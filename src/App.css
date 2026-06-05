@@ -1,0 +1,311 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1c1c1e;
+  background: #f5f5f7;
+}
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.rec-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  background: #0a84ff;
+  color: white;
+}
+.rec-btn.recording {
+  background: #ff3b30;
+}
+.empty {
+  color: #8e8e93;
+  text-align: center;
+  margin-top: 48px;
+}
+.meeting-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.meeting-row {
+  background: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.meeting-row:hover {
+  background: #ececf0;
+}
+.meeting-title {
+  font-weight: 600;
+}
+.meeting-meta,
+.detail-meta {
+  color: #8e8e93;
+  font-size: 13px;
+}
+.track {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.track-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.back {
+  border: none;
+  background: none;
+  color: #0a84ff;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+}
+audio {
+  width: 100%;
+}
+.transcript {
+  margin-top: 24px;
+}
+.transcribe-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #0a84ff;
+  color: white;
+  cursor: pointer;
+}
+.transcribe-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.transcript-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.turn {
+  display: grid;
+  grid-template-columns: 90px 48px 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  align-items: baseline;
+}
+.turn-speaker {
+  font-weight: 600;
+  font-size: 13px;
+}
+.turn-them .turn-speaker {
+  color: #0a84ff;
+}
+.turn-time {
+  color: #8e8e93;
+  font-size: 12px;
+}
+
+/* ── AI panel ────────────────────────────────────────── */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 16px;
+  cursor: pointer;
+  background: #e5e5ea;
+  color: #1c1c1e;
+  line-height: 1;
+}
+.settings-btn:hover {
+  background: #d1d1d6;
+}
+.settings-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.settings-panel h2 {
+  margin: 0 0 20px;
+  font-size: 18px;
+}
+.settings-panel label,
+.ai-meta label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.settings-panel label input,
+.ai-meta label input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #c7c7cc;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  background: #f9f9fb;
+}
+.settings-panel label input:focus,
+.ai-meta label input:focus {
+  outline: none;
+  border-color: #0a84ff;
+  background: white;
+}
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.ai-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  background: #0a84ff;
+  color: white;
+}
+.ai-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ai-actions button:last-child {
+  background: #e5e5ea;
+  color: #1c1c1e;
+}
+.ai-panel {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.ai-panel h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.ai-meta,
+.ai-summary,
+.ai-chat {
+  background: white;
+  border-radius: 10px;
+  padding: 18px;
+}
+.ai-error {
+  background: #fff3f3;
+  border: 1px solid #ff3b30;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #c0392b;
+  font-size: 13px;
+  margin: 0;
+}
+.summary-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  color: #1c1c1e;
+}
+.muted {
+  color: #8e8e93;
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.ai-summary button,
+.ai-chat button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  background: #0a84ff;
+  color: white;
+}
+.ai-summary button:disabled,
+.ai-chat button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ai-chat input {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #c7c7cc;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  background: #f9f9fb;
+  margin-bottom: 8px;
+}
+.ai-chat input:focus {
+  outline: none;
+  border-color: #0a84ff;
+  background: white;
+}
+.ai-answer {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #f0f8ff;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Meeting row with delete button ─────────────────────── */
+.meeting-row-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meeting-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.delete-btn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: #8e8e93;
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.delete-btn:hover {
+  color: #ff3b30;
+  background: #fff0ef;
+}
+
+/* ── Recording timer ─────────────────────────────────────── */
+.rec-timer {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  color: #ff3b30;
+  letter-spacing: 0.03em;
+}

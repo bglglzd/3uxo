@@ -1,0 +1,32 @@
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import type { Meeting, TrackFile, Transcript, AiConfig, MetadataSuggestion } from "./types";
+
+export const api = {
+  startRecording: (): Promise<string> => invoke("start_recording"),
+  stopRecording: (): Promise<Meeting> => invoke("stop_recording"),
+  listMeetings: (): Promise<Meeting[]> => invoke("list_meetings"),
+  getMeeting: (id: string): Promise<Meeting> => invoke("get_meeting", { id }),
+  deleteMeeting: (id: string): Promise<void> => invoke("delete_meeting", { id }),
+  isRecording: (): Promise<boolean> => invoke("is_recording"),
+  transcribe: (id: string): Promise<Transcript> => invoke("transcribe", { id }),
+  getTranscript: (id: string): Promise<Transcript | null> =>
+    invoke("get_transcript", { id }),
+  async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
+    const path: string = await invoke("track_path", { id, trackFile });
+    return convertFileSrc(path);
+  },
+  suggestMetadata: (id: string, config: AiConfig): Promise<MetadataSuggestion> =>
+    invoke("suggest_metadata", { id, config }),
+  summarize: (id: string, config: AiConfig): Promise<string> =>
+    invoke("summarize", { id, config }),
+  getSummary: (id: string): Promise<string | null> => invoke("get_summary", { id }),
+  ask: (id: string, config: AiConfig, question: string): Promise<string> =>
+    invoke("ask", { id, config, question }),
+  updateMeetingMeta: (
+    id: string,
+    title: string,
+    participants: string,
+    topic: string,
+  ): Promise<void> =>
+    invoke("update_meeting_meta", { id, title, participants, topic }),
+};

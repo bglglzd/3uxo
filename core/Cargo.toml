@@ -1,0 +1,30 @@
+[package]
+name = "uxo-core"
+version = "0.1.0"
+edition = "2021"
+description = "3uxo core domain logic (no GUI dependencies)"
+
+[lib]
+name = "uxo_core"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+hound = "3"
+thiserror = "1"
+ureq = { version = "2", features = ["json"] }
+whisper-rs = { version = "0.12", optional = true }
+
+[features]
+whisper = ["dep:whisper-rs"]
+
+# Реальный захват звука только на Windows. На Linux/macOS не подтягивается,
+# поэтому воркспейс собирается без WASAPI.
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.15"
+
+[dev-dependencies]
+tempfile = "3"

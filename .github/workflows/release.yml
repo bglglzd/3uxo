@@ -1,0 +1,37 @@
+name: release
+
+# Собирает Windows-инсталляторы при пуше тега вида v1.2.3 и публикует
+# черновик GitHub-релиза. Запускается также вручную (workflow_dispatch).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Базовая сборка (без локального Whisper — см. README про --features whisper).
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "3uxo ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false

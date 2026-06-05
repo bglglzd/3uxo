@@ -1,0 +1,21 @@
+//! 3uxo core domain logic: data model, storage, audio helpers, recorder
+//! abstraction and service layer. Deliberately free of any GUI/Tauri
+//! dependency so it builds and tests on any platform.
+
+pub mod ai;
+pub mod audio;
+pub mod error;
+pub mod model;
+pub mod recorder;
+pub mod service;
+pub mod storage;
+pub mod transcript;
+pub mod transcriber;
+
+#[cfg(feature = "whisper")]
+pub mod whisper;
+
+/// Реальный захват звука на Windows (WASAPI). На других ОС используется
+/// `recorder::MockRecorder`.
+#[cfg(target_os = "windows")]
+pub mod wasapi_recorder;

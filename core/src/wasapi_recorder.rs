@@ -1,0 +1,211 @@
+//! Реальный захват звука на Windows через WASAPI (крейт `wasapi`).
+//!
+//! Реализует [`crate::recorder::Recorder`], поэтому подменяет `MockRecorder`
+//! без изменений в остальном коде. Пишет ДВЕ дорожки в формате конвейера
+//! (WAV, моно, 16 кГц, 16 бит): микрофон («Я») и системный звук через
+//! loopback («Собеседник»).
+//!
+//! # СТАТУС: не проверено на Linux-машине разработки
+//! Код нельзя собрать без Windows + крейта `wasapi`. Написан по примеру
+//! `wasapi/examples/loopback.rs`. Перед использованием см. риск-лист в
+//! `docs/superpowers/plans/2026-06-04-3uxo-plan-2-wasapi-audio.md`.
+//!
+//! Ключевой приём: shared-режим с `autoconvert: true` просит WASAPI самому
+//! сконвертировать поток устройства в запрошенные 16 кГц/моно/16 бит.
+
+#![cfg(target_os = "windows")]
+
+use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+
+use wasapi::{
+    Direction, SampleType, StreamMode, WaveFormat,
+};
+
+use crate::audio::wav_duration_secs;
+use crate::error::{AppError, AppResult};
+use crate::recorder::{Recorder, RecordingResult};
+
+const SAMPLE_RATE: u32 = 16_000;
+
+/// Что захватываем: микрофон или системный звук (loopback).
+#[derive(Clone, Copy)]
+enum Source {
+    Mic,
+    Loopback,
+}
+
+/// Захватчик двух дорожек на WASAPI.
+pub struct WasapiRecorder {
+    running: Mutex<Option<Running>>,
+}
+
+struct Running {
+    stop: Arc<AtomicBool>,
+    mic: JoinHandle<AppResult<()>>,
+    system: JoinHandle<AppResult<()>>,
+    mic_path: PathBuf,
+}
+
+impl WasapiRecorder {
+    pub fn new() -> Self {
+        Self {
+            running: Mutex::new(None),
+        }
+    }
+}
+
+impl Default for WasapiRecorder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Recorder for WasapiRecorder {
+    fn start(&self, mic_path: &Path, system_path: &Path) -> AppResult<()> {
+        let mut running = self.running.lock().unwrap();
+        if running.is_some() {
+            return Err(AppError::InvalidState("already recording".into()));
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let mic_pb = mic_path.to_path_buf();
+        let sys_pb = system_path.to_path_buf();
+        let stop_mic = stop.clone();
+        let stop_sys = stop.clone();
+
+        let mic = std::thread::spawn(move || capture_loop(mic_pb, Source::Mic, stop_mic));
+        let system =
+            std::thread::spawn(move || capture_loop(sys_pb, Source::Loopback, stop_sys));
+
+        *running = Some(Running {
+            stop,
+            mic,
+            system,
+            mic_path: mic_path.to_path_buf(),
+        });
+        Ok(())
+    }
+
+    fn stop(&self) -> AppResult<RecordingResult> {
+        let running = {
+            let mut guard = self.running.lock().unwrap();
+            guard
+                .take()
+                .ok_or_else(|| AppError::InvalidState("not recording".into()))?
+        };
+        running.stop.store(true, Ordering::Relaxed);
+        // Дожидаемся завершения потоков; ошибки внутри потока пробрасываем.
+        let mic_res = running
+            .mic
+            .join()
+            .map_err(|_| AppError::Audio("mic capture thread panicked".into()))?;
+        let sys_res = running
+            .system
+            .join()
+            .map_err(|_| AppError::Audio("system capture thread panicked".into()))?;
+        mic_res?;
+        sys_res?;
+
+        let duration_secs = wav_duration_secs(&running.mic_path).unwrap_or(0);
+        Ok(RecordingResult { duration_secs })
+    }
+
+    fn is_recording(&self) -> bool {
+        self.running.lock().unwrap().is_some()
+    }
+}
+
+/// Поток захвата одной дорожки: открывает устройство, пишет WAV до сигнала stop.
+fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResult<()> {
+    // COM в каждом потоке свой.
+    wasapi::initialize_mta()
+        .ok()
+        .map_err(|e| AppError::Audio(format!("wasapi: COM init: {e}")))?;
+
+    let enumerator = wasapi::DeviceEnumerator::new()
+        .map_err(|e| AppError::Audio(format!("wasapi: enumerator: {e}")))?;
+
+    // Микрофон — Capture-устройство; системный звук — Render-устройство,
+    // но клиент инициализируется как Capture (loopback).
+    let device = match source {
+        Source::Mic => enumerator.get_default_device(&Direction::Capture),
+        Source::Loopback => enumerator.get_default_device(&Direction::Render),
+    }
+    .map_err(|e| AppError::Audio(format!("wasapi: default device: {e}")))?;
+
+    let mut audio_client = device
+        .get_iaudioclient()
+        .map_err(|e| AppError::Audio(format!("wasapi: get_iaudioclient: {e}")))?;
+
+    // Просим сразу нужный формат; autoconvert переведёт поток устройства в него.
+    let format = WaveFormat::new(16, 16, &SampleType::Int, SAMPLE_RATE as usize, 1, None);
+    let blockalign = format.get_blockalign() as usize; // 2 байта для моно i16
+
+    let (_def_time, min_time) = audio_client
+        .get_device_period()
+        .map_err(|e| AppError::Audio(format!("wasapi: device_period: {e}")))?;
+
+    let mode = StreamMode::EventsShared {
+        autoconvert: true,
+        buffer_duration_hns: min_time,
+    };
+    audio_client
+        .initialize_client(&format, &Direction::Capture, &mode)
+        .map_err(|e| AppError::Audio(format!("wasapi: initialize_client: {e}")))?;
+
+    let h_event = audio_client
+        .set_get_eventhandle()
+        .map_err(|e| AppError::Audio(format!("wasapi: eventhandle: {e}")))?;
+    let capture_client = audio_client
+        .get_audiocaptureclient()
+        .map_err(|e| AppError::Audio(format!("wasapi: capture_client: {e}")))?;
+
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: SAMPLE_RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer =
+        hound::WavWriter::create(&path, spec).map_err(|e| AppError::Audio(e.to_string()))?;
+
+    audio_client
+        .start_stream()
+        .map_err(|e| AppError::Audio(format!("wasapi: start_stream: {e}")))?;
+
+    let mut queue: VecDeque<u8> = VecDeque::new();
+    while !stop.load(Ordering::Relaxed) {
+        capture_client
+            .read_from_device_to_deque(&mut queue)
+            .map_err(|e| AppError::Audio(format!("wasapi: read: {e}")))?;
+
+        // Каждые `blockalign` байт = один моно-сэмпл i16 (LE).
+        while queue.len() >= blockalign {
+            let lo = queue.pop_front().unwrap();
+            let hi = queue.pop_front().unwrap();
+            // На случай blockalign>2 (не наш случай) — отбрасываем лишние байты кадра.
+            for _ in 2..blockalign {
+                queue.pop_front();
+            }
+            let sample = i16::from_le_bytes([lo, hi]);
+            writer
+                .write_sample(sample)
+                .map_err(|e| AppError::Audio(e.to_string()))?;
+        }
+
+        // Ждём следующий буфер; таймаут позволяет периодически проверять stop.
+        let _ = h_event.wait_for_event(100);
+    }
+
+    audio_client
+        .stop_stream()
+        .map_err(|e| AppError::Audio(format!("wasapi: stop_stream: {e}")))?;
+    writer
+        .finalize()
+        .map_err(|e| AppError::Audio(e.to_string()))?;
+    Ok(())
+}
