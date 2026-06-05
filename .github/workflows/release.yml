@@ -27,11 +27,16 @@ jobs:
         run: npm ci
 
       # Базовая сборка (без локального Whisper — см. README про --features whisper).
+      # Подпись апдейтов: ключи лежат в секретах репозитория.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "3uxo ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
+          # Генерирует и прикладывает latest.json для авто-обновления.
+          includeUpdaterJson: true

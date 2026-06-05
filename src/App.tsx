@@ -7,6 +7,7 @@ import { RecordButton } from "./components/RecordButton";
 import { MeetingList } from "./components/MeetingList";
 import { MeetingDetail } from "./components/MeetingDetail";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { checkForUpdates } from "./updater";
 import "./App.css";
 
 export default function App() {
@@ -24,6 +25,11 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Проверка обновлений при запуске (тихо, не блокирует UI).
+  useEffect(() => {
+    void checkForUpdates();
+  }, []);
 
   // Recording timer: tick every second while recording is active
   useEffect(() => {
