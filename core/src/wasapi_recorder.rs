@@ -21,9 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use wasapi::{
-    Direction, SampleType, StreamMode, WaveFormat,
-};
+use wasapi::{Direction, SampleType, ShareMode, WaveFormat};
 
 use crate::audio::wav_duration_secs;
 use crate::error::{AppError, AppResult};
@@ -122,39 +120,39 @@ impl Recorder for WasapiRecorder {
 /// Поток захвата одной дорожки: открывает устройство, пишет WAV до сигнала stop.
 fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResult<()> {
     // COM в каждом потоке свой.
-    wasapi::initialize_mta()
-        .ok()
-        .map_err(|e| AppError::Audio(format!("wasapi: COM init: {e}")))?;
+    let _ = wasapi::initialize_mta();
 
-    let enumerator = wasapi::DeviceEnumerator::new()
-        .map_err(|e| AppError::Audio(format!("wasapi: enumerator: {e}")))?;
-
-    // Микрофон — Capture-устройство; системный звук — Render-устройство,
-    // но клиент инициализируется как Capture (loopback).
-    let device = match source {
-        Source::Mic => enumerator.get_default_device(&Direction::Capture),
-        Source::Loopback => enumerator.get_default_device(&Direction::Render),
-    }
-    .map_err(|e| AppError::Audio(format!("wasapi: default device: {e}")))?;
+    // Микрофон берётся с Capture-устройства; системный звук — с Render-устройства
+    // (loopback): получаем render-девайс, но клиент инициализируем как Capture.
+    let device_direction = match source {
+        Source::Mic => Direction::Capture,
+        Source::Loopback => Direction::Render,
+    };
+    let device = wasapi::get_default_device(&device_direction)
+        .map_err(|e| AppError::Audio(format!("wasapi: default device: {e}")))?;
 
     let mut audio_client = device
         .get_iaudioclient()
         .map_err(|e| AppError::Audio(format!("wasapi: get_iaudioclient: {e}")))?;
 
-    // Просим сразу нужный формат; autoconvert переведёт поток устройства в него.
+    // Просим сразу нужный формат; последний аргумент `true` (convert) включает
+    // авто-конвертацию WASAPI, чтобы получить 16 кГц/моно/16 бит из любого
+    // формата устройства.
     let format = WaveFormat::new(16, 16, &SampleType::Int, SAMPLE_RATE as usize, 1, None);
     let blockalign = format.get_blockalign() as usize; // 2 байта для моно i16
 
     let (_def_time, min_time) = audio_client
-        .get_device_period()
-        .map_err(|e| AppError::Audio(format!("wasapi: device_period: {e}")))?;
+        .get_periods()
+        .map_err(|e| AppError::Audio(format!("wasapi: get_periods: {e}")))?;
 
-    let mode = StreamMode::EventsShared {
-        autoconvert: true,
-        buffer_duration_hns: min_time,
-    };
     audio_client
-        .initialize_client(&format, &Direction::Capture, &mode)
+        .initialize_client(
+            &format,
+            min_time,
+            &Direction::Capture,
+            &ShareMode::Shared,
+            true,
+        )
         .map_err(|e| AppError::Audio(format!("wasapi: initialize_client: {e}")))?;
 
     let h_event = audio_client
