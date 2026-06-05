@@ -36,7 +36,8 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "3uxo ${{ github.ref_name }}"
-          releaseDraft: true
+          # Сразу публикуем (не черновик), чтобы апдейтер видел новую версию.
+          releaseDraft: false
           prerelease: false
           # Генерирует и прикладывает latest.json для авто-обновления.
           includeUpdaterJson: true
