@@ -23,11 +23,17 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Whisper.cpp (whisper-rs) собирается через bindgen — нужен libclang.
+      - name: Install LLVM (libclang for whisper-rs)
+        run: choco install llvm -y --no-progress
+      - name: Set LIBCLANG_PATH
+        shell: pwsh
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
       - name: Install frontend dependencies
         run: npm ci
 
-      # Базовая сборка (без локального Whisper — см. README про --features whisper).
-      # Подпись апдейтов: ключи лежат в секретах репозитория.
+      # Встроенный Whisper включён фичей `whisper`. Подпись апдейтов — из секретов.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,3 +47,5 @@ jobs:
           prerelease: false
           # Генерирует и прикладывает latest.json для авто-обновления.
           includeUpdaterJson: true
+          # Включаем встроенный whisper.cpp.
+          args: --features whisper

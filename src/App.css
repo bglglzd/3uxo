@@ -727,7 +727,8 @@ textarea {
   color: var(--text-dim);
   font-weight: 600;
 }
-.field input {
+.field input,
+.field select {
   background: var(--bg-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
@@ -737,7 +738,16 @@ textarea {
   outline: none;
   transition: border-color 0.18s ease;
 }
-.field input:focus {
+.field select {
+  appearance: none;
+  cursor: pointer;
+}
+.field select option {
+  background: var(--bg-2);
+  color: var(--text);
+}
+.field input:focus,
+.field select:focus {
   border-color: var(--accent-strong);
 }
 .field .hint {

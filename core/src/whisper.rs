@@ -24,12 +24,53 @@ pub struct WhisperTranscriber {
     language: Option<String>,
 }
 
+/// Размер модели по умолчанию (баланс качества RU и размера ~466 МБ).
+pub const DEFAULT_MODEL_SIZE: &str = "small";
+
+/// Гарантирует наличие ggml-модели нужного размера в `<data_dir>/models`,
+/// скачивая её с HuggingFace при первом обращении. Возвращает путь к файлу.
+/// Качается только модель (не данные пользователя); транскрибация — локально.
+pub fn ensure_model(data_dir: &Path, size: &str) -> AppResult<PathBuf> {
+    let models_dir = data_dir.join("models");
+    std::fs::create_dir_all(&models_dir)?;
+    let path = models_dir.join(format!("ggml-{size}.bin"));
+    if path.exists() && std::fs::metadata(&path)?.len() > 1_000_000 {
+        return Ok(path);
+    }
+    let url = format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{size}.bin"
+    );
+    let resp = ureq::get(&url)
+        .call()
+        .map_err(|e| AppError::Http(format!("download model: {e}")))?;
+    let tmp = path.with_extension("part");
+    {
+        let mut reader = resp.into_reader();
+        let mut file = std::fs::File::create(&tmp)?;
+        std::io::copy(&mut reader, &mut file)?;
+    }
+    std::fs::rename(&tmp, &path)?;
+    Ok(path)
+}
+
 impl WhisperTranscriber {
     pub fn new(model_path: impl Into<PathBuf>, language: Option<String>) -> Self {
         Self {
             model_path: model_path.into(),
             language,
         }
+    }
+
+    /// Встроенный движок: гарантирует модель (скачивает при необходимости)
+    /// и возвращает готовый транскрайбер. `size` пустой → DEFAULT_MODEL_SIZE.
+    pub fn managed(
+        data_dir: &Path,
+        size: Option<&str>,
+        language: Option<String>,
+    ) -> AppResult<Self> {
+        let size = size.filter(|s| !s.is_empty()).unwrap_or(DEFAULT_MODEL_SIZE);
+        let model_path = ensure_model(data_dir, size)?;
+        Ok(Self::new(model_path, language))
     }
 
     /// Читает WAV (i16 моно) и нормализует в f32 [-1.0, 1.0].

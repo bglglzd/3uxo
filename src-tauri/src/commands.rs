@@ -111,9 +111,36 @@ pub fn transcribe(
     id: String,
     options: TranscribeOptions,
 ) -> AppResult<Transcript> {
-    let transcriber = CliTranscriber::new(options);
     let repo = state.repo.lock().unwrap();
-    service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id)
+
+    // Явно указанный внешний whisper-CLI — используем его.
+    if options
+        .whisper_path
+        .as_deref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
+        let transcriber = CliTranscriber::new(options);
+        return service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id);
+    }
+
+    // Иначе — встроенный whisper.cpp; модель скачивается при первом запуске.
+    #[cfg(feature = "whisper")]
+    {
+        let transcriber = uxo_core::whisper::WhisperTranscriber::managed(
+            &state.data_root,
+            options.model.as_deref(),
+            options.language.clone(),
+        )?;
+        service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id)
+    }
+    #[cfg(not(feature = "whisper"))]
+    {
+        let _ = options;
+        Err(AppError::Audio(
+            "встроенный Whisper недоступен в этой сборке; укажите путь к whisper в настройках".into(),
+        ))
+    }
 }
 
 #[tauri::command]

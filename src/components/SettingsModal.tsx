@@ -56,34 +56,41 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <h4>Whisper · расшифровка</h4>
         <p className="hint">
-          По умолчанию 3uxo сам находит установленный whisper. Поля ниже — только
-          если нужно указать вручную.
+          Расшифровка идёт локально, внутри приложения. Нужную модель 3uxo
+          скачает сам один раз при первой расшифровке — ставить ничего не нужно.
         </p>
+        <div className="field">
+          <label>Модель</label>
+          <select
+            value={s.whisper.model || "small"}
+            onChange={(e) => wh("model", e.target.value)}
+          >
+            <option value="base">base — быстрее, ~142 МБ</option>
+            <option value="small">small — баланс, ~466 МБ (рекомендуется)</option>
+            <option value="medium">medium — точнее для русского, ~1.5 ГБ</option>
+            <option value="large-v3">large-v3 — максимум качества, ~3 ГБ</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Язык</label>
+          <input
+            value={s.whisper.language}
+            onChange={(e) => wh("language", e.target.value)}
+            placeholder="ru (пусто — автоопределение)"
+          />
+        </div>
         <details className="adv">
-          <summary>Дополнительно</summary>
+          <summary>Использовать свой whisper (необязательно)</summary>
           <div className="field">
-            <label>Путь к whisper (необязательно)</label>
+            <label>Путь к whisper-CLI</label>
             <input
               value={s.whisper.whisperPath}
               onChange={(e) => wh("whisperPath", e.target.value)}
               placeholder="напр. C:\\tools\\whisper-cli.exe"
             />
-          </div>
-          <div className="field">
-            <label>Модель</label>
-            <input
-              value={s.whisper.model}
-              onChange={(e) => wh("model", e.target.value)}
-              placeholder="напр. small или путь к ggml-модели"
-            />
-          </div>
-          <div className="field">
-            <label>Язык</label>
-            <input
-              value={s.whisper.language}
-              onChange={(e) => wh("language", e.target.value)}
-              placeholder="ru"
-            />
+            <span className="hint">
+              Если задано — используется он вместо встроенного движка.
+            </span>
           </div>
         </details>
 
