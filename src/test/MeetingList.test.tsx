@@ -18,37 +18,37 @@ const meetings: Meeting[] = [
 ];
 
 describe("MeetingList", () => {
-  it("renders meeting titles and formatted duration", () => {
+  it("renders title and formatted duration", () => {
     render(<MeetingList meetings={meetings} onSelect={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText("Звонок с Иваном")).toBeInTheDocument();
     expect(screen.getByText(/1:05/)).toBeInTheDocument();
   });
 
-  it("shows empty state when no meetings", () => {
+  it("shows empty state", () => {
     render(<MeetingList meetings={[]} onSelect={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText(/Пока нет записей/i)).toBeInTheDocument();
   });
 
-  it("calls onSelect with id when a meeting is clicked", async () => {
+  it("calls onSelect when a meeting is clicked", async () => {
     const onSelect = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={onSelect} onDelete={vi.fn()} />);
     await userEvent.click(screen.getByText("Звонок с Иваном"));
     expect(onSelect).toHaveBeenCalledWith("a");
   });
 
-  it("calls onDelete with id when delete button is clicked and user confirms", async () => {
+  it("deletes on confirm without selecting", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     const onSelect = vi.fn();
     const onDelete = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<MeetingList meetings={meetings} onSelect={onSelect} onDelete={onDelete} />);
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDelete).toHaveBeenCalledWith("a");
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("does not call onDelete when user cancels the confirm dialog", async () => {
-    const onDelete = vi.fn();
+  it("does not delete when confirm is cancelled", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onDelete = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={vi.fn()} onDelete={onDelete} />);
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDelete).not.toHaveBeenCalled();

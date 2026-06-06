@@ -1,45 +1,51 @@
 import type { Meeting } from "../types";
+import { formatClock } from "../util";
 
 interface Props {
   meetings: Meeting[];
+  activeId?: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-function formatDuration(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
-export function MeetingList({ meetings, onSelect, onDelete }: Props) {
+export function MeetingList({ meetings, activeId, onSelect, onDelete }: Props) {
   if (meetings.length === 0) {
-    return <p className="empty">Пока нет записей. Нажми «Начать запись».</p>;
+    return <p className="section-label">Пока нет записей</p>;
   }
   return (
-    <ul className="meeting-list">
+    <>
       {meetings.map((m) => (
-        <li key={m.id} className="meeting-row" onClick={() => onSelect(m.id)}>
-          <div className="meeting-row-content">
-            <div className="meeting-row-info">
-              <span className="meeting-title">{m.title}</span>
-              <span className="meeting-meta">
-                {new Date(m.created_at).toLocaleString()} · {formatDuration(m.duration_secs)}
-              </span>
-            </div>
-            <button
-              className="delete-btn"
-              aria-label="Удалить"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm("Удалить эту встречу?")) onDelete(m.id);
-              }}
-            >
-              🗑
-            </button>
-          </div>
-        </li>
+        <button
+          key={m.id}
+          className={m.id === activeId ? "m-item active" : "m-item"}
+          onClick={() => onSelect(m.id)}
+        >
+          <span className="m-title">{m.title}</span>
+          <span
+            className="m-del"
+            role="button"
+            aria-label="Удалить"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm("Удалить эту встречу?")) onDelete(m.id);
+            }}
+          >
+            🗑
+          </span>
+          <span className="m-sub">
+            {shortDate(m.created_at)} · {formatClock(m.duration_secs)}
+          </span>
+        </button>
       ))}
-    </ul>
+    </>
   );
 }

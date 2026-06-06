@@ -1,17 +1,33 @@
-import type { AiConfig } from "./types";
+import type { AppSettings } from "./types";
 
-const KEY = "3uxo.ai";
+const KEY = "3uxo.settings";
 
-export function getSettings(): AiConfig {
+const DEFAULTS: AppSettings = {
+  ai: { base_url: "", api_key: "", model: "" },
+  whisper: { whisperPath: "", model: "", language: "" },
+};
+
+export function getSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as AiConfig;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ai: { ...DEFAULTS.ai, ...(parsed.ai ?? {}) },
+        whisper: { ...DEFAULTS.whisper, ...(parsed.whisper ?? {}) },
+      };
+    }
   } catch {
-    // ignore malformed storage
+    // malformed storage → defaults
   }
-  return { base_url: "", api_key: "", model: "" };
+  return DEFAULTS;
 }
 
-export function saveSettings(cfg: AiConfig): void {
-  localStorage.setItem(KEY, JSON.stringify(cfg));
+export function saveSettings(settings: AppSettings): void {
+  localStorage.setItem(KEY, JSON.stringify(settings));
+}
+
+/// true, если ИИ настроен достаточно для запросов.
+export function isAiConfigured(s: AppSettings): boolean {
+  return !!(s.ai.base_url && s.ai.api_key && s.ai.model);
 }

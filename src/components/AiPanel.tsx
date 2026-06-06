@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Meeting } from "../types";
 import { api } from "../api";
-import { getSettings } from "../settings";
+import { getSettings, isAiConfigured } from "../settings";
 
 interface Props {
   meeting: Meeting;
@@ -10,32 +10,46 @@ interface Props {
 
 export function AiPanel({ meeting, onMetaSaved }: Props) {
   const [summary, setSummary] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [title, setTitle] = useState(meeting.title);
-  const [participants, setParticipants] = useState(meeting.participants);
-  const [topic, setTopic] = useState(meeting.topic);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
 
   useEffect(() => {
-    api.getSummary(meeting.id).then(setSummary);
+    setSummary(null);
+    setAnswer("");
+    api.getSummary(meeting.id).then(setSummary).catch(() => {});
   }, [meeting.id]);
 
-  const requireConfig = () => {
-    const c = getSettings();
-    if (!c.base_url || !c.api_key || !c.model) {
-      setError("Заполни настройки ИИ (base URL, ключ, модель).");
+  const aiCfg = () => {
+    const s = getSettings();
+    if (!isAiConfigured(s)) {
+      setError("Заполни настройки ИИ (base URL, ключ, модель) в «Настройки».");
       return null;
     }
     setError("");
-    return c;
+    return s.ai;
+  };
+
+  const doSuggest = async () => {
+    const c = aiCfg();
+    if (!c) return;
+    setBusy("suggest");
+    try {
+      const m = await api.suggestMetadata(meeting.id, c);
+      await api.updateMeetingMeta(meeting.id, m.title, m.participants, m.topic);
+      onMetaSaved();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy("");
+    }
   };
 
   const doSummarize = async () => {
-    const c = requireConfig();
+    const c = aiCfg();
     if (!c) return;
-    setBusy("summary");
+    setBusy("sum");
     try {
       setSummary(await api.summarize(meeting.id, c));
     } catch (e) {
@@ -45,36 +59,8 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     }
   };
 
-  const doSuggest = async () => {
-    const c = requireConfig();
-    if (!c) return;
-    setBusy("suggest");
-    try {
-      const s = await api.suggestMetadata(meeting.id, c);
-      setTitle(s.title);
-      setParticipants(s.participants);
-      setTopic(s.topic);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const saveMeta = async () => {
-    setBusy("save");
-    try {
-      await api.updateMeetingMeta(meeting.id, title, participants, topic);
-      onMetaSaved();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
   const doAsk = async () => {
-    const c = requireConfig();
+    const c = aiCfg();
     if (!c) return;
     setBusy("ask");
     try {
@@ -87,60 +73,45 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
   };
 
   return (
-    <section className="ai-panel">
-      {error && <p className="ai-error">{error}</p>}
-
-      <div className="ai-meta">
-        <h3>Метаданные</h3>
-        <label>
-          Заголовок
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label>
-          Участники
-          <input
-            value={participants}
-            onChange={(e) => setParticipants(e.target.value)}
-          />
-        </label>
-        <label>
-          Тема
-          <input value={topic} onChange={(e) => setTopic(e.target.value)} />
-        </label>
-        <div className="ai-actions">
-          <button onClick={doSuggest} disabled={busy !== ""}>
-            {busy === "suggest" ? "…" : "ИИ: предложить"}
+    <div className="card">
+      <div className="card-head">
+        <h3>ИИ-ассистент</h3>
+        <div className="spacer" />
+        <div className="btn-row">
+          <button className="btn" onClick={doSuggest} disabled={busy !== ""}>
+            {busy === "suggest" ? "…" : "Авто-заголовок"}
           </button>
-          <button onClick={saveMeta} disabled={busy !== ""}>
-            Сохранить
+          <button className="btn" onClick={doSummarize} disabled={busy !== ""}>
+            {busy === "sum" ? "Думаю…" : "Сделать выжимку"}
           </button>
         </div>
       </div>
-
-      <div className="ai-summary">
-        <h3>Выжимка</h3>
+      <div className="card-body">
+        {error && <div className="ai-error">{error}</div>}
         {summary ? (
-          <pre className="summary-text">{summary}</pre>
+          <div className="summary-text">{summary}</div>
         ) : (
-          <p className="muted">Выжимки пока нет.</p>
+          <p className="muted">Выжимки пока нет — нажми «Сделать выжимку».</p>
         )}
-        <button onClick={doSummarize} disabled={busy !== ""}>
-          {busy === "summary" ? "Думаю…" : "Сделать выжимку"}
-        </button>
+        <div className="ask-row">
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Спросить по встрече…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") doAsk();
+            }}
+          />
+          <button
+            className="btn primary"
+            onClick={doAsk}
+            disabled={busy !== "" || !question}
+          >
+            {busy === "ask" ? "…" : "Спросить"}
+          </button>
+        </div>
+        {answer && <div className="ai-answer">{answer}</div>}
       </div>
-
-      <div className="ai-chat">
-        <h3>Вопрос по встрече</h3>
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Спросить…"
-        />
-        <button onClick={doAsk} disabled={busy !== "" || !question}>
-          {busy === "ask" ? "…" : "Спросить"}
-        </button>
-        {answer && <p className="ai-answer">{answer}</p>}
-      </div>
-    </section>
+    </div>
   );
 }

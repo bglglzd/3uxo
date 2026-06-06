@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
-import { formatClock } from "./util";
 import type { Meeting } from "./types";
-import { RecordButton } from "./components/RecordButton";
-import { MeetingList } from "./components/MeetingList";
-import { MeetingDetail } from "./components/MeetingDetail";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { Sidebar } from "./components/Sidebar";
+import { MeetingView } from "./components/MeetingView";
+import { SettingsModal } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
-import "./App.css";
 
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -26,24 +23,22 @@ export default function App() {
     refresh();
   }, [refresh]);
 
-  // Проверка обновлений при запуске (тихо, не блокирует UI).
+  // Проверка обновлений при запуске (тихо).
   useEffect(() => {
     void checkForUpdates();
   }, []);
 
-  // Recording timer: tick every second while recording is active
+  // Таймер записи.
   useEffect(() => {
     if (!recording) return;
     setElapsed(0);
-    const id = setInterval(() => setElapsed((prev) => prev + 1), 1000);
+    const id = setInterval(() => setElapsed((p) => p + 1), 1000);
     return () => clearInterval(id);
   }, [recording]);
 
-  // Subscribe to backend recording-changed events (hotkey / tray)
+  // События старта/стопа по горячей клавише / трею.
   useEffect(() => {
-    const un = listen("recording-changed", () => {
-      refresh();
-    });
+    const un = listen("recording-changed", () => refresh());
     return () => {
       un.then((f) => f());
     };
@@ -55,9 +50,10 @@ export default function App() {
   };
 
   const handleStop = async () => {
-    await api.stopRecording();
+    const m = await api.stopRecording();
     setRecording(false);
     await refresh();
+    if (m?.id) setSelectedId(m.id);
   };
 
   const handleDelete = async (id: string) => {
@@ -69,23 +65,36 @@ export default function App() {
   const selected = meetings.find((m) => m.id === selectedId) ?? null;
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1>3uxo · третье ухо</h1>
-        <div className="header-actions">
-          <RecordButton recording={recording} onStart={handleStart} onStop={handleStop} />
-          {recording && <span className="rec-timer">{formatClock(elapsed)}</span>}
-          <button className="settings-btn" onClick={() => setShowSettings(true)}>⚙</button>
-        </div>
-      </header>
+    <div className="app">
+      <Sidebar
+        meetings={meetings}
+        activeId={selectedId}
+        recording={recording}
+        elapsed={elapsed}
+        onStart={handleStart}
+        onStop={handleStop}
+        onSelect={setSelectedId}
+        onDelete={handleDelete}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      <main className="content">
+        {selected ? (
+          <MeetingView key={selected.id} meeting={selected} onMetaSaved={refresh} />
+        ) : (
+          <div className="empty">
+            <div className="ear">👂</div>
+            <h2>Выбери встречу</h2>
+            <p>
+              Нажми «Начать запись», чтобы записать созвон,
+              <br />
+              или выбери встречу слева.
+            </p>
+          </div>
+        )}
+      </main>
 
-      {selected ? (
-        <MeetingDetail meeting={selected} onBack={() => setSelectedId(null)} onMetaSaved={refresh} />
-      ) : (
-        <MeetingList meetings={meetings} onSelect={setSelectedId} onDelete={handleDelete} />
-      )}
-    </main>
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+    </div>
   );
 }

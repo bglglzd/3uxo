@@ -1,16 +1,21 @@
+import { formatClock } from "../util";
+
 interface Props {
   recording: boolean;
+  elapsed?: number;
   onStart: () => void;
   onStop: () => void;
 }
 
-export function RecordButton({ recording, onStart, onStop }: Props) {
+export function RecordButton({ recording, elapsed = 0, onStart, onStop }: Props) {
   return (
     <button
-      className={recording ? "rec-btn recording" : "rec-btn"}
+      className={recording ? "record is-recording" : "record"}
       onClick={recording ? onStop : onStart}
     >
-      {recording ? "⏹ Остановить" : "⏺ Начать запись"}
+      <span className="dot" />
+      {recording ? "Остановить" : "Начать запись"}
+      {recording && <span className="timer">{formatClock(elapsed)}</span>}
     </button>
   );
 }

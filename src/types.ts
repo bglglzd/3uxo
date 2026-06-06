@@ -35,3 +35,15 @@ export interface MetadataSuggestion {
   participants: string;
   topic: string;
 }
+
+/// Настройки локального Whisper. Пустые поля означают «найди сам».
+export interface WhisperConfig {
+  whisperPath: string;
+  model: string;
+  language: string;
+}
+
+export interface AppSettings {
+  ai: AiConfig;
+  whisper: WhisperConfig;
+}
