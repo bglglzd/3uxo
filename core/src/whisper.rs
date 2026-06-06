@@ -70,6 +70,11 @@ impl WhisperTranscriber {
     ) -> AppResult<Self> {
         let size = size.filter(|s| !s.is_empty()).unwrap_or(DEFAULT_MODEL_SIZE);
         let model_path = ensure_model(data_dir, size)?;
+        // По умолчанию — русский. Пусто/не задано → "ru"; "auto" → автоопределение.
+        let language = match language {
+            Some(l) if !l.is_empty() => Some(l),
+            _ => Some("ru".to_string()),
+        };
         Ok(Self::new(model_path, language))
     }
 
@@ -102,9 +107,13 @@ impl Transcriber for WhisperTranscriber {
             .map_err(|e| AppError::Audio(format!("whisper: create_state: {e}")))?;
 
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        if let Some(lang) = &self.language {
-            params.set_language(Some(lang));
+        // Язык: "auto"/None — автоопределение; иначе фиксируем (напр. "ru").
+        match self.language.as_deref() {
+            Some("auto") | None => {}
+            Some(lang) => params.set_language(Some(lang)),
         }
+        // Никакого перевода — расшифровка на языке оригинала.
+        params.set_translate(false);
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);

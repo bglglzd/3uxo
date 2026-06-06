@@ -194,7 +194,11 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
         <div className="card-head">
           <h3>Расшифровка</h3>
           <div className="spacer" />
-          {hasTranscript ? (
+          {transcribing ? (
+            <span className="muted transcribing">
+              <span className="spin">◜</span> Расшифровываю…
+            </span>
+          ) : hasTranscript ? (
             <div className="btn-row">
               <button className="btn ghost" onClick={() => exportAs("txt")}>
                 ⬇ TXT
@@ -202,11 +206,14 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
               <button className="btn ghost" onClick={() => exportAs("md")}>
                 ⬇ MD
               </button>
+              <button
+                className="btn ghost"
+                onClick={transcribe}
+                title="Перерасшифровать заново"
+              >
+                ↻ Заново
+              </button>
             </div>
-          ) : transcribing ? (
-            <span className="muted transcribing">
-              <span className="spin">◜</span> Расшифровываю…
-            </span>
           ) : (
             <button className="btn primary" onClick={transcribe}>
               Расшифровать

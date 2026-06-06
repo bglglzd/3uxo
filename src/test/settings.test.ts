@@ -7,7 +7,7 @@ describe("settings", () => {
   it("returns defaults when empty", () => {
     const s = getSettings();
     expect(s.ai).toEqual({ base_url: "", api_key: "", model: "" });
-    expect(s.whisper).toEqual({ whisperPath: "", model: "", language: "" });
+    expect(s.whisper).toEqual({ whisperPath: "", model: "", language: "ru" });
   });
 
   it("round-trips saved settings", () => {

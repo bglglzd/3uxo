@@ -77,8 +77,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <input
             value={s.whisper.language}
             onChange={(e) => wh("language", e.target.value)}
-            placeholder="ru (пусто — автоопределение)"
+            placeholder="ru"
           />
+          <span className="hint">
+            По умолчанию «ru». Впиши «auto» для автоопределения языка.
+          </span>
         </div>
         <details className="adv">
           <summary>Использовать свой whisper (необязательно)</summary>
