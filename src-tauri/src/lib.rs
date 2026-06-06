@@ -1,12 +1,10 @@
 mod commands;
 
-use std::path::Path;
 use std::sync::Mutex;
 
 use commands::AppState;
 use uxo_core::recorder::Recorder;
 use uxo_core::storage::Repo;
-use uxo_core::transcriber::Transcriber;
 
 /// Выбирает рекордер: настоящий WASAPI на Windows, иначе — мок (тишина).
 fn build_recorder() -> Box<dyn Recorder> {
@@ -17,27 +15,6 @@ fn build_recorder() -> Box<dyn Recorder> {
     #[cfg(not(target_os = "windows"))]
     {
         Box::new(uxo_core::recorder::MockRecorder::new(5))
-    }
-}
-
-/// Собирает транскрайбер: настоящий Whisper при сборке с фичей `whisper`
-/// (нужен файл модели `<data_root>/whisper-model.bin`), иначе — заглушка,
-/// которая возвращает пустую расшифровку.
-#[allow(unused_variables)]
-fn build_transcriber(data_root: &Path) -> Box<dyn Transcriber> {
-    #[cfg(feature = "whisper")]
-    {
-        Box::new(uxo_core::whisper::WhisperTranscriber::new(
-            data_root.join("whisper-model.bin"),
-            Some("ru".to_string()),
-        ))
-    }
-    #[cfg(not(feature = "whisper"))]
-    {
-        Box::new(uxo_core::transcriber::MockTranscriber::new(
-            Vec::new(),
-            Vec::new(),
-        ))
     }
 }
 
@@ -97,6 +74,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(
@@ -114,13 +92,11 @@ pub fn run() {
             std::fs::create_dir_all(&data_root).expect("cannot create data dir");
             let db_path = data_root.join("3uxo.db");
             let repo = Repo::open(&db_path).expect("cannot open db");
-            let transcriber = build_transcriber(&data_root);
 
             app.manage(AppState {
                 data_root,
                 repo: Mutex::new(repo),
                 recorder: build_recorder(),
-                transcriber,
                 active: Mutex::new(None),
             });
 
@@ -143,6 +119,7 @@ pub fn run() {
             commands::get_summary,
             commands::ask,
             commands::update_meeting_meta,
+            commands::save_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

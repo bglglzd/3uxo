@@ -2,12 +2,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use uxo_core::ai::{AiConfig, HttpChatBackend, MetadataSuggestion};
+use uxo_core::cli_transcriber::{CliTranscriber, TranscribeOptions};
 use uxo_core::error::{AppError, AppResult};
 use uxo_core::model::Meeting;
 use uxo_core::recorder::Recorder;
 use uxo_core::service::{self, ActiveRecording};
 use uxo_core::storage::Repo;
-use uxo_core::transcriber::Transcriber;
 use uxo_core::transcript::Transcript;
 
 /// Текст расшифровки встречи для подачи в ИИ (ошибка, если ещё не расшифровано).
@@ -23,7 +23,6 @@ pub struct AppState {
     pub data_root: PathBuf,
     pub repo: Mutex<Repo>,
     pub recorder: Box<dyn Recorder>,
-    pub transcriber: Box<dyn Transcriber>,
     pub active: Mutex<Option<ActiveRecording>>,
 }
 
@@ -107,9 +106,20 @@ pub fn toggle_recording_state(state: &AppState) -> AppResult<bool> {
 }
 
 #[tauri::command]
-pub fn transcribe(state: tauri::State<AppState>, id: String) -> AppResult<Transcript> {
+pub fn transcribe(
+    state: tauri::State<AppState>,
+    id: String,
+    options: TranscribeOptions,
+) -> AppResult<Transcript> {
+    let transcriber = CliTranscriber::new(options);
     let repo = state.repo.lock().unwrap();
-    service::transcribe_meeting(state.transcriber.as_ref(), &repo, &state.data_root, &id)
+    service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id)
+}
+
+#[tauri::command]
+pub fn save_text_file(path: String, content: String) -> AppResult<()> {
+    std::fs::write(&path, content)?;
+    Ok(())
 }
 
 #[tauri::command]

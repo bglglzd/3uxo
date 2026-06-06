@@ -16,6 +16,7 @@ chrono = { version = "0.4", features = ["serde"] }
 hound = "3"
 thiserror = "1"
 ureq = { version = "2", features = ["json"] }
+tempfile = "3"
 whisper-rs = { version = "0.12", optional = true }
 
 [features]
