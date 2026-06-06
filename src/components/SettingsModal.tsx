@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getSettings, saveSettings } from "../settings";
 import type { AppSettings } from "../types";
+import { CopyLogButton } from "./CopyLogButton";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<AppSettings>(getSettings());
@@ -93,6 +94,15 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </span>
           </div>
         </details>
+
+        <h4>Диагностика</h4>
+        <p className="hint">
+          Если что-то идёт не так — скопируй лог и пришли его. В нём версия,
+          окружение и последние ошибки (без твоих ключей и текста разговоров).
+        </p>
+        <div className="btn-row">
+          <CopyLogButton className="btn" />
+        </div>
 
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>

@@ -619,6 +619,20 @@ textarea {
   font-size: 13px;
   margin: 0 0 12px;
 }
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.error-banner span {
+  word-break: break-word;
+}
+.transcribing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .summary-text {
   white-space: pre-wrap;
   font-family: var(--font-ui);

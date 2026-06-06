@@ -102,11 +102,11 @@ pub fn track_path(data_root: &Path, id: &str, track_file: &str) -> AppResult<Pat
     Ok(path)
 }
 
-/// Расшифровывает обе дорожки встречи, сохраняет `transcript.json` и
-/// ставит статус "transcribed".
-pub fn transcribe_meeting(
+/// Тяжёлая часть расшифровки БЕЗ обращения к БД: читает дорожки,
+/// прогоняет транскрайбер, пишет `transcript.json`. Вынесена отдельно,
+/// чтобы вызывающий не держал блокировку БД во время долгой работы.
+pub fn transcribe_to_file(
     transcriber: &dyn Transcriber,
-    repo: &Repo,
     data_root: &Path,
     id: &str,
 ) -> AppResult<Transcript> {
@@ -117,6 +117,18 @@ pub fn transcribe_meeting(
     let transcript = merge_tracks(mic, system);
     let json = serde_json::to_string_pretty(&transcript)?;
     std::fs::write(dir.join("transcript.json"), json)?;
+    Ok(transcript)
+}
+
+/// Расшифровывает обе дорожки встречи, сохраняет `transcript.json` и
+/// ставит статус "transcribed".
+pub fn transcribe_meeting(
+    transcriber: &dyn Transcriber,
+    repo: &Repo,
+    data_root: &Path,
+    id: &str,
+) -> AppResult<Transcript> {
+    let transcript = transcribe_to_file(transcriber, data_root, id)?;
     repo.update_status(id, "transcribed")?;
     Ok(transcript)
 }

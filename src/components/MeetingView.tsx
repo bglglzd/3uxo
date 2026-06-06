@@ -8,6 +8,7 @@ import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
 import { TranscriptView } from "./TranscriptView";
 import { AiPanel } from "./AiPanel";
+import { CopyLogButton } from "./CopyLogButton";
 
 interface Props {
   meeting: Meeting;
@@ -143,7 +144,12 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
         </div>
       </div>
 
-      {error && <div className="ai-error">{error}</div>}
+      {error && (
+        <div className="ai-error error-banner">
+          <span>{error}</span>
+          <CopyLogButton className="btn ghost" />
+        </div>
+      )}
 
       <div className="card">
         <div className="player">
@@ -197,21 +203,29 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
                 ⬇ MD
               </button>
             </div>
+          ) : transcribing ? (
+            <span className="muted transcribing">
+              <span className="spin">◜</span> Расшифровываю…
+            </span>
           ) : (
-            <button
-              className="btn primary"
-              onClick={transcribe}
-              disabled={transcribing}
-            >
-              {transcribing ? "Расшифровываю…" : "Расшифровать"}
+            <button className="btn primary" onClick={transcribe}>
+              Расшифровать
             </button>
           )}
         </div>
-        <TranscriptView
-          transcript={transcript}
-          activeIndex={activeIndex}
-          onSeek={seek}
-        />
+        {transcribing && !hasTranscript ? (
+          <div className="transcript-empty">
+            Идёт расшифровка. Первый раз скачивается модель — это может занять
+            несколько минут. Окно остаётся отзывчивым; можно открыть другие
+            встречи.
+          </div>
+        ) : (
+          <TranscriptView
+            transcript={transcript}
+            activeIndex={activeIndex}
+            onSeek={seek}
+          />
+        )}
       </div>
 
       <AiPanel meeting={meeting} onMetaSaved={onMetaSaved} />

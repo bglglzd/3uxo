@@ -39,7 +39,7 @@ pub fn start_recording(state: tauri::State<AppState>) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn stop_recording(state: tauri::State<AppState>) -> AppResult<Meeting> {
+pub async fn stop_recording(state: tauri::State<'_, AppState>) -> AppResult<Meeting> {
     // Берём активную запись и сразу отпускаем lock, чтобы не держать его
     // во время блокирующего I/O в recorder.stop() (важно для Плана 2).
     let current = {
@@ -105,14 +105,14 @@ pub fn toggle_recording_state(state: &AppState) -> AppResult<bool> {
     }
 }
 
+// Асинхронная: тяжёлая работа (загрузка модели + whisper) уходит с главного
+// потока, поэтому окно не зависает. Блокировку БД берём лишь на миг в конце.
 #[tauri::command]
-pub fn transcribe(
-    state: tauri::State<AppState>,
+pub async fn transcribe(
+    state: tauri::State<'_, AppState>,
     id: String,
     options: TranscribeOptions,
 ) -> AppResult<Transcript> {
-    let repo = state.repo.lock().unwrap();
-
     // Явно указанный внешний whisper-CLI — используем его.
     if options
         .whisper_path
@@ -121,7 +121,9 @@ pub fn transcribe(
         .unwrap_or(false)
     {
         let transcriber = CliTranscriber::new(options);
-        return service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id);
+        let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
+        state.repo.lock().unwrap().update_status(&id, "transcribed")?;
+        return Ok(transcript);
     }
 
     // Иначе — встроенный whisper.cpp; модель скачивается при первом запуске.
@@ -132,7 +134,9 @@ pub fn transcribe(
             options.model.as_deref(),
             options.language.clone(),
         )?;
-        service::transcribe_meeting(&transcriber, &repo, &state.data_root, &id)
+        let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
+        state.repo.lock().unwrap().update_status(&id, "transcribed")?;
+        Ok(transcript)
     }
     #[cfg(not(feature = "whisper"))]
     {
@@ -155,8 +159,8 @@ pub fn get_transcript(state: tauri::State<AppState>, id: String) -> AppResult<Op
 }
 
 #[tauri::command]
-pub fn suggest_metadata(
-    state: tauri::State<AppState>,
+pub async fn suggest_metadata(
+    state: tauri::State<'_, AppState>,
     id: String,
     config: AiConfig,
 ) -> AppResult<MetadataSuggestion> {
@@ -166,7 +170,11 @@ pub fn suggest_metadata(
 }
 
 #[tauri::command]
-pub fn summarize(state: tauri::State<AppState>, id: String, config: AiConfig) -> AppResult<String> {
+pub async fn summarize(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+) -> AppResult<String> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
     let summary = uxo_core::ai::summarize(&backend, &text)?;
@@ -181,8 +189,8 @@ pub fn get_summary(state: tauri::State<AppState>, id: String) -> AppResult<Optio
 }
 
 #[tauri::command]
-pub fn ask(
-    state: tauri::State<AppState>,
+pub async fn ask(
+    state: tauri::State<'_, AppState>,
     id: String,
     config: AiConfig,
     question: String,
