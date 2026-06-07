@@ -17,19 +17,19 @@ use crate::error::{AppError, AppResult};
 use crate::transcriber::Transcriber;
 use crate::transcript::Segment;
 
-/// Колбэк прогресса расшифровки: получает процент 0..100.
-pub type ProgressCb = std::sync::Arc<dyn Fn(i32) + Send + Sync>;
-
 /// Транскрайбер на локальной модели Whisper.
 pub struct WhisperTranscriber {
     model_path: PathBuf,
     /// Код языка (напр. "ru"); `None` — автоопределение.
     language: Option<String>,
-    progress: Option<ProgressCb>,
 }
 
 /// Размер модели по умолчанию (баланс качества RU и размера ~466 МБ).
 pub const DEFAULT_MODEL_SIZE: &str = "small";
+
+/// Длина окна (сек) при пооконной расшифровке — для прогресса и памяти.
+pub const DEFAULT_WINDOW_SECS: usize = 120;
+const SAMPLE_RATE: usize = 16_000;
 
 /// Гарантирует наличие ggml-модели нужного размера в `<data_dir>/models`,
 /// скачивая её с HuggingFace при первом обращении. Возвращает путь к файлу.
@@ -62,14 +62,7 @@ impl WhisperTranscriber {
         Self {
             model_path: model_path.into(),
             language,
-            progress: None,
         }
-    }
-
-    /// Подключает колбэк прогресса (процент 0..100).
-    pub fn with_progress(mut self, cb: ProgressCb) -> Self {
-        self.progress = Some(cb);
-        self
     }
 
     /// Встроенный движок: гарантирует модель (скачивает при необходимости)
@@ -99,10 +92,17 @@ impl WhisperTranscriber {
             .map_err(|e| AppError::Audio(e.to_string()))?;
         Ok(samples)
     }
-}
 
-impl Transcriber for WhisperTranscriber {
-    fn transcribe(&self, wav_path: &Path) -> AppResult<Vec<Segment>> {
+    /// Расшифровка пооконно: модель грузится один раз, аудио идёт окнами по
+    /// `window_secs` секунд, после каждого окна зовётся `on_progress(0.0..=1.0)`.
+    /// Прогресс идёт из нашего цикла (без FFI-колбэка whisper, который ронял
+    /// приложение). Подходит для очень длинных записей (память ограничена окном).
+    pub fn transcribe_windowed(
+        &self,
+        wav_path: &Path,
+        window_secs: usize,
+        on_progress: &dyn Fn(f32),
+    ) -> AppResult<Vec<Segment>> {
         let audio = Self::read_wav_as_f32(wav_path)?;
         if audio.is_empty() {
             return Ok(Vec::new());
@@ -113,51 +113,62 @@ impl Transcriber for WhisperTranscriber {
             WhisperContextParameters::default(),
         )
         .map_err(|e| AppError::Audio(format!("whisper: cannot load model: {e}")))?;
-        let mut state = ctx
-            .create_state()
-            .map_err(|e| AppError::Audio(format!("whisper: create_state: {e}")))?;
 
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        // Язык: "auto"/None — автоопределение; иначе фиксируем (напр. "ru").
-        match self.language.as_deref() {
-            Some("auto") | None => {}
-            Some(lang) => params.set_language(Some(lang)),
-        }
-        // Никакого перевода — расшифровка на языке оригинала.
-        params.set_translate(false);
-        if let Some(cb) = &self.progress {
-            let cb = cb.clone();
-            params.set_progress_callback_safe(move |p: i32| cb(p));
-        }
-        params.set_print_progress(false);
-        params.set_print_realtime(false);
-        params.set_print_timestamps(false);
+        let win = window_secs.max(1) * SAMPLE_RATE;
+        let total = audio.len().div_ceil(win).max(1);
+        let mut segments = Vec::new();
 
-        state
-            .full(params, &audio)
-            .map_err(|e| AppError::Audio(format!("whisper: full: {e}")))?;
+        for (i, chunk) in audio.chunks(win).enumerate() {
+            let mut state = ctx
+                .create_state()
+                .map_err(|e| AppError::Audio(format!("whisper: create_state: {e}")))?;
 
-        let n = state
-            .full_n_segments()
-            .map_err(|e| AppError::Audio(e.to_string()))?;
-        let mut segments = Vec::with_capacity(n as usize);
-        for i in 0..n {
-            let text = state
-                .full_get_segment_text(i)
+            let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            match self.language.as_deref() {
+                Some("auto") | None => {}
+                Some(lang) => params.set_language(Some(lang)),
+            }
+            params.set_translate(false);
+            params.set_print_progress(false);
+            params.set_print_realtime(false);
+            params.set_print_timestamps(false);
+
+            state
+                .full(params, chunk)
+                .map_err(|e| AppError::Audio(format!("whisper: full: {e}")))?;
+
+            let offset = (i * win) as f64 / SAMPLE_RATE as f64;
+            let n = state
+                .full_n_segments()
                 .map_err(|e| AppError::Audio(e.to_string()))?;
-            let t0 = state
-                .full_get_segment_t0(i)
-                .map_err(|e| AppError::Audio(e.to_string()))?;
-            let t1 = state
-                .full_get_segment_t1(i)
-                .map_err(|e| AppError::Audio(e.to_string()))?;
-            // Таймкоды whisper — в сотых долях секунды.
-            segments.push(Segment {
-                start_secs: t0 as f64 / 100.0,
-                end_secs: t1 as f64 / 100.0,
-                text: text.trim().to_string(),
-            });
+            for s in 0..n {
+                let text = state
+                    .full_get_segment_text(s)
+                    .map_err(|e| AppError::Audio(e.to_string()))?;
+                let t0 = state
+                    .full_get_segment_t0(s)
+                    .map_err(|e| AppError::Audio(e.to_string()))?;
+                let t1 = state
+                    .full_get_segment_t1(s)
+                    .map_err(|e| AppError::Audio(e.to_string()))?;
+                let text = text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                segments.push(Segment {
+                    start_secs: offset + t0 as f64 / 100.0,
+                    end_secs: offset + t1 as f64 / 100.0,
+                    text: text.to_string(),
+                });
+            }
+            on_progress((i + 1) as f32 / total as f32);
         }
         Ok(segments)
+    }
+}
+
+impl Transcriber for WhisperTranscriber {
+    fn transcribe(&self, wav_path: &Path) -> AppResult<Vec<Segment>> {
+        self.transcribe_windowed(wav_path, DEFAULT_WINDOW_SECS, &|_| {})
     }
 }

@@ -185,26 +185,26 @@ pub async fn transcribe(
     // whisper.cpp — он вызывал нативный краш).
     #[cfg(feature = "whisper")]
     {
-        use uxo_core::transcriber::Transcriber;
         use uxo_core::transcript::merge_tracks;
-        use uxo_core::whisper::WhisperTranscriber;
+        use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
         flog(&state.data_root, &format!("transcribe start id={id}"));
         let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
         let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
 
-        let emit_stage = |stage: &str| {
+        // Прогресс шлём из НАШЕГО цикла (между окнами): mic → 0–50%, system → 50–100%.
+        let emit = |overall: i32, stage: &str| {
             let _ = app.emit(
                 "transcribe-progress",
                 TranscribeProgress {
                     id: id.clone(),
                     stage: stage.into(),
-                    percent: 0,
+                    percent: overall.clamp(0, 100),
                 },
             );
         };
 
-        emit_stage("mic");
+        emit(0, "mic");
         flog(&state.data_root, "transcribe: model+mic track");
         let mic_segs = {
             let t = WhisperTranscriber::managed(
@@ -212,10 +212,12 @@ pub async fn transcribe(
                 options.model.as_deref(),
                 options.language.clone(),
             )?;
-            t.transcribe(&mic_path)?
+            t.transcribe_windowed(&mic_path, DEFAULT_WINDOW_SECS, &|frac| {
+                emit((frac * 50.0) as i32, "mic");
+            })?
         };
 
-        emit_stage("system");
+        emit(50, "system");
         flog(&state.data_root, "transcribe: system track");
         let system_segs = {
             let t = WhisperTranscriber::managed(
@@ -223,7 +225,9 @@ pub async fn transcribe(
                 options.model.as_deref(),
                 options.language.clone(),
             )?;
-            t.transcribe(&system_path)?
+            t.transcribe_windowed(&system_path, DEFAULT_WINDOW_SECS, &|frac| {
+                emit(50 + (frac * 50.0) as i32, "system");
+            })?
         };
 
         let transcript = merge_tracks(mic_segs, system_segs);
