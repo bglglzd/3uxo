@@ -47,3 +47,14 @@ export interface AppSettings {
   ai: AiConfig;
   whisper: WhisperConfig;
 }
+
+/// Состояние расшифровки одной встречи (живёт на уровне приложения, чтобы
+/// переживать переход между встречами).
+export interface TranscribeState {
+  running: boolean;
+  percent: number;
+  stage?: string;
+  error?: string;
+  /// Меняется при завершении — сигнал перезагрузить расшифровку.
+  doneToken?: number;
+}

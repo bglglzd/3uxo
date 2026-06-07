@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_notification::NotificationExt;
+
 use uxo_core::ai::{AiConfig, HttpChatBackend, MetadataSuggestion};
 use uxo_core::cli_transcriber::{CliTranscriber, TranscribeOptions};
 use uxo_core::error::{AppError, AppResult};
@@ -9,6 +12,20 @@ use uxo_core::recorder::Recorder;
 use uxo_core::service::{self, ActiveRecording};
 use uxo_core::storage::Repo;
 use uxo_core::transcript::Transcript;
+
+/// Событие прогресса расшифровки для фронтенда.
+#[derive(Clone, serde::Serialize)]
+pub struct TranscribeProgress {
+    pub id: String,
+    /// "mic" (своя дорожка) или "system" (собеседник).
+    pub stage: String,
+    pub percent: i32,
+}
+
+/// Показывает нативное уведомление Windows (тихо игнорирует ошибки).
+pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
 
 /// Текст расшифровки встречи для подачи в ИИ (ошибка, если ещё не расшифровано).
 fn meeting_transcript_text(data_root: &Path, id: &str) -> AppResult<String> {
@@ -27,7 +44,7 @@ pub struct AppState {
 }
 
 #[tauri::command]
-pub fn start_recording(state: tauri::State<AppState>) -> AppResult<String> {
+pub fn start_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResult<String> {
     let mut active = state.active.lock().unwrap();
     if active.is_some() {
         return Err(AppError::InvalidState("already recording".into()));
@@ -35,11 +52,15 @@ pub fn start_recording(state: tauri::State<AppState>) -> AppResult<String> {
     let id = uuid::Uuid::new_v4().to_string();
     let rec = service::start_recording(state.recorder.as_ref(), &state.data_root, id.clone())?;
     *active = Some(rec);
+    notify(&app, "🔴 3uxo — запись начата", "Идёт запись звонка");
     Ok(id)
 }
 
 #[tauri::command]
-pub async fn stop_recording(state: tauri::State<'_, AppState>) -> AppResult<Meeting> {
+pub async fn stop_recording(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<Meeting> {
     // Берём активную запись и сразу отпускаем lock, чтобы не держать его
     // во время блокирующего I/O в recorder.stop() (важно для Плана 2).
     let current = {
@@ -49,8 +70,12 @@ pub async fn stop_recording(state: tauri::State<'_, AppState>) -> AppResult<Meet
             .ok_or_else(|| AppError::InvalidState("not recording".into()))?
     };
     let created_at = chrono::Utc::now().to_rfc3339();
-    let repo = state.repo.lock().unwrap();
-    service::stop_recording(state.recorder.as_ref(), &repo, &current, created_at)
+    let meeting = {
+        let repo = state.repo.lock().unwrap();
+        service::stop_recording(state.recorder.as_ref(), &repo, &current, created_at)?
+    };
+    notify(&app, "✅ 3uxo — запись сохранена", &meeting.title);
+    Ok(meeting)
 }
 
 #[tauri::command]
@@ -106,14 +131,16 @@ pub fn toggle_recording_state(state: &AppState) -> AppResult<bool> {
 }
 
 // Асинхронная: тяжёлая работа (загрузка модели + whisper) уходит с главного
-// потока, поэтому окно не зависает. Блокировку БД берём лишь на миг в конце.
+// потока, поэтому окно не зависает и можно ходить по другим встречам.
+// Прогресс шлём событием `transcribe-progress`.
 #[tauri::command]
 pub async fn transcribe(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     id: String,
     options: TranscribeOptions,
 ) -> AppResult<Transcript> {
-    // Явно указанный внешний whisper-CLI — используем его.
+    // Явно указанный внешний whisper-CLI — используем его (без прогресса).
     if options
         .whisper_path
         .as_deref()
@@ -123,24 +150,66 @@ pub async fn transcribe(
         let transcriber = CliTranscriber::new(options);
         let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
+        notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
         return Ok(transcript);
     }
 
     // Иначе — встроенный whisper.cpp; модель скачивается при первом запуске.
     #[cfg(feature = "whisper")]
     {
-        let transcriber = uxo_core::whisper::WhisperTranscriber::managed(
-            &state.data_root,
-            options.model.as_deref(),
-            options.language.clone(),
-        )?;
-        let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
+        use std::sync::Arc;
+        use uxo_core::transcript::merge_tracks;
+        use uxo_core::whisper::WhisperTranscriber;
+
+        let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
+        let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+
+        let progress_cb = |stage: &'static str| {
+            let app = app.clone();
+            let id = id.clone();
+            Arc::new(move |percent: i32| {
+                let _ = app.emit(
+                    "transcribe-progress",
+                    TranscribeProgress {
+                        id: id.clone(),
+                        stage: stage.into(),
+                        percent,
+                    },
+                );
+            })
+        };
+
+        // Дорожка «Я» (микрофон). Контекст модели создаётся и освобождается
+        // до следующей дорожки, чтобы не держать две модели в памяти сразу.
+        let mic_segs = {
+            let t = WhisperTranscriber::managed(
+                &state.data_root,
+                options.model.as_deref(),
+                options.language.clone(),
+            )?
+            .with_progress(progress_cb("mic"));
+            t.transcribe(&mic_path)?
+        };
+        // Дорожка «Собеседник» (системный звук).
+        let system_segs = {
+            let t = WhisperTranscriber::managed(
+                &state.data_root,
+                options.model.as_deref(),
+                options.language.clone(),
+            )?
+            .with_progress(progress_cb("system"));
+            t.transcribe(&system_path)?
+        };
+
+        let transcript = merge_tracks(mic_segs, system_segs);
+        service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
+        notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }
     #[cfg(not(feature = "whisper"))]
     {
-        let _ = options;
+        let _ = (options, &app);
         Err(AppError::Audio(
             "встроенный Whisper недоступен в этой сборке; укажите путь к whisper в настройках".into(),
         ))
@@ -177,7 +246,8 @@ pub async fn summarize(
 ) -> AppResult<String> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
-    let summary = uxo_core::ai::summarize(&backend, &text)?;
+    // Длинные разговоры (2–3 ч) не влезают в контекст — map-reduce по частям.
+    let summary = uxo_core::ai::summarize_long(&backend, &text)?;
     service::save_summary(&state.data_root, &id, &summary)?;
     state.repo.lock().unwrap().update_status(&id, "summarized")?;
     Ok(summary)

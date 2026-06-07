@@ -576,6 +576,24 @@ textarea {
   padding: 30px;
 }
 
+.progress {
+  height: 8px;
+  border-radius: 6px;
+  background: #232c3e;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--accent));
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+.m-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   border: 1px solid var(--border);
@@ -634,7 +652,6 @@ textarea {
   gap: 8px;
 }
 .summary-text {
-  white-space: pre-wrap;
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.55;
@@ -642,8 +659,86 @@ textarea {
   background: var(--bg-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 14px;
+  padding: 4px 16px;
   margin: 0 0 12px;
+}
+
+/* Markdown-рендер (выжимка, ответы ИИ) */
+.md {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  margin: 16px 0 8px;
+  line-height: 1.25;
+}
+.md h1 {
+  font-size: 19px;
+}
+.md h2 {
+  font-size: 16px;
+  color: var(--cyan);
+}
+.md h3 {
+  font-size: 14.5px;
+}
+.md p {
+  margin: 8px 0;
+}
+.md ul,
+.md ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.md li {
+  margin: 4px 0;
+}
+.md strong {
+  color: #fff;
+  font-weight: 700;
+}
+.md a {
+  color: var(--accent);
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.md pre {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+.md pre code {
+  border: none;
+  padding: 0;
+  background: none;
+}
+.md blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-dim);
+}
+.md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
 }
 .muted {
   color: var(--text-faint);
@@ -670,11 +765,10 @@ textarea {
 }
 .ai-answer {
   margin-top: 12px;
-  white-space: pre-wrap;
   background: var(--bg-2);
   border-left: 2px solid var(--accent);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 2px 14px;
   font-size: 14px;
   line-height: 1.5;
 }

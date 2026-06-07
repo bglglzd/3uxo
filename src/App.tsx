@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
-import type { Meeting } from "./types";
+import { getSettings } from "./settings";
+import type { Meeting, TranscribeState } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { MeetingView } from "./components/MeetingView";
 import { SettingsModal } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
+
+type ProgressEvent = { id: string; stage: string; percent: number };
 
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -13,6 +16,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // Состояние расшифровок по id — живёт на уровне приложения.
+  const [trans, setTrans] = useState<Record<string, TranscribeState>>({});
 
   const refresh = useCallback(async () => {
     setMeetings(await api.listMeetings());
@@ -23,7 +28,6 @@ export default function App() {
     refresh();
   }, [refresh]);
 
-  // Проверка обновлений при запуске (тихо).
   useEffect(() => {
     void checkForUpdates();
   }, []);
@@ -43,6 +47,44 @@ export default function App() {
       un.then((f) => f());
     };
   }, [refresh]);
+
+  // Прогресс расшифровки из бэкенда. mic → 0–50%, system → 50–100%.
+  useEffect(() => {
+    const un = listen<ProgressEvent>("transcribe-progress", (e) => {
+      const { id, stage, percent } = e.payload;
+      const overall =
+        stage === "system"
+          ? 50 + Math.round(percent / 2)
+          : Math.round(percent / 2);
+      setTrans((t) => ({
+        ...t,
+        [id]: { ...t[id], running: true, percent: overall, stage, error: undefined },
+      }));
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  const startTranscription = useCallback(
+    async (id: string) => {
+      setTrans((t) => ({ ...t, [id]: { running: true, percent: 0 } }));
+      try {
+        await api.transcribe(id, getSettings().whisper);
+        setTrans((t) => ({
+          ...t,
+          [id]: { running: false, percent: 100, doneToken: (t[id]?.doneToken ?? 0) + 1 },
+        }));
+        await refresh();
+      } catch (e) {
+        setTrans((t) => ({
+          ...t,
+          [id]: { running: false, percent: 0, error: String(e) },
+        }));
+      }
+    },
+    [refresh],
+  );
 
   const handleStart = async () => {
     await api.startRecording();
@@ -71,6 +113,7 @@ export default function App() {
         activeId={selectedId}
         recording={recording}
         elapsed={elapsed}
+        progress={trans}
         onStart={handleStart}
         onStop={handleStop}
         onSelect={setSelectedId}
@@ -80,7 +123,13 @@ export default function App() {
 
       <main className="content">
         {selected ? (
-          <MeetingView key={selected.id} meeting={selected} onMetaSaved={refresh} />
+          <MeetingView
+            key={selected.id}
+            meeting={selected}
+            transState={trans[selected.id]}
+            onTranscribe={() => startTranscription(selected.id)}
+            onMetaSaved={refresh}
+          />
         ) : (
           <div className="empty">
             <div className="ear">👂</div>

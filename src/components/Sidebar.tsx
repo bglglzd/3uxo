@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Meeting } from "../types";
+import type { Meeting, TranscribeState } from "../types";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
 
@@ -8,6 +8,7 @@ interface Props {
   activeId: string | null;
   recording: boolean;
   elapsed: number;
+  progress: Record<string, TranscribeState>;
   onStart: () => void;
   onStop: () => void;
   onSelect: (id: string) => void;
@@ -52,6 +53,7 @@ export function Sidebar(p: Props) {
         <MeetingList
           meetings={filtered}
           activeId={p.activeId}
+          progress={p.progress}
           onSelect={p.onSelect}
           onDelete={p.onDelete}
         />

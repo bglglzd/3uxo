@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Meeting } from "../types";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
+import { Markdown } from "./Markdown";
 
 interface Props {
   meeting: Meeting;
@@ -89,7 +90,9 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
       <div className="card-body">
         {error && <div className="ai-error">{error}</div>}
         {summary ? (
-          <div className="summary-text">{summary}</div>
+          <div className="summary-text">
+            <Markdown>{summary}</Markdown>
+          </div>
         ) : (
           <p className="muted">Выжимки пока нет — нажми «Сделать выжимку».</p>
         )}
@@ -110,7 +113,11 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
             {busy === "ask" ? "…" : "Спросить"}
           </button>
         </div>
-        {answer && <div className="ai-answer">{answer}</div>}
+        {answer && (
+          <div className="ai-answer">
+            <Markdown>{answer}</Markdown>
+          </div>
+        )}
       </div>
     </div>
   );

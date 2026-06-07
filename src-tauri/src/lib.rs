@@ -26,6 +26,13 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     match commands::toggle_recording_state(&state) {
         Ok(now_recording) => {
             let _ = app.emit("recording-changed", now_recording);
+            use tauri_plugin_notification::NotificationExt;
+            let (title, body) = if now_recording {
+                ("🔴 3uxo — запись начата", "Идёт запись звонка")
+            } else {
+                ("✅ 3uxo — запись остановлена", "Запись сохранена")
+            };
+            let _ = app.notification().builder().title(title).body(body).show();
         }
         Err(e) => {
             let _ = app.emit("recording-error", e.to_string());
@@ -75,6 +82,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { Meeting, Transcript } from "../types";
+import type { Meeting, Transcript, TranscribeState } from "../types";
 import { api } from "../api";
-import { getSettings } from "../settings";
 import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
 import { TranscriptView } from "./TranscriptView";
@@ -12,17 +11,18 @@ import { CopyLogButton } from "./CopyLogButton";
 
 interface Props {
   meeting: Meeting;
+  transState?: TranscribeState;
+  onTranscribe: () => void;
   onMetaSaved: () => void;
 }
 
-export function MeetingView({ meeting, onMetaSaved }: Props) {
+export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: Props) {
   const micRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
 
   const [micUrl, setMicUrl] = useState("");
   const [sysUrl, setSysUrl] = useState("");
   const [transcript, setTranscript] = useState<Transcript | null>(null);
-  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
 
   const [playing, setPlaying] = useState(false);
@@ -44,6 +44,17 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
     api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
   }, [meeting.id]);
+
+  // Перезагрузка расшифровки, когда фоновая задача завершилась.
+  useEffect(() => {
+    if (transState?.doneToken) {
+      api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
+    }
+  }, [transState?.doneToken, meeting.id]);
+
+  const transcribing = transState?.running ?? false;
+  const percent = transState?.percent ?? 0;
+  const shownError = error || transState?.error || "";
 
   const activeIndex = useMemo(
     () => (transcript ? activeSegmentIndex(transcript.segments, time) : -1),
@@ -68,19 +79,6 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
     if (micRef.current) micRef.current.currentTime = t;
     if (sysRef.current) sysRef.current.currentTime = t;
     setTime(t);
-  };
-
-  const transcribe = async () => {
-    setError("");
-    setTranscribing(true);
-    try {
-      setTranscript(await api.transcribe(meeting.id, getSettings().whisper));
-      onMetaSaved();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setTranscribing(false);
-    }
   };
 
   const saveMeta = async () => {
@@ -144,9 +142,9 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
         </div>
       </div>
 
-      {error && (
+      {shownError && (
         <div className="ai-error error-banner">
-          <span>{error}</span>
+          <span>{shownError}</span>
           <CopyLogButton className="btn ghost" />
         </div>
       )}
@@ -196,7 +194,7 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
           <div className="spacer" />
           {transcribing ? (
             <span className="muted transcribing">
-              <span className="spin">◜</span> Расшифровываю…
+              <span className="spin">◜</span> Расшифровываю… {percent}%
             </span>
           ) : hasTranscript ? (
             <div className="btn-row">
@@ -208,23 +206,31 @@ export function MeetingView({ meeting, onMetaSaved }: Props) {
               </button>
               <button
                 className="btn ghost"
-                onClick={transcribe}
+                onClick={onTranscribe}
                 title="Перерасшифровать заново"
               >
                 ↻ Заново
               </button>
             </div>
           ) : (
-            <button className="btn primary" onClick={transcribe}>
+            <button className="btn primary" onClick={onTranscribe}>
               Расшифровать
             </button>
           )}
         </div>
-        {transcribing && !hasTranscript ? (
-          <div className="transcript-empty">
-            Идёт расшифровка. Первый раз скачивается модель — это может занять
-            несколько минут. Окно остаётся отзывчивым; можно открыть другие
-            встречи.
+        {transcribing ? (
+          <div className="card-body">
+            <div className="progress">
+              <div className="progress-bar" style={{ width: `${percent}%` }} />
+            </div>
+            <p className="muted" style={{ marginTop: 10 }}>
+              {transState?.stage === "system"
+                ? "Дорожка собеседника"
+                : "Дорожка «Я»"}{" "}
+              · {percent}%. Первый раз скачивается модель — это может занять
+              несколько минут. Можно открыть другие встречи, расшифровка не
+              прервётся.
+            </p>
           </div>
         ) : (
           <TranscriptView

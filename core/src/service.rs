@@ -133,6 +133,16 @@ pub fn transcribe_meeting(
     Ok(transcript)
 }
 
+/// Сохраняет уже готовую расшифровку в `transcript.json`.
+pub fn save_transcript(data_root: &Path, id: &str, transcript: &Transcript) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    let json = serde_json::to_string_pretty(transcript)?;
+    std::fs::write(dir.join("transcript.json"), json)?;
+    Ok(())
+}
+
 /// Читает сохранённую расшифровку встречи, если она есть.
 pub fn load_transcript(data_root: &Path, id: &str) -> AppResult<Option<Transcript>> {
     validate_id(id)?;

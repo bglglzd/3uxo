@@ -17,11 +17,15 @@ use crate::error::{AppError, AppResult};
 use crate::transcriber::Transcriber;
 use crate::transcript::Segment;
 
+/// Колбэк прогресса расшифровки: получает процент 0..100.
+pub type ProgressCb = std::sync::Arc<dyn Fn(i32) + Send + Sync>;
+
 /// Транскрайбер на локальной модели Whisper.
 pub struct WhisperTranscriber {
     model_path: PathBuf,
     /// Код языка (напр. "ru"); `None` — автоопределение.
     language: Option<String>,
+    progress: Option<ProgressCb>,
 }
 
 /// Размер модели по умолчанию (баланс качества RU и размера ~466 МБ).
@@ -58,7 +62,14 @@ impl WhisperTranscriber {
         Self {
             model_path: model_path.into(),
             language,
+            progress: None,
         }
+    }
+
+    /// Подключает колбэк прогресса (процент 0..100).
+    pub fn with_progress(mut self, cb: ProgressCb) -> Self {
+        self.progress = Some(cb);
+        self
     }
 
     /// Встроенный движок: гарантирует модель (скачивает при необходимости)
@@ -114,6 +125,10 @@ impl Transcriber for WhisperTranscriber {
         }
         // Никакого перевода — расшифровка на языке оригинала.
         params.set_translate(false);
+        if let Some(cb) = &self.progress {
+            let cb = cb.clone();
+            params.set_progress_callback_safe(move |p: i32| cb(p));
+        }
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);

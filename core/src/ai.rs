@@ -105,11 +105,70 @@ pub fn suggest_metadata(
     Ok(suggestion)
 }
 
-/// Краткая выжимка разговора.
+/// Краткая выжимка короткого разговора (один проход).
 pub fn summarize(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
-    let system = "Сделай краткую структурированную выжимку разговора: ключевые темы, решения, \
-        задачи и договорённости. По-русски, по делу.";
+    let system = "Сделай структурированную выжимку разговора в формате Markdown: \
+        заголовки (##), маркированные списки, выделение важного. Разделы: краткое \
+        резюме, ключевые темы, решения, задачи и договорённости. По-русски, по делу.";
     backend.chat(system, transcript_text)
+}
+
+/// Порог длины (в символах) одного фрагмента для длинной выжимки.
+/// Подобрано консервативно под модели с контекстом ~130k токенов.
+pub const SUMMARY_CHUNK_CHARS: usize = 60_000;
+
+/// Разбивает текст на части не длиннее `max` символов по границам строк.
+fn split_chunks(text: &str, max: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut cur = String::new();
+    for line in text.lines() {
+        if !cur.is_empty() && cur.len() + line.len() + 1 > max {
+            chunks.push(std::mem::take(&mut cur));
+        }
+        if !cur.is_empty() {
+            cur.push('\n');
+        }
+        cur.push_str(line);
+        if cur.len() >= max {
+            chunks.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        chunks.push(cur);
+    }
+    chunks
+}
+
+/// Выжимка разговора любой длины. Короткий — один проход; длинный (не влезает
+/// в контекст модели) — map-reduce: суммируем каждый фрагмент, затем объединяем
+/// конспекты (рекурсивно, если их сумма всё ещё велика).
+pub fn summarize_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    if transcript_text.len() <= SUMMARY_CHUNK_CHARS {
+        return summarize(backend, transcript_text);
+    }
+
+    let chunks = split_chunks(transcript_text, SUMMARY_CHUNK_CHARS);
+    let total = chunks.len();
+    let mut partials = Vec::with_capacity(total);
+    for (i, chunk) in chunks.iter().enumerate() {
+        let system = "Ты конспектируешь ОДНУ ЧАСТЬ длинного разговора. Кратко и по делу \
+            изложи ключевые моменты, решения и задачи именно из этого фрагмента. \
+            По-русски. Без вступлений.";
+        let user = format!("Часть {}/{} разговора:\n\n{}", i + 1, total, chunk);
+        partials.push(backend.chat(system, &user)?);
+    }
+
+    let combined = partials.join("\n\n---\n\n");
+    // Если конспектов всё ещё слишком много — сворачиваем ещё раз.
+    if combined.len() > SUMMARY_CHUNK_CHARS {
+        return summarize_long(backend, &combined);
+    }
+
+    let system = "Объедини конспекты частей одного разговора в единую связную итоговую \
+        выжимку в формате Markdown: заголовки (##), списки, выделение важного. \
+        Разделы: краткое резюме, ключевые темы, решения, задачи и договорённости. \
+        Не повторяйся, убери дубли. По-русски.";
+    backend.chat(system, &combined)
 }
 
 /// Ответ на вопрос пользователя по расшифровке.
@@ -133,24 +192,48 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
 
-    /// Мок-бэкенд: отдаёт заданный ответ и запоминает последний (system,user).
+    /// Мок-бэкенд: отдаёт заданный ответ, запоминает последний (system,user)
+    /// и считает число вызовов.
     struct MockChatBackend {
         response: String,
         last: Arc<Mutex<Option<(String, String)>>>,
+        calls: Arc<Mutex<usize>>,
     }
     impl MockChatBackend {
         fn new(response: &str) -> Self {
             Self {
                 response: response.into(),
                 last: Arc::new(Mutex::new(None)),
+                calls: Arc::new(Mutex::new(0)),
             }
         }
     }
     impl ChatBackend for MockChatBackend {
         fn chat(&self, system: &str, user: &str) -> AppResult<String> {
             *self.last.lock().unwrap() = Some((system.into(), user.into()));
+            *self.calls.lock().unwrap() += 1;
             Ok(self.response.clone())
         }
+    }
+
+    #[test]
+    fn summarize_long_short_input_is_single_pass() {
+        let b = MockChatBackend::new("итог");
+        let out = summarize_long(&b, "короткий разговор").unwrap();
+        assert_eq!(out, "итог");
+        assert_eq!(*b.calls.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn summarize_long_chunks_then_reduces() {
+        // Текст заметно длиннее порога → несколько частей + финальное объединение.
+        let line = "Я: довольно длинная строка разговора для проверки разбиения\n";
+        let big = line.repeat((SUMMARY_CHUNK_CHARS / line.len()) * 3 + 10);
+        let b = MockChatBackend::new("короткий конспект");
+        let out = summarize_long(&b, &big).unwrap();
+        assert_eq!(out, "короткий конспект");
+        // как минимум 3 части + 1 объединение = 4 вызова
+        assert!(*b.calls.lock().unwrap() >= 4, "calls={}", *b.calls.lock().unwrap());
     }
 
     #[test]
