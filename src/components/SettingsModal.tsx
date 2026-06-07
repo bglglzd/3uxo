@@ -63,14 +63,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <div className="field">
           <label>Модель</label>
           <select
-            value={s.whisper.model || "small"}
+            value={s.whisper.model || "medium"}
             onChange={(e) => wh("model", e.target.value)}
           >
-            <option value="base">base — быстрее, ~142 МБ</option>
-            <option value="small">small — баланс, ~466 МБ (рекомендуется)</option>
-            <option value="medium">medium — точнее для русского, ~1.5 ГБ</option>
+            <option value="base">base — быстрее всего, ~142 МБ</option>
+            <option value="small">small — быстрее, ~466 МБ</option>
+            <option value="medium">
+              medium — точнее для русского, ~1.5 ГБ (рекомендуется)
+            </option>
             <option value="large-v3">large-v3 — максимум качества, ~3 ГБ</option>
           </select>
+          <span className="hint">
+            Модель скачается один раз при первой расшифровке. Больше модель —
+            точнее, но медленнее на CPU.
+          </span>
         </div>
         <div className="field">
           <label>Язык</label>

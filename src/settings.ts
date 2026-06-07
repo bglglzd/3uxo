@@ -4,7 +4,7 @@ const KEY = "3uxo.settings";
 
 const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },
-  whisper: { whisperPath: "", model: "", language: "ru" },
+  whisper: { whisperPath: "", model: "medium", language: "ru" },
 };
 
 export function getSettings(): AppSettings {

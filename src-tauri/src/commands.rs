@@ -204,31 +204,29 @@ pub async fn transcribe(
             );
         };
 
+        // Модель грузится ОДИН раз на обе дорожки; скачивание — с прогрессом.
+        emit(0, "download");
+        flog(&state.data_root, "transcribe: ensure model + load");
+        let transcriber = WhisperTranscriber::managed(
+            &state.data_root,
+            options.model.as_deref(),
+            options.language.clone(),
+            &|frac| emit((frac * 100.0) as i32, "download"),
+        )?;
+
         emit(0, "mic");
-        flog(&state.data_root, "transcribe: model+mic track");
-        let mic_segs = {
-            let t = WhisperTranscriber::managed(
-                &state.data_root,
-                options.model.as_deref(),
-                options.language.clone(),
-            )?;
-            t.transcribe_windowed(&mic_path, DEFAULT_WINDOW_SECS, &|frac| {
+        flog(&state.data_root, "transcribe: mic track");
+        let mic_segs =
+            transcriber.transcribe_windowed(&mic_path, DEFAULT_WINDOW_SECS, &|frac| {
                 emit((frac * 50.0) as i32, "mic");
-            })?
-        };
+            })?;
 
         emit(50, "system");
         flog(&state.data_root, "transcribe: system track");
-        let system_segs = {
-            let t = WhisperTranscriber::managed(
-                &state.data_root,
-                options.model.as_deref(),
-                options.language.clone(),
-            )?;
-            t.transcribe_windowed(&system_path, DEFAULT_WINDOW_SECS, &|frac| {
+        let system_segs =
+            transcriber.transcribe_windowed(&system_path, DEFAULT_WINDOW_SECS, &|frac| {
                 emit(50 + (frac * 50.0) as i32, "system");
-            })?
-        };
+            })?;
 
         let transcript = merge_tracks(mic_segs, system_segs);
         service::save_transcript(&state.data_root, &id, &transcript)?;

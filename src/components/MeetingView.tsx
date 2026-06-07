@@ -252,12 +252,14 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <div className="progress-bar" style={{ width: `${percent}%` }} />
             </div>
             <p className="muted" style={{ marginTop: 10 }}>
-              {transState?.stage === "system"
-                ? "Дорожка собеседника"
-                : "Дорожка «Я»"}{" "}
-              · {percent}%. Первый раз скачивается модель — это может занять
-              несколько минут. Можно открыть другие встречи, расшифровка не
-              прервётся.
+              {transState?.stage === "download"
+                ? "Скачивание модели"
+                : transState?.stage === "system"
+                  ? "Дорожка собеседника"
+                  : "Дорожка «Я»"}{" "}
+              · {percent}%. Первый раз модель скачивается (medium ~1.5 ГБ) — это
+              может занять несколько минут. Можно открыть другие встречи,
+              расшифровка не прервётся.
             </p>
           </div>
         ) : (

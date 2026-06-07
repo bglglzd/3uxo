@@ -9,6 +9,7 @@
 //! Ожидаемый формат входа — то, что пишет рекордер: WAV PCM, моно, 16 кГц,
 //! 16 бит (см. `crate::audio`). Whisper как раз хочет 16 кГц f32 моно.
 
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -17,24 +18,28 @@ use crate::error::{AppError, AppResult};
 use crate::transcriber::Transcriber;
 use crate::transcript::Segment;
 
-/// Транскрайбер на локальной модели Whisper.
+/// Транскрайбер на локальной модели Whisper (модель грузится в память один раз).
 pub struct WhisperTranscriber {
-    model_path: PathBuf,
+    ctx: WhisperContext,
     /// Код языка (напр. "ru"); `None` — автоопределение.
     language: Option<String>,
 }
 
-/// Размер модели по умолчанию (баланс качества RU и размера ~466 МБ).
-pub const DEFAULT_MODEL_SIZE: &str = "small";
+/// Размер модели по умолчанию (medium — заметно лучше для русского, ~1.5 ГБ).
+pub const DEFAULT_MODEL_SIZE: &str = "medium";
 
 /// Длина окна (сек) при пооконной расшифровке — для прогресса и памяти.
-pub const DEFAULT_WINDOW_SECS: usize = 120;
+pub const DEFAULT_WINDOW_SECS: usize = 60;
 const SAMPLE_RATE: usize = 16_000;
 
 /// Гарантирует наличие ggml-модели нужного размера в `<data_dir>/models`,
-/// скачивая её с HuggingFace при первом обращении. Возвращает путь к файлу.
+/// скачивая её с HuggingFace при первом обращении (с прогрессом 0.0..=1.0).
 /// Качается только модель (не данные пользователя); транскрибация — локально.
-pub fn ensure_model(data_dir: &Path, size: &str) -> AppResult<PathBuf> {
+pub fn ensure_model(
+    data_dir: &Path,
+    size: &str,
+    on_progress: &dyn Fn(f32),
+) -> AppResult<PathBuf> {
     let models_dir = data_dir.join("models");
     std::fs::create_dir_all(&models_dir)?;
     let path = models_dir.join(format!("ggml-{size}.bin"));
@@ -47,39 +52,55 @@ pub fn ensure_model(data_dir: &Path, size: &str) -> AppResult<PathBuf> {
     let resp = ureq::get(&url)
         .call()
         .map_err(|e| AppError::Http(format!("download model: {e}")))?;
+    let total: u64 = resp
+        .header("Content-Length")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
     let tmp = path.with_extension("part");
     {
         let mut reader = resp.into_reader();
         let mut file = std::fs::File::create(&tmp)?;
-        std::io::copy(&mut reader, &mut file)?;
+        let mut buf = [0u8; 65536];
+        let mut downloaded: u64 = 0;
+        loop {
+            let n = reader.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n])?;
+            downloaded += n as u64;
+            if total > 0 {
+                on_progress(downloaded as f32 / total as f32);
+            }
+        }
     }
     std::fs::rename(&tmp, &path)?;
+    on_progress(1.0);
     Ok(path)
 }
 
 impl WhisperTranscriber {
-    pub fn new(model_path: impl Into<PathBuf>, language: Option<String>) -> Self {
-        Self {
-            model_path: model_path.into(),
-            language,
-        }
-    }
-
-    /// Встроенный движок: гарантирует модель (скачивает при необходимости)
-    /// и возвращает готовый транскрайбер. `size` пустой → DEFAULT_MODEL_SIZE.
+    /// Встроенный движок: гарантирует модель (скачивает с прогрессом при
+    /// необходимости), грузит её в память один раз и возвращает транскрайбер.
     pub fn managed(
         data_dir: &Path,
         size: Option<&str>,
         language: Option<String>,
+        on_download: &dyn Fn(f32),
     ) -> AppResult<Self> {
         let size = size.filter(|s| !s.is_empty()).unwrap_or(DEFAULT_MODEL_SIZE);
-        let model_path = ensure_model(data_dir, size)?;
+        let model_path = ensure_model(data_dir, size, on_download)?;
         // По умолчанию — русский. Пусто/не задано → "ru"; "auto" → автоопределение.
         let language = match language {
             Some(l) if !l.is_empty() => Some(l),
             _ => Some("ru".to_string()),
         };
-        Ok(Self::new(model_path, language))
+        let ctx = WhisperContext::new_with_params(
+            &model_path.to_string_lossy(),
+            WhisperContextParameters::default(),
+        )
+        .map_err(|e| AppError::Audio(format!("whisper: cannot load model: {e}")))?;
+        Ok(Self { ctx, language })
     }
 
     /// Читает WAV (i16 моно) и нормализует в f32 [-1.0, 1.0].
@@ -108,12 +129,7 @@ impl WhisperTranscriber {
             return Ok(Vec::new());
         }
 
-        let ctx = WhisperContext::new_with_params(
-            &self.model_path.to_string_lossy(),
-            WhisperContextParameters::default(),
-        )
-        .map_err(|e| AppError::Audio(format!("whisper: cannot load model: {e}")))?;
-
+        let ctx = &self.ctx;
         let win = window_secs.max(1) * SAMPLE_RATE;
         let total = audio.len().div_ceil(win).max(1);
         let mut segments = Vec::new();
