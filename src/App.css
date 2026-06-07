@@ -388,6 +388,20 @@ textarea {
   border-color: var(--accent-strong);
   color: var(--text);
 }
+.speakers-row {
+  gap: 16px;
+}
+.speaker-edit {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.speaker-edit span {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
 
 /* Card */
 .card {

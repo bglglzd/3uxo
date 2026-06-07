@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting, Transcript, TranscribeState } from "../types";
 import { api } from "../api";
+import { getLabels, setLabels as saveLabels } from "../labels";
+import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
 import { TranscriptView } from "./TranscriptView";
@@ -32,6 +34,13 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [title, setTitle] = useState(meeting.title);
   const [participants, setParticipants] = useState(meeting.participants);
   const [topic, setTopic] = useState(meeting.topic);
+  const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
+
+  const updateLabel = (key: "me" | "them", value: string) => {
+    const next = { ...labels, [key]: value };
+    setLbls(next);
+    saveLabels(meeting.id, next);
+  };
 
   useEffect(() => {
     setTitle(meeting.title);
@@ -40,6 +49,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setTime(0);
     setPlaying(false);
     setError("");
+    setLbls(getLabels(meeting.id));
     api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
     api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
@@ -94,8 +104,8 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     if (!transcript) return;
     const content =
       fmt === "txt"
-        ? transcriptToTxt(meeting, transcript)
-        : transcriptToMd(meeting, transcript);
+        ? transcriptToTxt(meeting, transcript, labels)
+        : transcriptToMd(meeting, transcript, labels);
     try {
       const path = await save({
         defaultPath: exportFileName(meeting, fmt),
@@ -139,6 +149,24 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             onBlur={saveMeta}
             placeholder="тема"
           />
+        </div>
+        <div className="mv-meta-row speakers-row">
+          <label className="speaker-edit">
+            <span>Имя дорожки «Я»</span>
+            <input
+              className="chip-input"
+              value={labels.me}
+              onChange={(e) => updateLabel("me", e.target.value)}
+            />
+          </label>
+          <label className="speaker-edit">
+            <span>Имя собеседника</span>
+            <input
+              className="chip-input"
+              value={labels.them}
+              onChange={(e) => updateLabel("them", e.target.value)}
+            />
+          </label>
         </div>
       </div>
 
@@ -236,6 +264,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           <TranscriptView
             transcript={transcript}
             activeIndex={activeIndex}
+            labels={labels}
             onSeek={seek}
           />
         )}

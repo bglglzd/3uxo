@@ -129,6 +129,11 @@ impl WhisperTranscriber {
                 Some(lang) => params.set_language(Some(lang)),
             }
             params.set_translate(false);
+            // Более дробные сегменты (по словам) → точнее очередность реплик
+            // при склейке двух дорожек и аккуратнее «пузыри» чата.
+            params.set_token_timestamps(true);
+            params.set_split_on_word(true);
+            params.set_max_len(140);
             params.set_print_progress(false);
             params.set_print_realtime(false);
             params.set_print_timestamps(false);

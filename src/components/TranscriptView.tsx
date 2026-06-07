@@ -1,14 +1,16 @@
 import { useEffect, useRef } from "react";
 import type { Transcript } from "../types";
+import type { SpeakerLabels } from "../labels";
 import { clock } from "../export";
 
 interface Props {
   transcript: Transcript | null;
   activeIndex: number;
+  labels: SpeakerLabels;
   onSeek: (secs: number) => void;
 }
 
-export function TranscriptView({ transcript, activeIndex, onSeek }: Props) {
+export function TranscriptView({ transcript, activeIndex, labels, onSeek }: Props) {
   const activeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +37,9 @@ export function TranscriptView({ transcript, activeIndex, onSeek }: Props) {
             ref={active ? activeRef : undefined}
             className={`turn ${seg.speaker}${active ? " active" : ""}`}
           >
-            <span className="who">{seg.speaker === "me" ? "Я" : "Собеседник"}</span>
+            <span className="who">
+              {seg.speaker === "me" ? labels.me : labels.them}
+            </span>
             <div
               className="bubble"
               onClick={() => onSeek(seg.start_secs)}

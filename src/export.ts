@@ -1,7 +1,14 @@
 import type { Meeting, Transcript, Speaker } from "./types";
 
-function speakerLabel(s: Speaker): string {
-  return s === "me" ? "Я" : "Собеседник";
+export interface SpeakerNames {
+  me: string;
+  them: string;
+}
+
+const DEFAULT_NAMES: SpeakerNames = { me: "Я", them: "Собеседник" };
+
+function speakerLabel(s: Speaker, names: SpeakerNames): string {
+  return s === "me" ? names.me : names.them;
 }
 
 export function clock(secs: number): string {
@@ -12,19 +19,29 @@ export function clock(secs: number): string {
 }
 
 /// Простой текст расшифровки.
-export function transcriptToTxt(meeting: Meeting, transcript: Transcript): string {
+export function transcriptToTxt(
+  meeting: Meeting,
+  transcript: Transcript,
+  names: SpeakerNames = DEFAULT_NAMES,
+): string {
   const lines: string[] = [meeting.title || "Встреча"];
   if (meeting.participants) lines.push(`Участники: ${meeting.participants}`);
   if (meeting.topic) lines.push(`Тема: ${meeting.topic}`);
   lines.push("");
   for (const seg of transcript.segments) {
-    lines.push(`[${clock(seg.start_secs)}] ${speakerLabel(seg.speaker)}: ${seg.text}`);
+    lines.push(
+      `[${clock(seg.start_secs)}] ${speakerLabel(seg.speaker, names)}: ${seg.text}`,
+    );
   }
   return lines.join("\n") + "\n";
 }
 
 /// Markdown-версия расшифровки.
-export function transcriptToMd(meeting: Meeting, transcript: Transcript): string {
+export function transcriptToMd(
+  meeting: Meeting,
+  transcript: Transcript,
+  names: SpeakerNames = DEFAULT_NAMES,
+): string {
   const lines: string[] = [`# ${meeting.title || "Встреча"}`, ""];
   const meta: string[] = [];
   if (meeting.participants) meta.push(`**Участники:** ${meeting.participants}`);
@@ -36,7 +53,7 @@ export function transcriptToMd(meeting: Meeting, transcript: Transcript): string
   lines.push("## Расшифровка", "");
   for (const seg of transcript.segments) {
     lines.push(
-      `- \`${clock(seg.start_secs)}\` **${speakerLabel(seg.speaker)}:** ${seg.text}`,
+      `- \`${clock(seg.start_secs)}\` **${speakerLabel(seg.speaker, names)}:** ${seg.text}`,
     );
   }
   return lines.join("\n") + "\n";
