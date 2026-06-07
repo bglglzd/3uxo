@@ -158,6 +158,7 @@ pub async fn transcribe(
     #[cfg(feature = "whisper")]
     {
         use std::sync::Arc;
+        use uxo_core::transcriber::Transcriber;
         use uxo_core::transcript::merge_tracks;
         use uxo_core::whisper::WhisperTranscriber;
 
