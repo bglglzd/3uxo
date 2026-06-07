@@ -64,6 +64,17 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
 
   const transcribing = transState?.running ?? false;
   const percent = transState?.percent ?? 0;
+  const stage = transState?.stage;
+  const done = transState?.done ?? 0;
+  const total = transState?.total ?? 0;
+  const stageLabel =
+    stage === "download"
+      ? "Скачивание модели"
+      : stage === "loading"
+        ? "Загрузка модели в память"
+        : stage === "system"
+          ? "Дорожка собеседника"
+          : "Дорожка «Я»";
   const shownError = error || transState?.error || "";
 
   const activeIndex = useMemo(
@@ -222,7 +233,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           <div className="spacer" />
           {transcribing ? (
             <span className="muted transcribing">
-              <span className="spin">◜</span> Расшифровываю… {percent}%
+              <span className="spin">◜</span> {stageLabel}…
             </span>
           ) : hasTranscript ? (
             <div className="btn-row">
@@ -252,14 +263,11 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <div className="progress-bar" style={{ width: `${percent}%` }} />
             </div>
             <p className="muted" style={{ marginTop: 10 }}>
-              {transState?.stage === "download"
-                ? "Скачивание модели"
-                : transState?.stage === "system"
-                  ? "Дорожка собеседника"
-                  : "Дорожка «Я»"}{" "}
-              · {percent}%. Первый раз модель скачивается (medium ~1.5 ГБ) — это
-              может занять несколько минут. Можно открыть другие встречи,
-              расшифровка не прервётся.
+              {stageLabel}
+              {total > 0 ? ` · фрагмент ${done}/${total}` : ""} ·{" "}
+              {Math.round(percent)}%. Первый раз модель скачивается (выбранная в
+              настройках) — это занимает несколько минут. Можно открыть другие
+              встречи, расшифровка не прервётся.
             </p>
           </div>
         ) : (

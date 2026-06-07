@@ -54,6 +54,9 @@ export interface TranscribeState {
   running: boolean;
   percent: number;
   stage?: string;
+  /// Сколько фрагментов готово / всего (для счётчика прогресса).
+  done?: number;
+  total?: number;
   error?: string;
   /// Меняется при завершении — сигнал перезагрузить расшифровку.
   doneToken?: number;

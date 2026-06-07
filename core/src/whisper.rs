@@ -122,7 +122,7 @@ impl WhisperTranscriber {
         &self,
         wav_path: &Path,
         window_secs: usize,
-        on_progress: &dyn Fn(f32),
+        on_progress: &dyn Fn(usize, usize),
     ) -> AppResult<Vec<Segment>> {
         let audio = Self::read_wav_as_f32(wav_path)?;
         if audio.is_empty() {
@@ -182,7 +182,7 @@ impl WhisperTranscriber {
                     text: text.to_string(),
                 });
             }
-            on_progress((i + 1) as f32 / total as f32);
+            on_progress(i + 1, total);
         }
         Ok(segments)
     }
@@ -190,6 +190,6 @@ impl WhisperTranscriber {
 
 impl Transcriber for WhisperTranscriber {
     fn transcribe(&self, wav_path: &Path) -> AppResult<Vec<Segment>> {
-        self.transcribe_windowed(wav_path, DEFAULT_WINDOW_SECS, &|_| {})
+        self.transcribe_windowed(wav_path, DEFAULT_WINDOW_SECS, &|_, _| {})
     }
 }

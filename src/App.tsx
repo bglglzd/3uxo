@@ -8,7 +8,13 @@ import { MeetingView } from "./components/MeetingView";
 import { SettingsModal } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
 
-type ProgressEvent = { id: string; stage: string; percent: number };
+type ProgressEvent = {
+  id: string;
+  stage: string;
+  percent: number;
+  done: number;
+  total: number;
+};
 
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -51,10 +57,10 @@ export default function App() {
   // Прогресс расшифровки из бэкенда. mic → 0–50%, system → 50–100%.
   useEffect(() => {
     const un = listen<ProgressEvent>("transcribe-progress", (e) => {
-      const { id, stage, percent } = e.payload;
+      const { id, stage, percent, done, total } = e.payload;
       setTrans((t) => ({
         ...t,
-        [id]: { ...t[id], running: true, percent, stage, error: undefined },
+        [id]: { ...t[id], running: true, percent, stage, done, total, error: undefined },
       }));
     });
     return () => {
