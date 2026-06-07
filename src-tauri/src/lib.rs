@@ -98,6 +98,24 @@ pub fn run() {
             use tauri::Manager;
             let data_root = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_root).expect("cannot create data dir");
+            // Panic-hook пишет в файл лога — переживает нативный краш.
+            let log_path = data_root.join("3uxo.log");
+            std::panic::set_hook(Box::new(move |info| {
+                use std::io::Write;
+                let line = format!(
+                    "[panic] {}\n  location: {:?}\n",
+                    info,
+                    info.location()
+                );
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&log_path)
+                {
+                    let _ = f.write_all(line.as_bytes());
+                }
+            }));
+
             let db_path = data_root.join("3uxo.db");
             let repo = Repo::open(&db_path).expect("cannot open db");
 
@@ -128,6 +146,7 @@ pub fn run() {
             commands::ask,
             commands::update_meeting_meta,
             commands::save_text_file,
+            commands::get_backend_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

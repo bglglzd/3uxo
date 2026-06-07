@@ -27,6 +27,32 @@ pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
+/// Дописывает строку в файл лога `<data_root>/3uxo.log` (переживает краш).
+pub(crate) fn flog(data_root: &Path, msg: &str) {
+    use std::io::Write;
+    let line = format!("[{}] {}\n", chrono::Utc::now().to_rfc3339(), msg);
+    let path = data_root.join("3uxo.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// Возвращает «хвост» бэкенд-лога (последние ~64 КБ) для диагностики.
+#[tauri::command]
+pub fn get_backend_log(state: tauri::State<AppState>) -> AppResult<String> {
+    let path = state.data_root.join("3uxo.log");
+    if !path.exists() {
+        return Ok(String::new());
+    }
+    let data = std::fs::read(&path)?;
+    let start = data.len().saturating_sub(64 * 1024);
+    Ok(String::from_utf8_lossy(&data[start..]).to_string())
+}
+
 /// Текст расшифровки встречи для подачи в ИИ (ошибка, если ещё не расшифровано).
 fn meeting_transcript_text(data_root: &Path, id: &str) -> AppResult<String> {
     let transcript = service::load_transcript(data_root, id)?.ok_or_else(|| {
@@ -155,56 +181,55 @@ pub async fn transcribe(
     }
 
     // Иначе — встроенный whisper.cpp; модель скачивается при первом запуске.
+    // Прогресс шлём ПО ФАЗАМ из безопасного потока (без FFI-колбэка внутри
+    // whisper.cpp — он вызывал нативный краш).
     #[cfg(feature = "whisper")]
     {
-        use std::sync::Arc;
         use uxo_core::transcriber::Transcriber;
         use uxo_core::transcript::merge_tracks;
         use uxo_core::whisper::WhisperTranscriber;
 
+        flog(&state.data_root, &format!("transcribe start id={id}"));
         let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
         let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
 
-        let progress_cb = |stage: &'static str| {
-            let app = app.clone();
-            let id = id.clone();
-            Arc::new(move |percent: i32| {
-                let _ = app.emit(
-                    "transcribe-progress",
-                    TranscribeProgress {
-                        id: id.clone(),
-                        stage: stage.into(),
-                        percent,
-                    },
-                );
-            })
+        let emit_stage = |stage: &str| {
+            let _ = app.emit(
+                "transcribe-progress",
+                TranscribeProgress {
+                    id: id.clone(),
+                    stage: stage.into(),
+                    percent: 0,
+                },
+            );
         };
 
-        // Дорожка «Я» (микрофон). Контекст модели создаётся и освобождается
-        // до следующей дорожки, чтобы не держать две модели в памяти сразу.
+        emit_stage("mic");
+        flog(&state.data_root, "transcribe: model+mic track");
         let mic_segs = {
             let t = WhisperTranscriber::managed(
                 &state.data_root,
                 options.model.as_deref(),
                 options.language.clone(),
-            )?
-            .with_progress(progress_cb("mic"));
+            )?;
             t.transcribe(&mic_path)?
         };
-        // Дорожка «Собеседник» (системный звук).
+
+        emit_stage("system");
+        flog(&state.data_root, "transcribe: system track");
         let system_segs = {
             let t = WhisperTranscriber::managed(
                 &state.data_root,
                 options.model.as_deref(),
                 options.language.clone(),
-            )?
-            .with_progress(progress_cb("system"));
+            )?;
             t.transcribe(&system_path)?
         };
 
         let transcript = merge_tracks(mic_segs, system_segs);
         service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
+        flog(&state.data_root, "transcribe done");
         notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }

@@ -61,6 +61,8 @@ export const api = {
   saveTextFile: (path: string, content: string): Promise<void> =>
     inv("save_text_file", { path, content }),
 
+  getBackendLog: (): Promise<string> => inv("get_backend_log"),
+
   async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
     const path: string = await inv("track_path", { id, trackFile });
     return convertFileSrc(path);

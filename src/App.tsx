@@ -51,11 +51,9 @@ export default function App() {
   // Прогресс расшифровки из бэкенда. mic → 0–50%, system → 50–100%.
   useEffect(() => {
     const un = listen<ProgressEvent>("transcribe-progress", (e) => {
-      const { id, stage, percent } = e.payload;
-      const overall =
-        stage === "system"
-          ? 50 + Math.round(percent / 2)
-          : Math.round(percent / 2);
+      const { id, stage } = e.payload;
+      // Прогресс по фазам: дорожка «Я» → ~25%, «Собеседник» → ~75%.
+      const overall = stage === "system" ? 75 : 25;
       setTrans((t) => ({
         ...t,
         [id]: { ...t[id], running: true, percent: overall, stage, error: undefined },
