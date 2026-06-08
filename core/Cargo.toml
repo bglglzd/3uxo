@@ -17,10 +17,13 @@ hound = "3"
 thiserror = "1"
 ureq = { version = "2", features = ["json"] }
 tempfile = "3"
-whisper-rs = { version = "0.12", optional = true }
+whisper-rs = { version = "0.16", optional = true }
 
 [features]
 whisper = ["dep:whisper-rs"]
+# GPU-ускорение через Vulkan (быстро на NVIDIA/AMD/Intel; рантайм vulkan-1.dll
+# идёт с драйвером, ничего вкладывать в установщик не нужно).
+gpu = ["whisper", "whisper-rs/vulkan"]
 
 # Реальный захват звука только на Windows. На Linux/macOS не подтягивается,
 # поэтому воркспейс собирается без WASAPI.

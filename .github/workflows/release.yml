@@ -30,10 +30,17 @@ jobs:
         shell: pwsh
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
 
+      # GPU-бэкенд Vulkan для whisper.cpp требует Vulkan SDK (glslc, заголовки).
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_runtime: true
+          cache: true
+
       - name: Install frontend dependencies
         run: npm ci
 
-      # Встроенный Whisper включён фичей `whisper`. Подпись апдейтов — из секретов.
+      # Whisper с GPU (Vulkan). Подпись апдейтов — из секретов.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,5 +54,5 @@ jobs:
           prerelease: false
           # Генерирует и прикладывает latest.json для авто-обновления.
           includeUpdaterJson: true
-          # Включаем встроенный whisper.cpp.
-          args: --features whisper
+          # Встроенный whisper.cpp с GPU-ускорением (Vulkan).
+          args: --features gpu

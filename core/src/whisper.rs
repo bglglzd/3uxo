@@ -161,27 +161,24 @@ impl WhisperTranscriber {
                 .map_err(|e| AppError::Audio(format!("whisper: full: {e}")))?;
 
             let offset = (i * win) as f64 / SAMPLE_RATE as f64;
-            let n = state
-                .full_n_segments()
-                .map_err(|e| AppError::Audio(e.to_string()))?;
+            let n = state.full_n_segments();
             for s in 0..n {
-                let text = state
-                    .full_get_segment_text(s)
-                    .map_err(|e| AppError::Audio(e.to_string()))?;
-                let t0 = state
-                    .full_get_segment_t0(s)
-                    .map_err(|e| AppError::Audio(e.to_string()))?;
-                let t1 = state
-                    .full_get_segment_t1(s)
-                    .map_err(|e| AppError::Audio(e.to_string()))?;
-                let text = text.trim();
+                let Some(seg) = state.get_segment(s) else {
+                    continue;
+                };
+                let text = seg
+                    .to_str_lossy()
+                    .map_err(|e| AppError::Audio(e.to_string()))?
+                    .trim()
+                    .to_string();
                 if text.is_empty() {
                     continue;
                 }
+                // Таймкоды whisper — в сотых долях секунды.
                 segments.push(Segment {
-                    start_secs: offset + t0 as f64 / 100.0,
-                    end_secs: offset + t1 as f64 / 100.0,
-                    text: text.to_string(),
+                    start_secs: offset + seg.start_timestamp() as f64 / 100.0,
+                    end_secs: offset + seg.end_timestamp() as f64 / 100.0,
+                    text,
                 });
             }
             on_progress(i + 1, total);
