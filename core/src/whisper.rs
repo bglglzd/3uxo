@@ -134,22 +134,24 @@ impl WhisperTranscriber {
         let total = audio.len().div_ceil(win).max(1);
         let mut segments = Vec::new();
 
+        // Число потоков по ядрам CPU (whisper по умолчанию берёт мало → медленно).
+        let n_threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .clamp(1, 8) as std::os::raw::c_int;
+
         for (i, chunk) in audio.chunks(win).enumerate() {
             let mut state = ctx
                 .create_state()
                 .map_err(|e| AppError::Audio(format!("whisper: create_state: {e}")))?;
 
             let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            params.set_n_threads(n_threads);
             match self.language.as_deref() {
                 Some("auto") | None => {}
                 Some(lang) => params.set_language(Some(lang)),
             }
             params.set_translate(false);
-            // Более дробные сегменты (по словам) → точнее очередность реплик
-            // при склейке двух дорожек и аккуратнее «пузыри» чата.
-            params.set_token_timestamps(true);
-            params.set_split_on_word(true);
-            params.set_max_len(140);
             params.set_print_progress(false);
             params.set_print_realtime(false);
             params.set_print_timestamps(false);
