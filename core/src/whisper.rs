@@ -96,7 +96,7 @@ impl WhisperTranscriber {
             _ => Some("ru".to_string()),
         };
         let ctx = WhisperContext::new_with_params(
-            &model_path.to_string_lossy(),
+            &model_path,
             WhisperContextParameters::default(),
         )
         .map_err(|e| AppError::Audio(format!("whisper: cannot load model: {e}")))?;
