@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Meeting, TranscribeState } from "../types";
 import { formatClock } from "../util";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
   meetings: Meeting[];
@@ -25,6 +27,8 @@ export function MeetingList({
   onSelect,
   onDelete,
 }: Props) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   if (meetings.length === 0) {
     return <p className="section-label">Пока нет записей</p>;
   }
@@ -42,10 +46,10 @@ export function MeetingList({
             <span
               className="m-del"
               role="button"
-              aria-label="Удалить"
+              aria-label="Удалить встречу"
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm("Удалить эту встречу?")) onDelete(m.id);
+                setConfirmId(m.id);
               }}
             >
               🗑
@@ -62,6 +66,17 @@ export function MeetingList({
           </button>
         );
       })}
+
+      {confirmId && (
+        <ConfirmDialog
+          message="Удалить эту встречу? Запись и расшифровка будут стёрты безвозвратно."
+          onConfirm={() => {
+            onDelete(confirmId);
+            setConfirmId(null);
+          }}
+          onCancel={() => setConfirmId(null)}
+        />
+      )}
     </>
   );
 }

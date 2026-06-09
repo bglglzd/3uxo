@@ -146,6 +146,7 @@ pub fn run() {
             commands::ask,
             commands::update_meeting_meta,
             commands::save_text_file,
+            commands::export_audio,
             commands::get_backend_log,
         ])
         .run(tauri::generate_context!())

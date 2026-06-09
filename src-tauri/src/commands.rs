@@ -255,6 +255,19 @@ pub fn save_text_file(path: String, content: String) -> AppResult<()> {
     Ok(())
 }
 
+/// Копирует WAV-дорожку встречи в выбранный путь (скачивание аудио).
+#[tauri::command]
+pub fn export_audio(
+    state: tauri::State<AppState>,
+    id: String,
+    track_file: String,
+    dest: String,
+) -> AppResult<()> {
+    let src = service::track_path(&state.data_root, &id, &track_file)?;
+    std::fs::copy(&src, &dest)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_transcript(state: tauri::State<AppState>, id: String) -> AppResult<Option<Transcript>> {
     service::load_transcript(&state.data_root, &id)

@@ -36,21 +36,22 @@ describe("MeetingList", () => {
     expect(onSelect).toHaveBeenCalledWith("a");
   });
 
-  it("deletes on confirm without selecting", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("deletes after confirming in the dialog, without selecting", async () => {
     const onSelect = vi.fn();
     const onDelete = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={onSelect} onDelete={onDelete} />);
+    await userEvent.click(screen.getByRole("button", { name: "Удалить встречу" }));
+    // подтверждаем во всплывшем диалоге
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDelete).toHaveBeenCalledWith("a");
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("does not delete when confirm is cancelled", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("does not delete when the dialog is cancelled", async () => {
     const onDelete = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={vi.fn()} onDelete={onDelete} />);
-    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    await userEvent.click(screen.getByRole("button", { name: "Удалить встречу" }));
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onDelete).not.toHaveBeenCalled();
   });
 });

@@ -635,6 +635,27 @@ textarea {
 .btn.ghost {
   background: transparent;
 }
+.btn.danger {
+  background: var(--rec);
+  color: #2a0907;
+  border-color: transparent;
+  font-weight: 700;
+}
+.track-downloads {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 14px;
+  flex-wrap: wrap;
+}
+.confirm-modal {
+  width: min(440px, 92vw);
+}
+.confirm-text {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 4px 0 0;
+}
 .btn-row {
   display: flex;
   flex-wrap: wrap;

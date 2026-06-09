@@ -34,6 +34,6 @@ uxo-core = { path = "../core" }
 [features]
 # Реальная транскрибация на Whisper (CPU).
 whisper = ["uxo-core/whisper"]
-# Whisper с GPU-ускорением (Vulkan). Релизы собираются с этой фичей.
-gpu = ["uxo-core/gpu"]
+# Whisper с GPU-ускорением (Vulkan). Включает и whisper-гейт в командах.
+gpu = ["whisper", "uxo-core/gpu"]
 

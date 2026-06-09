@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { Meeting, Transcript, TranscribeState } from "../types";
+import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
 import { api } from "../api";
 import { getLabels, setLabels as saveLabels } from "../labels";
 import type { SpeakerLabels } from "../labels";
@@ -111,6 +111,18 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     }
   };
 
+  const downloadAudio = async (track: TrackFile, label: string) => {
+    try {
+      const path = await save({
+        defaultPath: `${meeting.title || "meeting"} — ${label}.wav`,
+        filters: [{ name: "WAV", extensions: ["wav"] }],
+      });
+      if (path) await api.exportAudio(meeting.id, track, path);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const exportAs = async (fmt: "txt" | "md") => {
     if (!transcript) return;
     const content =
@@ -212,6 +224,17 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <span>{clock(duration)}</span>
             </div>
           </div>
+        </div>
+        <div className="track-downloads">
+          <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
+            ⬇ Аудио «Я»
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => downloadAudio("system.wav", "Собеседник")}
+          >
+            ⬇ Аудио собеседника
+          </button>
         </div>
         <audio
           ref={micRef}
