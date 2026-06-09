@@ -32,6 +32,18 @@ pub const DEFAULT_MODEL_SIZE: &str = "medium";
 pub const DEFAULT_WINDOW_SECS: usize = 60;
 const SAMPLE_RATE: usize = 16_000;
 
+/// Порог энергии (RMS) участка: ниже — считаем тишиной и отбрасываем реплику
+/// как галлюцинацию whisper (типа «Спасибо за внимание» на молчании).
+const SILENCE_RMS: f32 = 0.01;
+
+fn rms(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = samples.iter().map(|&s| s as f64 * s as f64).sum();
+    (sum / samples.len() as f64).sqrt() as f32
+}
+
 /// Гарантирует наличие ggml-модели нужного размера в `<data_dir>/models`,
 /// скачивая её с HuggingFace при первом обращении (с прогрессом 0.0..=1.0).
 /// Качается только модель (не данные пользователя); транскрибация — локально.
@@ -152,6 +164,8 @@ impl WhisperTranscriber {
                 Some(lang) => params.set_language(Some(lang)),
             }
             params.set_translate(false);
+            // Не опираться на предыдущий текст — меньше зацикленных галлюцинаций.
+            params.set_no_context(true);
             params.set_print_progress(false);
             params.set_print_realtime(false);
             params.set_print_timestamps(false);
@@ -174,10 +188,19 @@ impl WhisperTranscriber {
                 if text.is_empty() {
                     continue;
                 }
-                // Таймкоды whisper — в сотых долях секунды.
+                // Таймкоды whisper — в сотых долях секунды (внутри окна).
+                let t0c = seg.start_timestamp().max(0) as usize;
+                let t1c = seg.end_timestamp().max(0) as usize;
+                // Отбрасываем галлюцинации на тишине: если участок реплики
+                // в исходном аудио почти беззвучный — это выдумка whisper.
+                let a = (t0c * SAMPLE_RATE / 100).min(chunk.len());
+                let b = (t1c * SAMPLE_RATE / 100).min(chunk.len());
+                if b > a && rms(&chunk[a..b]) < SILENCE_RMS {
+                    continue;
+                }
                 segments.push(Segment {
-                    start_secs: offset + seg.start_timestamp() as f64 / 100.0,
-                    end_secs: offset + seg.end_timestamp() as f64 / 100.0,
+                    start_secs: offset + t0c as f64 / 100.0,
+                    end_secs: offset + t1c as f64 / 100.0,
                     text,
                 });
             }
