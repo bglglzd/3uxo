@@ -219,7 +219,7 @@ pub async fn transcribe(
     // whisper.cpp — он вызывал нативный краш).
     #[cfg(feature = "whisper")]
     {
-        use uxo_core::transcript::{merge_tracks, single_speaker};
+        use uxo_core::transcript::merge_tracks;
         use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
         flog(
@@ -252,16 +252,41 @@ pub async fn transcribe(
         )?;
 
         let transcript = if imported {
-            // Одна дорожка: прогресс 0..100; пока один говорящий (spk0), диаризация — M3.
+            // Импорт — одна дорожка audio.wav. С диаризацией текст идёт 0..50%,
+            // разделение голосов 50..100%; без фичи — текст 0..100%, один говорящий.
             let audio_path = service::track_path(&state.data_root, &id, "audio.wav")?;
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: imported audio");
+
+            #[cfg(feature = "diarize")]
+            let text_scale = 50.0f32;
+            #[cfg(not(feature = "diarize"))]
+            let text_scale = 100.0f32;
+
             let segs = transcriber.transcribe_windowed(
                 &audio_path,
                 DEFAULT_WINDOW_SECS,
-                &|done, total| emit("mic", (done as f32 / total as f32) * 100.0, done, total),
+                &|done, total| emit("mic", (done as f32 / total as f32) * text_scale, done, total),
             )?;
-            single_speaker(segs, "spk0")
+
+            #[cfg(feature = "diarize")]
+            {
+                use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
+                use uxo_core::transcript::assign_speakers;
+                // Модели диаризации скачиваются при первом запуске (фаза download).
+                emit("diarize", 50.0, 0, 0);
+                flog(&state.data_root, "transcribe: diarize (ensure models + run)");
+                let diarizer = PyannoteDiarizer::managed(&state.data_root, &|frac| {
+                    emit("download", 50.0 + frac * 40.0, 0, 0)
+                })?;
+                emit("diarize", 90.0, 0, 0);
+                let diar = diarizer.diarize(&audio_path)?;
+                assign_speakers(segs, diar)
+            }
+            #[cfg(not(feature = "diarize"))]
+            {
+                uxo_core::transcript::single_speaker(segs, "spk0")
+            }
         } else {
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let system_path = service::track_path(&state.data_root, &id, "system.wav")?;

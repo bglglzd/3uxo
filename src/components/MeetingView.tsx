@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
 import { api } from "../api";
-import { getLabels, setLabels as saveLabels, nameForSpeaker } from "../labels";
+import { getLabels, setLabels as saveLabels, nameForSpeaker, defaultName } from "../labels";
 import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
@@ -39,7 +39,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [topic, setTopic] = useState(meeting.topic);
   const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
 
-  const updateLabel = (key: "me" | "them", value: string) => {
+  const updateLabel = (key: string, value: string) => {
     const next = { ...labels, [key]: value };
     setLbls(next);
     saveLabels(meeting.id, next);
@@ -80,14 +80,27 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       ? "Скачивание модели"
       : stage === "loading"
         ? "Загрузка модели в память"
-        : stage === "system"
-          ? "Дорожка собеседника"
-          : "Дорожка «Я»";
+        : stage === "diarize"
+          ? "Разделение голосов"
+          : stage === "system"
+            ? "Дорожка собеседника"
+            : isImported
+              ? "Расшифровка"
+              : "Дорожка «Я»";
   const shownError = error || transState?.error || "";
 
   const activeIndex = useMemo(
     () => (transcript ? activeSegmentIndex(transcript.segments, time) : -1),
     [transcript, time],
+  );
+
+  // Уникальные говорящие в расшифровке (для переименования импортированных).
+  const speakers = useMemo(
+    () =>
+      transcript
+        ? Array.from(new Set(transcript.segments.map((s) => s.speaker)))
+        : [],
+    [transcript],
   );
 
   const togglePlay = () => {
@@ -200,6 +213,20 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
                 onChange={(e) => updateLabel("them", e.target.value)}
               />
             </label>
+          </div>
+        )}
+        {isImported && speakers.length > 0 && (
+          <div className="mv-meta-row speakers-row">
+            {speakers.map((sp) => (
+              <label className="speaker-edit" key={sp}>
+                <span>{defaultName(sp)}</span>
+                <input
+                  className="chip-input"
+                  value={nameForSpeaker(labels, sp)}
+                  onChange={(e) => updateLabel(sp, e.target.value)}
+                />
+              </label>
+            ))}
           </div>
         )}
       </div>

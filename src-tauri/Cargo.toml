@@ -39,4 +39,6 @@ uxo-core = { path = "../core" }
 whisper = ["uxo-core/whisper"]
 # Whisper с GPU-ускорением (Vulkan). Включает и whisper-гейт в командах.
 gpu = ["whisper", "uxo-core/gpu"]
+# Диаризация (разделение говорящих в импортированных записях).
+diarize = ["uxo-core/diarize"]
 

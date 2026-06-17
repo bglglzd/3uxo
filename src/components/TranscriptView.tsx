@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Transcript } from "../types";
 import type { SpeakerLabels } from "../labels";
 import { nameForSpeaker } from "../labels";
@@ -10,6 +10,9 @@ interface Props {
   labels: SpeakerLabels;
   onSeek: (secs: number) => void;
 }
+
+// Палитра для подписей говорящих (для импортированных записей с диаризацией).
+const PALETTE = ["#5ee0d0", "#6ea8fe", "#f0a868", "#c792ea", "#7ee787", "#ff9ec7"];
 
 export function TranscriptView({ transcript, activeIndex, labels, onSeek }: Props) {
   const activeRef = useRef<HTMLDivElement>(null);
@@ -23,6 +26,19 @@ export function TranscriptView({ transcript, activeIndex, labels, onSeek }: Prop
       // jsdom / unsupported — ignore
     }
   }, [activeIndex]);
+
+  // Порядок появления говорящих → стабильный цвет подписи.
+  const speakerOrder = useMemo(
+    () =>
+      transcript
+        ? Array.from(new Set(transcript.segments.map((s) => s.speaker)))
+        : [],
+    [transcript],
+  );
+  const colorFor = (id: string): string => {
+    const i = speakerOrder.indexOf(id);
+    return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+  };
 
   if (!transcript || transcript.segments.length === 0) {
     return <div className="transcript-empty">Расшифровки пока нет.</div>;
@@ -40,7 +56,12 @@ export function TranscriptView({ transcript, activeIndex, labels, onSeek }: Prop
             ref={active ? activeRef : undefined}
             className={`turn ${side}${active ? " active" : ""}`}
           >
-            <span className="who">{nameForSpeaker(labels, seg.speaker)}</span>
+            <span
+              className="who"
+              style={side === "them" ? { color: colorFor(seg.speaker) } : undefined}
+            >
+              {nameForSpeaker(labels, seg.speaker)}
+            </span>
             <div
               className="bubble"
               onClick={() => onSeek(seg.start_secs)}

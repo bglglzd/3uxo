@@ -39,8 +39,8 @@ jobs:
       - name: Core tests
         run: cargo test -p uxo-core
 
-  # Компиляция GUI-крейта (src-tauri) с whisper на Windows. Покрывает и
-  # uxo-core/whisper (как зависимость), и команды/lib приложения. Нужен
+  # Компиляция GUI-крейта (src-tauri) с whisper И diarize на Windows. Покрывает
+  # uxo-core/whisper + uxo-core/diarize (Burn) и команды/lib приложения. Нужен
   # собранный фронтенд: generate_context! встраивает ассеты из ../dist.
   check-app:
     runs-on: windows-latest
@@ -60,23 +60,6 @@ jobs:
       - name: Set LIBCLANG_PATH
         shell: pwsh
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-      # Компиляция приложения с whisper (без GPU/Vulkan).
-      - name: cargo check (app + whisper)
-        run: cargo check -p app-3uxo --features whisper
-
-  # СПАЙК M3: собирается ли движок диаризации (native-pyannote-rs: Burn +
-  # kaldi-native-fbank) под Windows. Без ONNX-рантайма; libclang/cmake — на
-  # случай bindgen в kaldi-native-fbank (cmake есть на раннере).
-  check-diarize:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install LLVM (libclang for potential bindgen)
-        run: choco install llvm -y --no-progress
-      - name: Set LIBCLANG_PATH
-        shell: pwsh
-        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-      - name: cargo check (diarize)
-        run: cargo check -p uxo-core --features diarize
+      # Компиляция приложения с whisper + diarize (без GPU/Vulkan).
+      - name: cargo check (app + whisper + diarize)
+        run: cargo check -p app-3uxo --features whisper,diarize
