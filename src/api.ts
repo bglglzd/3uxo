@@ -31,6 +31,8 @@ function whisperOptions(w: WhisperConfig) {
 export const api = {
   startRecording: (): Promise<string> => inv("start_recording"),
   stopRecording: (): Promise<Meeting> => inv("stop_recording"),
+  importRecording: (path: string): Promise<Meeting> =>
+    inv("import_recording", { path }),
   listMeetings: (): Promise<Meeting[]> => inv("list_meetings"),
   getMeeting: (id: string): Promise<Meeting> => inv("get_meeting", { id }),
   deleteMeeting: (id: string): Promise<void> => inv("delete_meeting", { id }),

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
-use crate::transcript::{Speaker, Transcript};
+use crate::transcript::{speaker_label, Transcript};
 
 /// Настройки доступа к OpenAI-совместимому ИИ.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -71,13 +71,7 @@ pub fn transcript_to_text(transcript: &Transcript) -> String {
     transcript
         .segments
         .iter()
-        .map(|s| {
-            let who = match s.speaker {
-                Speaker::Me => "Я",
-                Speaker::Them => "Собеседник",
-            };
-            format!("{who}: {}", s.text)
-        })
+        .map(|s| format!("{}: {}", speaker_label(&s.speaker), s.text))
         .collect::<Vec<_>>()
         .join("\n")
 }

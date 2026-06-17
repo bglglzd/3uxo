@@ -304,6 +304,27 @@ textarea {
   border-color: #34405a;
 }
 
+/* Импорт записи (под кнопкой записи) */
+.import-btn {
+  border: 1px dashed var(--border);
+  background: var(--bg-2);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.import-btn:hover {
+  color: var(--text);
+  border-color: var(--accent-strong);
+  background: var(--bg-3);
+}
+
 /* ---------- Content ---------- */
 .content {
   min-width: 0;

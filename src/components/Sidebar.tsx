@@ -9,8 +9,10 @@ interface Props {
   recording: boolean;
   elapsed: number;
   progress: Record<string, TranscribeState>;
+  importError?: string;
   onStart: () => void;
   onStop: () => void;
+  onImport: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenSettings: () => void;
@@ -39,6 +41,11 @@ export function Sidebar(p: Props) {
         onStart={p.onStart}
         onStop={p.onStop}
       />
+
+      <button className="import-btn" onClick={p.onImport}>
+        📥 Импорт записи
+      </button>
+      {p.importError && <div className="ai-error">{p.importError}</div>}
 
       <div className="search">
         <input

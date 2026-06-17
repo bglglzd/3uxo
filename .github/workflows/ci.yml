@@ -39,10 +39,19 @@ jobs:
       - name: Core tests
         run: cargo test -p uxo-core
 
-  check-whisper:
+  # Компиляция GUI-крейта (src-tauri) с whisper на Windows. Покрывает и
+  # uxo-core/whisper (как зависимость), и команды/lib приложения. Нужен
+  # собранный фронтенд: generate_context! встраивает ассеты из ../dist.
+  check-app:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Whisper.cpp (whisper-rs) собирается через bindgen — нужен libclang.
@@ -51,6 +60,6 @@ jobs:
       - name: Set LIBCLANG_PATH
         shell: pwsh
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-      # Только проверка компиляции фичи whisper (без GPU/Vulkan).
-      - name: cargo check (whisper)
-        run: cargo check -p uxo-core --features whisper
+      # Компиляция приложения с whisper (без GPU/Vulkan).
+      - name: cargo check (app + whisper)
+        run: cargo check -p app-3uxo --features whisper

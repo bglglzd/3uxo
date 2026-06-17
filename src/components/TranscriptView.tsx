@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Transcript } from "../types";
 import type { SpeakerLabels } from "../labels";
+import { nameForSpeaker } from "../labels";
 import { clock } from "../export";
 
 interface Props {
@@ -31,15 +32,15 @@ export function TranscriptView({ transcript, activeIndex, labels, onSeek }: Prop
     <div className="transcript">
       {transcript.segments.map((seg, i) => {
         const active = i === activeIndex;
+        // "me" — справа (синий), остальные говорящие — слева (как «собеседник»).
+        const side = seg.speaker === "me" ? "me" : "them";
         return (
           <div
             key={i}
             ref={active ? activeRef : undefined}
-            className={`turn ${seg.speaker}${active ? " active" : ""}`}
+            className={`turn ${side}${active ? " active" : ""}`}
           >
-            <span className="who">
-              {seg.speaker === "me" ? labels.me : labels.them}
-            </span>
+            <span className="who">{nameForSpeaker(labels, seg.speaker)}</span>
             <div
               className="bubble"
               onClick={() => onSeek(seg.start_secs)}

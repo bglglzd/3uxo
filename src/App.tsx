@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { getSettings } from "./settings";
 import type { Meeting, TranscribeState } from "./types";
@@ -22,6 +23,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [importError, setImportError] = useState("");
   // Состояние расшифровок по id — живёт на уровне приложения.
   const [trans, setTrans] = useState<Record<string, TranscribeState>>({});
 
@@ -100,6 +102,36 @@ export default function App() {
     if (m?.id) setSelectedId(m.id);
   };
 
+  const handleImport = async () => {
+    setImportError("");
+    let selected: string | string[] | null = null;
+    try {
+      selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Аудио",
+            extensions: [
+              "m4a", "mp3", "wav", "flac", "ogg", "oga",
+              "aac", "aif", "aiff", "caf", "mp4",
+            ],
+          },
+        ],
+      });
+    } catch (e) {
+      setImportError(String(e));
+      return;
+    }
+    if (typeof selected !== "string") return; // отмена выбора файла
+    try {
+      const m = await api.importRecording(selected);
+      await refresh();
+      setSelectedId(m.id);
+    } catch (e) {
+      setImportError(String(e));
+    }
+  };
+
   const handleDelete = async (id: string) => {
     await api.deleteMeeting(id);
     if (selectedId === id) setSelectedId(null);
@@ -116,8 +148,10 @@ export default function App() {
         recording={recording}
         elapsed={elapsed}
         progress={trans}
+        importError={importError}
         onStart={handleStart}
         onStop={handleStop}
+        onImport={handleImport}
         onSelect={setSelectedId}
         onDelete={handleDelete}
         onOpenSettings={() => setShowSettings(true)}

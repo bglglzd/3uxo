@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
 import { api } from "../api";
-import { getLabels, setLabels as saveLabels } from "../labels";
+import { getLabels, setLabels as saveLabels, nameForSpeaker } from "../labels";
 import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
@@ -19,6 +19,9 @@ interface Props {
 }
 
 export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: Props) {
+  // Импортированная запись — одна дорожка audio.wav (без разделения «Я/Собеседник»).
+  const isImported = meeting.source === "imported";
+
   const micRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
 
@@ -50,10 +53,15 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setPlaying(false);
     setError("");
     setLbls(getLabels(meeting.id));
-    api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
-    api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
+    if (isImported) {
+      api.trackUrl(meeting.id, "audio.wav").then(setMicUrl).catch(() => {});
+      setSysUrl("");
+    } else {
+      api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
+      api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
+    }
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
-  }, [meeting.id]);
+  }, [meeting.id, isImported]);
 
   // Перезагрузка расшифровки, когда фоновая задача завершилась.
   useEffect(() => {
@@ -125,10 +133,11 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
 
   const exportAs = async (fmt: "txt" | "md") => {
     if (!transcript) return;
+    const nameOf = (id: string) => nameForSpeaker(labels, id);
     const content =
       fmt === "txt"
-        ? transcriptToTxt(meeting, transcript, labels)
-        : transcriptToMd(meeting, transcript, labels);
+        ? transcriptToTxt(meeting, transcript, nameOf)
+        : transcriptToMd(meeting, transcript, nameOf);
     try {
       const path = await save({
         defaultPath: exportFileName(meeting, fmt),
@@ -173,24 +182,26 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             placeholder="тема"
           />
         </div>
-        <div className="mv-meta-row speakers-row">
-          <label className="speaker-edit">
-            <span>Имя дорожки «Я»</span>
-            <input
-              className="chip-input"
-              value={labels.me}
-              onChange={(e) => updateLabel("me", e.target.value)}
-            />
-          </label>
-          <label className="speaker-edit">
-            <span>Имя собеседника</span>
-            <input
-              className="chip-input"
-              value={labels.them}
-              onChange={(e) => updateLabel("them", e.target.value)}
-            />
-          </label>
-        </div>
+        {!isImported && (
+          <div className="mv-meta-row speakers-row">
+            <label className="speaker-edit">
+              <span>Имя дорожки «Я»</span>
+              <input
+                className="chip-input"
+                value={nameForSpeaker(labels, "me")}
+                onChange={(e) => updateLabel("me", e.target.value)}
+              />
+            </label>
+            <label className="speaker-edit">
+              <span>Имя собеседника</span>
+              <input
+                className="chip-input"
+                value={nameForSpeaker(labels, "them")}
+                onChange={(e) => updateLabel("them", e.target.value)}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {shownError && (
@@ -226,15 +237,26 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           </div>
         </div>
         <div className="track-downloads">
-          <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
-            ⬇ Аудио «Я»
-          </button>
-          <button
-            className="btn ghost"
-            onClick={() => downloadAudio("system.wav", "Собеседник")}
-          >
-            ⬇ Аудио собеседника
-          </button>
+          {isImported ? (
+            <button
+              className="btn ghost"
+              onClick={() => downloadAudio("audio.wav", "запись")}
+            >
+              ⬇ Скачать аудио
+            </button>
+          ) : (
+            <>
+              <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
+                ⬇ Аудио «Я»
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => downloadAudio("system.wav", "Собеседник")}
+              >
+                ⬇ Аудио собеседника
+              </button>
+            </>
+          )}
         </div>
         <audio
           ref={micRef}

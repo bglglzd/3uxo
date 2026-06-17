@@ -7,11 +7,16 @@ export interface Meeting {
   duration_secs: number;
   folder: string;
   status: string;
+  /// "recorded" (записана приложением, 2 дорожки) | "imported" (один файл).
+  /// Необязательно: бэкенд всегда присылает, но старые объекты могут не иметь.
+  source?: string;
 }
 
-export type TrackFile = "mic.wav" | "system.wav";
+export type TrackFile = "mic.wav" | "system.wav" | "audio.wav";
 
-export type Speaker = "me" | "them";
+/// Идентификатор говорящего: "me"/"them" для записей, "spk0"/"spk1"/… для
+/// импортированных (после диаризации).
+export type Speaker = string;
 
 export interface TranscriptSegment {
   speaker: Speaker;

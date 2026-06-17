@@ -133,6 +133,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::start_recording,
             commands::stop_recording,
+            commands::import_recording,
             commands::list_meetings,
             commands::get_meeting,
             commands::delete_meeting,

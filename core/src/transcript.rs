@@ -1,11 +1,24 @@
 use serde::{Deserialize, Serialize};
 
-/// Кто говорит: «Я» (микрофон) или «Собеседник» (системный звук).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum Speaker {
-    Me,
-    Them,
+/// Идентификатор говорящего в ленте. Для записанных встреч это `"me"`
+/// (микрофон) и `"them"` (системный звук); для импортированных записей —
+/// `"spk0"`, `"spk1"`, … после диаризации (или один `"spk0"` без неё).
+/// Хранится строкой: модель расширяема на N говорящих, а старые
+/// `transcript.json` (где `speaker` уже сериализовался в `"me"`/`"them"`)
+/// читаются без изменений.
+pub const ME: &str = "me";
+pub const THEM: &str = "them";
+
+/// Человеко-читаемая подпись говорящего по его id.
+pub fn speaker_label(id: &str) -> String {
+    match id {
+        ME => "Я".to_string(),
+        THEM => "Собеседник".to_string(),
+        other => match other.strip_prefix("spk").and_then(|n| n.parse::<usize>().ok()) {
+            Some(n) => format!("Спикер {}", n + 1),
+            None => other.to_string(),
+        },
+    }
 }
 
 /// Сырой сегмент от транскрайбера (одна дорожка).
@@ -16,10 +29,10 @@ pub struct Segment {
     pub text: String,
 }
 
-/// Сегмент итоговой ленты, с говорящим.
+/// Сегмент итоговой ленты, с говорящим (id, см. [`speaker_label`]).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TranscriptSegment {
-    pub speaker: Speaker,
+    pub speaker: String,
     pub start_secs: f64,
     pub end_secs: f64,
     pub text: String,
@@ -41,7 +54,7 @@ pub fn merge_tracks(mic: Vec<Segment>, system: Vec<Segment>) -> Transcript {
             continue;
         }
         segments.push(TranscriptSegment {
-            speaker: Speaker::Me,
+            speaker: ME.to_string(),
             start_secs: s.start_secs,
             end_secs: s.end_secs,
             text: s.text,
@@ -52,7 +65,7 @@ pub fn merge_tracks(mic: Vec<Segment>, system: Vec<Segment>) -> Transcript {
             continue;
         }
         segments.push(TranscriptSegment {
-            speaker: Speaker::Them,
+            speaker: THEM.to_string(),
             start_secs: s.start_secs,
             end_secs: s.end_secs,
             text: s.text,
@@ -63,6 +76,23 @@ pub fn merge_tracks(mic: Vec<Segment>, system: Vec<Segment>) -> Transcript {
             .partial_cmp(&b.start_secs)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
+    Transcript { segments }
+}
+
+/// Строит ленту из ОДНОЙ дорожки: всем сегментам присваивается один говорящий
+/// `speaker`. Пустые тексты пропускаются. Для импортированных записей без
+/// диаризации (один голос); диаризация на несколько говорящих появится в M3.
+pub fn single_speaker(segments: Vec<Segment>, speaker: &str) -> Transcript {
+    let segments = segments
+        .into_iter()
+        .filter(|s| !s.text.trim().is_empty())
+        .map(|s| TranscriptSegment {
+            speaker: speaker.to_string(),
+            start_secs: s.start_secs,
+            end_secs: s.end_secs,
+            text: s.text,
+        })
+        .collect();
     Transcript { segments }
 }
 
@@ -79,14 +109,14 @@ mod tests {
         let mic = vec![seg(0.0, "привет"), seg(4.0, "как дела")];
         let system = vec![seg(2.0, "здравствуй")];
         let t = merge_tracks(mic, system);
-        let order: Vec<(&Speaker, &str)> =
-            t.segments.iter().map(|s| (&s.speaker, s.text.as_str())).collect();
+        let order: Vec<(&str, &str)> =
+            t.segments.iter().map(|s| (s.speaker.as_str(), s.text.as_str())).collect();
         assert_eq!(
             order,
             vec![
-                (&Speaker::Me, "привет"),
-                (&Speaker::Them, "здравствуй"),
-                (&Speaker::Me, "как дела"),
+                ("me", "привет"),
+                ("them", "здравствуй"),
+                ("me", "как дела"),
             ]
         );
     }
@@ -104,8 +134,25 @@ mod tests {
         let mic = vec![seg(1.0, "я")];
         let system = vec![seg(1.0, "он")];
         let t = merge_tracks(mic, system);
-        assert_eq!(t.segments[0].speaker, Speaker::Me);
-        assert_eq!(t.segments[1].speaker, Speaker::Them);
+        assert_eq!(t.segments[0].speaker, "me");
+        assert_eq!(t.segments[1].speaker, "them");
+    }
+
+    #[test]
+    fn single_speaker_assigns_one_and_skips_empty() {
+        let segs = vec![seg(0.0, "первая"), seg(1.0, "  "), seg(2.0, "вторая")];
+        let t = single_speaker(segs, "spk0");
+        assert_eq!(t.segments.len(), 2);
+        assert!(t.segments.iter().all(|s| s.speaker == "spk0"));
+    }
+
+    #[test]
+    fn speaker_label_maps_known_and_spk() {
+        assert_eq!(speaker_label("me"), "Я");
+        assert_eq!(speaker_label("them"), "Собеседник");
+        assert_eq!(speaker_label("spk0"), "Спикер 1");
+        assert_eq!(speaker_label("spk2"), "Спикер 3");
+        assert_eq!(speaker_label("custom"), "custom");
     }
 
     #[test]

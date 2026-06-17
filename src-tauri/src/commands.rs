@@ -107,6 +107,30 @@ pub async fn stop_recording(
     Ok(meeting)
 }
 
+/// Импортирует внешнюю аудиозапись (m4a/mp3/wav/flac/ogg…) как новую встречу.
+/// Тяжёлый декод уходит в фон (`spawn_blocking`), поэтому окно не зависает.
+#[tauri::command]
+pub async fn import_recording(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> AppResult<Meeting> {
+    let data_root = state.data_root.clone();
+    let id = uuid::Uuid::new_v4().to_string();
+    let created_at = chrono::Utc::now().to_rfc3339();
+
+    // Декод + ресемпл в audio.wav — вне async-потока (без обращения к БД).
+    let meeting = tauri::async_runtime::spawn_blocking(move || {
+        service::import_to_meeting(&data_root, id, &PathBuf::from(path), created_at)
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("import join: {e}")))??;
+
+    state.repo.lock().unwrap().insert(&meeting)?;
+    notify(&app, "📥 3uxo — запись импортирована", &meeting.title);
+    Ok(meeting)
+}
+
 #[tauri::command]
 pub fn list_meetings(state: tauri::State<AppState>) -> AppResult<Vec<Meeting>> {
     state.repo.lock().unwrap().list()
@@ -169,6 +193,9 @@ pub async fn transcribe(
     id: String,
     options: TranscribeOptions,
 ) -> AppResult<Transcript> {
+    // Импортированная встреча — одна дорожка audio.wav; записанная — mic+system.
+    let imported = state.repo.lock().unwrap().get(&id)?.source == "imported";
+
     // Явно указанный внешний whisper-CLI — используем его (без прогресса).
     if options
         .whisper_path
@@ -177,7 +204,11 @@ pub async fn transcribe(
         .unwrap_or(false)
     {
         let transcriber = CliTranscriber::new(options);
-        let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
+        let transcript = if imported {
+            service::transcribe_single_to_file(&transcriber, &state.data_root, &id)?
+        } else {
+            service::transcribe_to_file(&transcriber, &state.data_root, &id)?
+        };
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
         return Ok(transcript);
@@ -188,12 +219,13 @@ pub async fn transcribe(
     // whisper.cpp — он вызывал нативный краш).
     #[cfg(feature = "whisper")]
     {
-        use uxo_core::transcript::merge_tracks;
+        use uxo_core::transcript::{merge_tracks, single_speaker};
         use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
-        flog(&state.data_root, &format!("transcribe start id={id}"));
-        let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
-        let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+        flog(
+            &state.data_root,
+            &format!("transcribe start id={id} imported={imported}"),
+        );
 
         // Прогресс из НАШЕГО цикла: фаза + процент + счётчик окон (done/total).
         let emit = |stage: &str, percent: f32, done: usize, total: usize| {
@@ -209,7 +241,7 @@ pub async fn transcribe(
             );
         };
 
-        // Модель грузится ОДИН раз на обе дорожки; скачивание — с прогрессом.
+        // Модель грузится ОДИН раз; скачивание — с прогрессом.
         emit("loading", 0.0, 0, 0);
         flog(&state.data_root, "transcribe: ensure model + load");
         let transcriber = WhisperTranscriber::managed(
@@ -219,21 +251,42 @@ pub async fn transcribe(
             &|frac| emit("download", frac * 100.0, 0, 0),
         )?;
 
-        emit("mic", 0.0, 0, 0);
-        flog(&state.data_root, "transcribe: mic track");
-        let mic_segs =
-            transcriber.transcribe_windowed(&mic_path, DEFAULT_WINDOW_SECS, &|done, total| {
-                emit("mic", (done as f32 / total as f32) * 50.0, done, total);
-            })?;
+        let transcript = if imported {
+            // Одна дорожка: прогресс 0..100; пока один говорящий (spk0), диаризация — M3.
+            let audio_path = service::track_path(&state.data_root, &id, "audio.wav")?;
+            emit("mic", 0.0, 0, 0);
+            flog(&state.data_root, "transcribe: imported audio");
+            let segs = transcriber.transcribe_windowed(
+                &audio_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| emit("mic", (done as f32 / total as f32) * 100.0, done, total),
+            )?;
+            single_speaker(segs, "spk0")
+        } else {
+            let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
+            let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
 
-        emit("system", 50.0, 0, 0);
-        flog(&state.data_root, "transcribe: system track");
-        let system_segs =
-            transcriber.transcribe_windowed(&system_path, DEFAULT_WINDOW_SECS, &|done, total| {
-                emit("system", 50.0 + (done as f32 / total as f32) * 50.0, done, total);
-            })?;
+            emit("mic", 0.0, 0, 0);
+            flog(&state.data_root, "transcribe: mic track");
+            let mic_segs = transcriber.transcribe_windowed(
+                &mic_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| emit("mic", (done as f32 / total as f32) * 50.0, done, total),
+            )?;
 
-        let transcript = merge_tracks(mic_segs, system_segs);
+            emit("system", 50.0, 0, 0);
+            flog(&state.data_root, "transcribe: system track");
+            let system_segs = transcriber.transcribe_windowed(
+                &system_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| {
+                    emit("system", 50.0 + (done as f32 / total as f32) * 50.0, done, total)
+                },
+            )?;
+
+            merge_tracks(mic_segs, system_segs)
+        };
+
         service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         flog(&state.data_root, "transcribe done");
