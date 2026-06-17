@@ -24,6 +24,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [importError, setImportError] = useState("");
+  // Боковая панель как выезжающее меню на узких экранах (телефон).
+  const [navOpen, setNavOpen] = useState(false);
   // Состояние расшифровок по id — живёт на уровне приложения.
   const [trans, setTrans] = useState<Record<string, TranscribeState>>({});
 
@@ -142,6 +144,14 @@ export default function App() {
 
   return (
     <div className="app">
+      <button
+        className="nav-toggle"
+        aria-label="Меню"
+        onClick={() => setNavOpen((v) => !v)}
+      >
+        ☰
+      </button>
+
       <Sidebar
         meetings={meetings}
         activeId={selectedId}
@@ -149,13 +159,26 @@ export default function App() {
         elapsed={elapsed}
         progress={trans}
         importError={importError}
+        open={navOpen}
         onStart={handleStart}
         onStop={handleStop}
-        onImport={handleImport}
-        onSelect={setSelectedId}
+        onImport={() => {
+          setNavOpen(false);
+          void handleImport();
+        }}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setNavOpen(false);
+        }}
         onDelete={handleDelete}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => {
+          setNavOpen(false);
+          setShowSettings(true);
+        }}
       />
+      {navOpen && (
+        <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
+      )}
 
       <main className="content">
         {selected ? (
