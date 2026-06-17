@@ -11,9 +11,9 @@ use crate::error::AppResult;
 use crate::transcript::DiarSegment;
 
 /// Источник разметки говорящих по одному моно-WAV (16 кГц).
-/// Реализуется так же, как `Recorder`/`Transcriber`, чтобы движок можно было
-/// подменить, не трогая остальной код.
-pub trait Diarizer: Send + Sync {
+/// Только `Send` (без `Sync`): burn-модели держат `OnceCell` и `Sync` не дают,
+/// а диаризатор создаётся локально в команде и в общем состоянии не хранится.
+pub trait Diarizer: Send {
     fn diarize(&self, wav_16k_mono: &Path) -> AppResult<Vec<DiarSegment>>;
 }
 
