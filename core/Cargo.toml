@@ -24,7 +24,7 @@ rubato = "0.15"
 whisper-rs = { version = "0.16", optional = true }
 # Диаризация (разделение говорящих): segmentation-3.0 + wespeaker, инференс на
 # Burn (чистый Rust, без ONNX-рантайма). Тяжёлая — только за фичей `diarize`.
-native-pyannote-rs = { version = "0.1", optional = true }
+native-pyannote-rs = { version = "=0.1.4", optional = true }
 
 [features]
 whisper = ["dep:whisper-rs"]
