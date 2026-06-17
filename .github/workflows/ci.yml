@@ -63,3 +63,19 @@ jobs:
       # Компиляция приложения с whisper (без GPU/Vulkan).
       - name: cargo check (app + whisper)
         run: cargo check -p app-3uxo --features whisper
+
+  # СПАЙК M3: собирается ли движок диаризации (pyannote-rs: ort + knf-rs) под
+  # Windows. ort скачивает onnxruntime; knf-rs (C++ kaldi) — нужен cmake + libclang.
+  check-diarize:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install LLVM (libclang for knf-rs bindgen)
+        run: choco install llvm -y --no-progress
+      - name: Set LIBCLANG_PATH
+        shell: pwsh
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+      - name: cargo check (diarize)
+        run: cargo check -p uxo-core --features diarize

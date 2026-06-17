@@ -38,6 +38,15 @@ pub struct TranscriptSegment {
     pub text: String,
 }
 
+/// Сегмент диаризации: интервал и сырой номер говорящего (id кластера).
+/// Производится [`crate::diarize::Diarizer`], потребляется [`assign_speakers`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiarSegment {
+    pub start_secs: f64,
+    pub end_secs: f64,
+    pub speaker: u32,
+}
+
 /// Полная расшифровка встречи.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Transcript {
@@ -94,6 +103,75 @@ pub fn single_speaker(segments: Vec<Segment>, speaker: &str) -> Transcript {
         })
         .collect();
     Transcript { segments }
+}
+
+/// Склеивает текст whisper с разметкой говорящих от диаризации: каждому
+/// текстовому сегменту назначается говорящий с максимальным перекрытием по
+/// времени (при отсутствии перекрытия — ближайший по середине). Сырые номера
+/// говорящих перенумеровываются в `spk0`, `spk1`, … по порядку появления.
+/// Пустой `diar` ⇒ один говорящий `spk0`.
+pub fn assign_speakers(whisper: Vec<Segment>, diar: Vec<DiarSegment>) -> Transcript {
+    use std::collections::HashMap;
+    let mut remap: HashMap<u32, usize> = HashMap::new();
+    let mut next = 0usize;
+    let mut segments = Vec::new();
+    for s in whisper {
+        if s.text.trim().is_empty() {
+            continue;
+        }
+        let speaker = match best_speaker(&diar, s.start_secs, s.end_secs) {
+            Some(raw) => {
+                let idx = *remap.entry(raw).or_insert_with(|| {
+                    let i = next;
+                    next += 1;
+                    i
+                });
+                format!("spk{idx}")
+            }
+            None => "spk0".to_string(),
+        };
+        segments.push(TranscriptSegment {
+            speaker,
+            start_secs: s.start_secs,
+            end_secs: s.end_secs,
+            text: s.text,
+        });
+    }
+    Transcript { segments }
+}
+
+/// Сырой номер говорящего с максимальным перекрытием интервала [start,end].
+/// Если ни один не перекрывается — ближайший по середине. `None` при пустом diar.
+fn best_speaker(diar: &[DiarSegment], start: f64, end: f64) -> Option<u32> {
+    let mut best: Option<(f64, u32)> = None;
+    for d in diar {
+        let overlap = (end.min(d.end_secs) - start.max(d.start_secs)).max(0.0);
+        if overlap > 0.0 && best.map(|(o, _)| overlap > o).unwrap_or(true) {
+            best = Some((overlap, d.speaker));
+        }
+    }
+    if let Some((_, sp)) = best {
+        return Some(sp);
+    }
+    // Нет перекрытия — ближайший по середине сегмента.
+    let mid = (start + end) / 2.0;
+    diar.iter()
+        .min_by(|a, b| {
+            dist_to(mid, a)
+                .partial_cmp(&dist_to(mid, b))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|d| d.speaker)
+}
+
+fn dist_to(mid: f64, d: &DiarSegment) -> f64 {
+    if mid < d.start_secs {
+        d.start_secs - mid
+    } else if mid > d.end_secs {
+        mid - d.end_secs
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +231,41 @@ mod tests {
         assert_eq!(speaker_label("spk0"), "Спикер 1");
         assert_eq!(speaker_label("spk2"), "Спикер 3");
         assert_eq!(speaker_label("custom"), "custom");
+    }
+
+    #[test]
+    fn assign_speakers_by_max_overlap_and_renumbers() {
+        // seg(start) занимает [start, start+1].
+        let whisper = vec![seg(0.0, "привет"), seg(5.0, "как дела"), seg(0.5, "ещё я")];
+        // Сырые номера кластеров 7 и 3 — должны перенумероваться в spk0/spk1.
+        let diar = vec![
+            DiarSegment { start_secs: 0.0, end_secs: 2.0, speaker: 7 },
+            DiarSegment { start_secs: 4.0, end_secs: 8.0, speaker: 3 },
+        ];
+        let t = assign_speakers(whisper, diar);
+        assert_eq!(t.segments[0].speaker, "spk0"); // перекрытие с кластером 7
+        assert_eq!(t.segments[1].speaker, "spk1"); // перекрытие с кластером 3
+        assert_eq!(t.segments[2].speaker, "spk0"); // снова кластер 7
+    }
+
+    #[test]
+    fn assign_speakers_empty_diar_is_single_speaker() {
+        let t = assign_speakers(vec![seg(0.0, "a"), seg(2.0, "b")], vec![]);
+        assert_eq!(t.segments.len(), 2);
+        assert!(t.segments.iter().all(|s| s.speaker == "spk0"));
+    }
+
+    #[test]
+    fn assign_speakers_no_overlap_picks_nearest() {
+        // Текст в [10,11], диаризация рядом — берём ближайший кластер.
+        let whisper = vec![seg(10.0, "поздняя реплика")];
+        let diar = vec![
+            DiarSegment { start_secs: 0.0, end_secs: 5.0, speaker: 1 },
+            DiarSegment { start_secs: 8.0, end_secs: 9.0, speaker: 2 },
+        ];
+        let t = assign_speakers(whisper, diar);
+        // Ближайший по середине (10.5) — кластер 2 (первый назначенный → spk0).
+        assert_eq!(t.segments[0].speaker, "spk0");
     }
 
     #[test]

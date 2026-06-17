@@ -22,9 +22,14 @@ tempfile = "3"
 symphonia = { version = "0.5", features = ["all"] }
 rubato = "0.15"
 whisper-rs = { version = "0.16", optional = true }
+# Диаризация (разделение говорящих): segmentation-3.0 + wespeaker (ONNX via ort).
+# Тяжёлая зависимость (ort + knf-rs) — только за фичей `diarize`.
+pyannote-rs = { version = "0.3", optional = true }
 
 [features]
 whisper = ["dep:whisper-rs"]
+# Диаризация (разделение говорящих). Тяжёлые ONNX-зависимости — отдельно.
+diarize = ["dep:pyannote-rs"]
 # GPU-ускорение через Vulkan (быстро на NVIDIA/AMD/Intel; рантайм vulkan-1.dll
 # идёт с драйвером, ничего вкладывать в установщик не нужно).
 gpu = ["whisper", "whisper-rs/vulkan"]
