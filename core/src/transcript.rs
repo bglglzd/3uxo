@@ -140,6 +140,20 @@ pub fn assign_speakers(whisper: Vec<Segment>, diar: Vec<DiarSegment>) -> Transcr
     Transcript { segments }
 }
 
+/// Объединяет две готовые ленты в одну, отсортированную по времени начала
+/// (стабильно). Для записей с несколькими собеседниками: дорожка «Я» (микрофон)
+/// + диаризованная дорожка собеседников (системный звук).
+pub fn merge_transcripts(a: Transcript, b: Transcript) -> Transcript {
+    let mut segments = a.segments;
+    segments.extend(b.segments);
+    segments.sort_by(|x, y| {
+        x.start_secs
+            .partial_cmp(&y.start_secs)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Transcript { segments }
+}
+
 /// Сырой номер говорящего с максимальным перекрытием интервала [start,end].
 /// Если ни один не перекрывается — ближайший по середине. `None` при пустом diar.
 fn best_speaker(diar: &[DiarSegment], start: f64, end: f64) -> Option<u32> {
@@ -246,6 +260,19 @@ mod tests {
         assert_eq!(t.segments[0].speaker, "spk0"); // перекрытие с кластером 7
         assert_eq!(t.segments[1].speaker, "spk1"); // перекрытие с кластером 3
         assert_eq!(t.segments[2].speaker, "spk0"); // снова кластер 7
+    }
+
+    #[test]
+    fn merge_transcripts_orders_by_start() {
+        let me = single_speaker(vec![seg(0.0, "я раз"), seg(4.0, "я два")], "me");
+        let them = single_speaker(vec![seg(2.0, "он")], "spk0");
+        let t = merge_transcripts(me, them);
+        let order: Vec<(&str, &str)> =
+            t.segments.iter().map(|s| (s.speaker.as_str(), s.text.as_str())).collect();
+        assert_eq!(
+            order,
+            vec![("me", "я раз"), ("spk0", "он"), ("me", "я два")]
+        );
     }
 
     #[test]

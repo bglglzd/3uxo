@@ -14,8 +14,17 @@ import { CopyLogButton } from "./CopyLogButton";
 interface Props {
   meeting: Meeting;
   transState?: TranscribeState;
-  onTranscribe: () => void;
+  onTranscribe: (speakerCount: number | null) => void;
   onMetaSaved: () => void;
+}
+
+/// Русское склонение слова по числу: 1 голос, 2 голоса, 5 голосов.
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
 }
 
 export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: Props) {
@@ -38,6 +47,19 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [participants, setParticipants] = useState(meeting.participants);
   const [topic, setTopic] = useState(meeting.topic);
   const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
+
+  // Сколько голосов в записи (для диаризации). Импорт: "auto"|2..8; запись: 1..8.
+  const [speakerSel, setSpeakerSel] = useState<string>(
+    () =>
+      localStorage.getItem(`3uxo.speakers.${meeting.id}`) ??
+      (isImported ? "auto" : "1"),
+  );
+  const updateSpeakerSel = (v: string) => {
+    setSpeakerSel(v);
+    localStorage.setItem(`3uxo.speakers.${meeting.id}`, v);
+  };
+  const speakerCountValue = (): number | null =>
+    speakerSel === "auto" ? null : Number(speakerSel);
 
   const updateLabel = (key: string, value: string) => {
     const next = { ...labels, [key]: value };
@@ -164,6 +186,25 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
 
   const pct = duration > 0 ? (time / duration) * 100 : 0;
   const hasTranscript = !!transcript && transcript.segments.length > 0;
+
+  const speakerOptions = isImported ? [2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
+  const speakerSelect = (
+    <select
+      className="speaker-count"
+      value={speakerSel}
+      onChange={(e) => updateSpeakerSel(e.target.value)}
+      title="Сколько голосов в записи — для разделения говорящих"
+    >
+      {isImported && <option value="auto">Голосов: авто</option>}
+      {speakerOptions.map((n) => (
+        <option key={n} value={String(n)}>
+          {isImported
+            ? `${n} ${plural(n, "голос", "голоса", "голосов")}`
+            : `${n} ${plural(n, "собеседник", "собеседника", "собеседников")}`}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <div className="mv">
@@ -315,18 +356,25 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <button className="btn ghost" onClick={() => exportAs("md")}>
                 ⬇ MD
               </button>
+              {speakerSelect}
               <button
                 className="btn ghost"
-                onClick={onTranscribe}
+                onClick={() => onTranscribe(speakerCountValue())}
                 title="Перерасшифровать заново"
               >
                 ↻ Заново
               </button>
             </div>
           ) : (
-            <button className="btn primary" onClick={onTranscribe}>
-              Расшифровать
-            </button>
+            <div className="btn-row">
+              {speakerSelect}
+              <button
+                className="btn primary"
+                onClick={() => onTranscribe(speakerCountValue())}
+              >
+                Расшифровать
+              </button>
+            </div>
           )}
         </div>
         {transcribing ? (

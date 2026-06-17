@@ -192,9 +192,15 @@ pub async fn transcribe(
     state: tauri::State<'_, AppState>,
     id: String,
     options: TranscribeOptions,
+    /// Сколько голосов в записи: для импорта — всего говорящих (None = авто);
+    /// для записи — число собеседников (>=2 включает диаризацию системной дорожки).
+    speaker_count: Option<u32>,
 ) -> AppResult<Transcript> {
     // Импортированная встреча — одна дорожка audio.wav; записанная — mic+system.
     let imported = state.repo.lock().unwrap().get(&id)?.source == "imported";
+    // Помечаем использованным во всех конфигурациях фич (используется ниже только
+    // в путях с диаризацией).
+    let _ = speaker_count;
 
     // Явно указанный внешний whisper-CLI — используем его (без прогресса).
     if options
@@ -273,10 +279,12 @@ pub async fn transcribe(
             {
                 use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
                 use uxo_core::transcript::assign_speakers;
+                // Потолок числа голосов: выбранный пользователем или авто (0).
+                let max_speakers = speaker_count.unwrap_or(0) as usize;
                 // Модели диаризации скачиваются при первом запуске (фаза download).
                 emit("diarize", 50.0, 0, 0);
                 flog(&state.data_root, "transcribe: diarize (ensure models + run)");
-                let diarizer = PyannoteDiarizer::managed(&state.data_root, &|frac| {
+                let diarizer = PyannoteDiarizer::managed(&state.data_root, max_speakers, &|frac| {
                     emit("download", 50.0 + frac * 40.0, 0, 0)
                 })?;
                 emit("diarize", 90.0, 0, 0);
@@ -290,6 +298,14 @@ pub async fn transcribe(
         } else {
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+
+            // При >=2 собеседниках системную дорожку («Собеседник») делим по
+            // голосам диаризацией; микрофон — всегда один «Я».
+            #[cfg(feature = "diarize")]
+            let will_diarize = speaker_count.unwrap_or(1) >= 2;
+            #[cfg(not(feature = "diarize"))]
+            let will_diarize = false;
+            let sys_end = if will_diarize { 85.0 } else { 100.0 };
 
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: mic track");
@@ -305,11 +321,34 @@ pub async fn transcribe(
                 &system_path,
                 DEFAULT_WINDOW_SECS,
                 &|done, total| {
-                    emit("system", 50.0 + (done as f32 / total as f32) * 50.0, done, total)
+                    emit("system", 50.0 + (done as f32 / total as f32) * (sys_end - 50.0), done, total)
                 },
             )?;
 
-            merge_tracks(mic_segs, system_segs)
+            #[cfg(feature = "diarize")]
+            {
+                if will_diarize {
+                    use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
+                    use uxo_core::transcript::{assign_speakers, merge_transcripts, single_speaker};
+                    let interlocutors = speaker_count.unwrap_or(0) as usize;
+                    emit("diarize", sys_end, 0, 0);
+                    flog(&state.data_root, "transcribe: diarize system track");
+                    let diarizer =
+                        PyannoteDiarizer::managed(&state.data_root, interlocutors, &|frac| {
+                            emit("download", sys_end + frac * (100.0 - sys_end), 0, 0)
+                        })?;
+                    let sys_diar = diarizer.diarize(&system_path)?;
+                    let them = assign_speakers(system_segs, sys_diar);
+                    let me = single_speaker(mic_segs, "me");
+                    merge_transcripts(me, them)
+                } else {
+                    merge_tracks(mic_segs, system_segs)
+                }
+            }
+            #[cfg(not(feature = "diarize"))]
+            {
+                merge_tracks(mic_segs, system_segs)
+            }
         };
 
         service::save_transcript(&state.data_root, &id, &transcript)?;

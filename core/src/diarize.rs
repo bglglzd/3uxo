@@ -46,8 +46,8 @@ mod engine {
     const EMB_MIN_BYTES: u64 = 25_000_000; // реально ~27.7 МБ
     /// Доля прогресса на сегментационную модель (она меньше эмбеддинговой).
     const SEG_WEIGHT: f32 = 0.175;
-    /// Максимум говорящих (как в примере крейта).
-    const MAX_SPEAKERS: usize = 6;
+    /// Максимум говорящих по умолчанию (когда пользователь выбрал «авто»).
+    pub const DEFAULT_MAX_SPEAKERS: usize = 6;
     /// Порог косинусной близости для отнесения к существующему говорящему.
     const THRESHOLD: f32 = 0.5;
 
@@ -111,18 +111,32 @@ mod engine {
     pub struct PyannoteDiarizer {
         segmenter: pyannote_rs::Segmenter,
         extractor: pyannote_rs::EmbeddingExtractor,
+        max_speakers: usize,
     }
 
     impl PyannoteDiarizer {
-        /// Гарантирует модели (скачивает с прогрессом при необходимости) и
-        /// загружает их в память.
-        pub fn managed(data_dir: &Path, on_download: &dyn Fn(f32)) -> AppResult<Self> {
+        /// Гарантирует модели (скачивает с прогрессом при необходимости), грузит
+        /// их в память. `max_speakers` — потолок числа говорящих (0 → авто).
+        pub fn managed(
+            data_dir: &Path,
+            max_speakers: usize,
+            on_download: &dyn Fn(f32),
+        ) -> AppResult<Self> {
             let (seg_path, emb_path) = ensure_models(data_dir, on_download)?;
             let segmenter = pyannote_rs::Segmenter::new(&seg_path)
                 .map_err(|e| AppError::Audio(format!("diarize: load segmentation: {e}")))?;
             let extractor = pyannote_rs::EmbeddingExtractor::new(&emb_path)
                 .map_err(|e| AppError::Audio(format!("diarize: load embedding: {e}")))?;
-            Ok(Self { segmenter, extractor })
+            let max_speakers = if max_speakers == 0 {
+                DEFAULT_MAX_SPEAKERS
+            } else {
+                max_speakers
+            };
+            Ok(Self {
+                segmenter,
+                extractor,
+                max_speakers,
+            })
         }
     }
 
@@ -145,7 +159,7 @@ mod engine {
                 .segments(&samples, sample_rate)
                 .map_err(|e| AppError::Audio(format!("diarize: segmentation: {e}")))?;
 
-            let mut manager = pyannote_rs::EmbeddingManager::new(MAX_SPEAKERS);
+            let mut manager = pyannote_rs::EmbeddingManager::new(self.max_speakers);
             let mut out = Vec::with_capacity(segments.len());
             for seg in segments {
                 // Слишком короткий участок может не дать эмбеддинг — просто пропускаем.

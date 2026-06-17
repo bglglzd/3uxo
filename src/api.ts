@@ -38,9 +38,19 @@ export const api = {
   deleteMeeting: (id: string): Promise<void> => inv("delete_meeting", { id }),
   isRecording: (): Promise<boolean> => inv("is_recording"),
 
-  transcribe: (id: string, whisper: WhisperConfig): Promise<Transcript> => {
-    logInfo(`transcribe start id=${id} model=${whisper.model || "small"}`);
-    return inv("transcribe", { id, options: whisperOptions(whisper) });
+  transcribe: (
+    id: string,
+    whisper: WhisperConfig,
+    speakerCount?: number | null,
+  ): Promise<Transcript> => {
+    logInfo(
+      `transcribe start id=${id} model=${whisper.model || "small"} speakers=${speakerCount ?? "auto"}`,
+    );
+    return inv("transcribe", {
+      id,
+      options: whisperOptions(whisper),
+      speakerCount: speakerCount ?? null,
+    });
   },
   getTranscript: (id: string): Promise<Transcript | null> =>
     inv("get_transcript", { id }),
