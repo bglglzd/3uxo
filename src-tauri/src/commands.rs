@@ -421,6 +421,27 @@ pub fn get_summary(state: tauri::State<AppState>, id: String) -> AppResult<Optio
     service::load_summary(&state.data_root, &id)
 }
 
+/// Литературный пересказ: ИИ переписывает расшифровку в связный текст, сохраняя
+/// детали. Сохраняется в `literary.md`.
+#[tauri::command]
+pub async fn literary_text(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+) -> AppResult<String> {
+    let text = meeting_transcript_text(&state.data_root, &id)?;
+    let backend = HttpChatBackend::new(config);
+    // Длинные разговоры переписываем по частям и склеиваем (без сворачивания).
+    let literary = uxo_core::ai::to_literary_long(&backend, &text)?;
+    service::save_literary(&state.data_root, &id, &literary)?;
+    Ok(literary)
+}
+
+#[tauri::command]
+pub fn get_literary(state: tauri::State<AppState>, id: String) -> AppResult<Option<String>> {
+    service::load_literary(&state.data_root, &id)
+}
+
 #[tauri::command]
 pub async fn ask(
     state: tauri::State<'_, AppState>,

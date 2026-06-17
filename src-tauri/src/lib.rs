@@ -144,6 +144,8 @@ pub fn run() {
             commands::suggest_metadata,
             commands::summarize,
             commands::get_summary,
+            commands::literary_text,
+            commands::get_literary,
             commands::ask,
             commands::update_meeting_meta,
             commands::save_text_file,

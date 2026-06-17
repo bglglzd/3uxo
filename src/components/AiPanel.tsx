@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting } from "../types";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
@@ -11,6 +12,7 @@ interface Props {
 
 export function AiPanel({ meeting, onMetaSaved }: Props) {
   const [summary, setSummary] = useState<string | null>(null);
+  const [literary, setLiterary] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
@@ -18,8 +20,10 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
 
   useEffect(() => {
     setSummary(null);
+    setLiterary(null);
     setAnswer("");
     api.getSummary(meeting.id).then(setSummary).catch(() => {});
+    api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
   }, [meeting.id]);
 
   const aiCfg = () => {
@@ -60,9 +64,22 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     }
   };
 
-  const doAsk = async () => {
+  const doLiterary = async () => {
     const c = aiCfg();
     if (!c) return;
+    setBusy("lit");
+    try {
+      setLiterary(await api.literaryText(meeting.id, c));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const doAsk = async () => {
+    const c = aiCfg();
+    if (!c || busy) return;
     setBusy("ask");
     try {
       setAnswer(await api.ask(meeting.id, c, question));
@@ -70,6 +87,25 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
       setError(String(e));
     } finally {
       setBusy("");
+    }
+  };
+
+  // Экспорт текста в файл (.md/.txt) через системный диалог.
+  const exportText = async (content: string, suffix: string) => {
+    const base =
+      (meeting.title || "meeting").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 80) ||
+      "meeting";
+    try {
+      const path = await save({
+        defaultPath: `${base} — ${suffix}.md`,
+        filters: [
+          { name: "Markdown", extensions: ["md"] },
+          { name: "Текст", extensions: ["txt"] },
+        ],
+      });
+      if (path) await api.saveTextFile(path, content);
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -83,19 +119,52 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
             {busy === "suggest" ? "…" : "Авто-заголовок"}
           </button>
           <button className="btn" onClick={doSummarize} disabled={busy !== ""}>
-            {busy === "sum" ? "Думаю…" : "Сделать выжимку"}
+            {busy === "sum" ? "Думаю…" : "Выжимка"}
+          </button>
+          <button className="btn" onClick={doLiterary} disabled={busy !== ""}>
+            {busy === "lit" ? "Пишу…" : "Литературный текст"}
           </button>
         </div>
       </div>
       <div className="card-body">
         {error && <div className="ai-error">{error}</div>}
+
         {summary ? (
-          <div className="summary-text">
-            <Markdown>{summary}</Markdown>
+          <div className="ai-block">
+            <div className="ai-block-head">
+              <span className="ai-block-title">Выжимка</span>
+              <button
+                className="btn ghost"
+                onClick={() => exportText(summary, "выжимка")}
+              >
+                ⬇ Экспорт
+              </button>
+            </div>
+            <div className="summary-text">
+              <Markdown>{summary}</Markdown>
+            </div>
           </div>
         ) : (
-          <p className="muted">Выжимки пока нет — нажми «Сделать выжимку».</p>
+          <p className="muted">Выжимки пока нет — нажми «Выжимка».</p>
         )}
+
+        {literary && (
+          <div className="ai-block">
+            <div className="ai-block-head">
+              <span className="ai-block-title">Литературный текст</span>
+              <button
+                className="btn ghost"
+                onClick={() => exportText(literary, "текст")}
+              >
+                ⬇ Экспорт
+              </button>
+            </div>
+            <div className="summary-text">
+              <Markdown>{literary}</Markdown>
+            </div>
+          </div>
+        )}
+
         <div className="ask-row">
           <input
             value={question}

@@ -739,6 +739,23 @@ textarea {
   padding: 4px 16px;
   margin: 0 0 12px;
 }
+.ai-block {
+  margin: 0 0 14px;
+}
+.ai-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+.ai-block-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 700;
+}
 
 /* Markdown-рендер (выжимка, ответы ИИ) */
 .md {

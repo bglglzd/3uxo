@@ -240,6 +240,25 @@ pub fn load_summary(data_root: &Path, id: &str) -> AppResult<Option<String>> {
     Ok(Some(std::fs::read_to_string(path)?))
 }
 
+/// Сохраняет литературный пересказ встречи в файл `literary.md`.
+pub fn save_literary(data_root: &Path, id: &str, text: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("literary.md"), text)?;
+    Ok(())
+}
+
+/// Читает сохранённый литературный пересказ, если есть.
+pub fn load_literary(data_root: &Path, id: &str) -> AppResult<Option<String>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join("literary.md");
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(std::fs::read_to_string(path)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

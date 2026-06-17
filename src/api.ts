@@ -60,6 +60,10 @@ export const api = {
   summarize: (id: string, config: AiConfig): Promise<string> =>
     inv("summarize", { id, config }),
   getSummary: (id: string): Promise<string | null> => inv("get_summary", { id }),
+  literaryText: (id: string, config: AiConfig): Promise<string> =>
+    inv("literary_text", { id, config }),
+  getLiterary: (id: string): Promise<string | null> =>
+    inv("get_literary", { id }),
   ask: (id: string, config: AiConfig, question: string): Promise<string> =>
     inv("ask", { id, config, question }),
   updateMeetingMeta: (
