@@ -42,9 +42,46 @@ export function mergeBySpeaker(segments: TranscriptSegment[]): SpeakerBlock[] {
   return blocks;
 }
 
-/// Стенограмма в виде текста: каждый блок — заголовок «[время] Имя», затем
-/// абзац с объединённой репликой; блоки разделены пустой строкой.
+/// Простой текст расшифровки — по реплике в строке (как было исторически).
 export function transcriptToTxt(
+  meeting: Meeting,
+  transcript: Transcript,
+  nameOf: NameOf = defaultName,
+): string {
+  const lines: string[] = [meeting.title || "Встреча"];
+  if (meeting.participants) lines.push(`Участники: ${meeting.participants}`);
+  if (meeting.topic) lines.push(`Тема: ${meeting.topic}`);
+  lines.push("");
+  for (const seg of transcript.segments) {
+    lines.push(`[${clock(seg.start_secs)}] ${nameOf(seg.speaker)}: ${seg.text}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+/// Markdown-версия расшифровки — по реплике в строке.
+export function transcriptToMd(
+  meeting: Meeting,
+  transcript: Transcript,
+  nameOf: NameOf = defaultName,
+): string {
+  const lines: string[] = [`# ${meeting.title || "Встреча"}`, ""];
+  const meta: string[] = [];
+  if (meeting.participants) meta.push(`**Участники:** ${meeting.participants}`);
+  if (meeting.topic) meta.push(`**Тема:** ${meeting.topic}`);
+  if (meeting.created_at) meta.push(`**Дата:** ${meeting.created_at}`);
+  if (meta.length) {
+    lines.push(meta.join("  \n"), "");
+  }
+  lines.push("## Расшифровка", "");
+  for (const seg of transcript.segments) {
+    lines.push(`- \`${clock(seg.start_secs)}\` **${nameOf(seg.speaker)}:** ${seg.text}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+/// Стенограмма (текст): блок — заголовок «[время] Имя», затем абзац с
+/// объединённой репликой; блоки разделены пустой строкой.
+export function stenogramToTxt(
   meeting: Meeting,
   transcript: Transcript,
   nameOf: NameOf = defaultName,
@@ -62,8 +99,8 @@ export function transcriptToTxt(
   return lines.join("\n") + "\n";
 }
 
-/// Стенограмма в Markdown: блок — жирный заголовок «[время] Имя» и абзац текста.
-export function transcriptToMd(
+/// Стенограмма (Markdown): блок — жирный заголовок «[время] Имя» и абзац текста.
+export function stenogramToMd(
   meeting: Meeting,
   transcript: Transcript,
   nameOf: NameOf = defaultName,

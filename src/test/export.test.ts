@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   transcriptToTxt,
   transcriptToMd,
+  stenogramToTxt,
+  stenogramToMd,
   exportFileName,
   mergeBySpeaker,
 } from "../export";
@@ -26,23 +28,22 @@ const transcript: Transcript = {
 };
 
 describe("export", () => {
-  it("txt groups by speaker: header line + paragraph", () => {
+  it("txt: one line per reply", () => {
     const txt = transcriptToTxt(meeting, transcript);
     expect(txt).toContain("Созвон с Иваном");
-    expect(txt).toContain("[0:00] Я\nПривет");
-    expect(txt).toContain("[1:05] Собеседник\nЗдравствуй");
+    expect(txt).toContain("[0:00] Я: Привет");
+    expect(txt).toContain("[1:05] Собеседник: Здравствуй");
   });
 
-  it("md groups by speaker: bold header + paragraph", () => {
+  it("md: bullet line per reply", () => {
     const md = transcriptToMd(meeting, transcript);
     expect(md).toContain("# Созвон с Иваном");
     expect(md).toContain("**Участники:** Иван");
-    expect(md).toContain("## Стенограмма");
-    expect(md).toContain("**[0:00] Я**");
-    expect(md).toContain("Привет");
+    expect(md).toContain("## Расшифровка");
+    expect(md).toMatch(/- `0:00` \*\*Я:\*\* Привет/);
   });
 
-  it("merges consecutive same-speaker segments into blocks until interrupted", () => {
+  it("mergeBySpeaker groups consecutive same-speaker segments until interrupted", () => {
     const t: Transcript = {
       segments: [
         { speaker: "spk0", start_secs: 0, end_secs: 2, text: "Привет" },
@@ -58,17 +59,24 @@ describe("export", () => {
     expect(blocks[2]).toMatchObject({ speaker: "spk0", start_secs: 6, text: "Отлично" });
   });
 
-  it("txt uses merged blocks with the first segment's timestamp", () => {
-    const meeting2: Meeting = { ...meeting, title: "Звонок", participants: "", topic: "" };
+  it("stenogram txt: grouped header + paragraph, first segment's timestamp", () => {
+    const m2: Meeting = { ...meeting, title: "Звонок", participants: "", topic: "" };
     const t: Transcript = {
       segments: [
         { speaker: "me", start_secs: 0, end_secs: 2, text: "Раз" },
         { speaker: "me", start_secs: 3, end_secs: 5, text: "два" },
       ],
     };
-    const txt = transcriptToTxt(meeting2, t);
+    const txt = stenogramToTxt(m2, t);
     expect(txt).toContain("[0:00] Я\nРаз два");
     expect(txt).not.toContain("[0:03]");
+  });
+
+  it("stenogram md: bold header + paragraph", () => {
+    const md = stenogramToMd(meeting, transcript);
+    expect(md).toContain("## Стенограмма");
+    expect(md).toContain("**[0:00] Я**");
+    expect(md).toContain("Привет");
   });
 
   it("exportFileName sanitizes and adds extension", () => {
