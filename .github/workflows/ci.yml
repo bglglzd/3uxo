@@ -1,0 +1,56 @@
+name: ci
+
+# Проверки на каждый PR и пуш в main: фронтенд (тесты/типы/сборка), тесты ядра
+# на Linux и компиляция тяжёлых фич (whisper) на Windows. Полная GPU-сборка
+# (Vulkan) остаётся в release.yml — здесь только быстрые проверки.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Ядро без GUI и тяжёлых фич: модель, хранилище, аудио, расшифровка, ИИ.
+      - name: Core tests
+        run: cargo test -p uxo-core
+
+  check-whisper:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Whisper.cpp (whisper-rs) собирается через bindgen — нужен libclang.
+      - name: Install LLVM (libclang for whisper-rs)
+        run: choco install llvm -y --no-progress
+      - name: Set LIBCLANG_PATH
+        shell: pwsh
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+      # Только проверка компиляции фичи whisper (без GPU/Vulkan).
+      - name: cargo check (whisper)
+        run: cargo check -p uxo-core --features whisper
