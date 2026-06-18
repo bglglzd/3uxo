@@ -22,11 +22,31 @@ use crate::error::{AppError, AppResult};
 const TARGET_RATE: u32 = 16_000;
 
 /// Список поддерживаемых форматов — для понятного текста ошибки.
+#[cfg(feature = "opus")]
+pub const SUPPORTED: &str = "WAV, MP3, M4A/AAC, FLAC, OGG (Vorbis/Opus), AIFF, CAF";
+#[cfg(not(feature = "opus"))]
 pub const SUPPORTED: &str = "WAV, MP3, M4A/AAC, FLAC, OGG/Vorbis, AIFF, CAF";
 
 /// Декодирует любой поддерживаемый аудиофайл в WAV (моно, 16 кГц, 16 бит).
 pub fn decode_to_wav_16k_mono(src: &Path, dst: &Path) -> AppResult<()> {
-    let (mono, src_rate) = decode_to_mono_f32(src)?;
+    let (mono, src_rate) = match decode_to_mono_f32(src) {
+        Ok(r) => r,
+        Err(e) => {
+            // symphonia не умеет Opus — пробуем отдельный путь Ogg/Opus.
+            #[cfg(feature = "opus")]
+            {
+                match opus::decode_ogg_opus_16k_mono(src) {
+                    Ok(r) => r,
+                    // Не Opus (или битый) — возвращаем исходную ошибку symphonia.
+                    Err(_) => return Err(e),
+                }
+            }
+            #[cfg(not(feature = "opus"))]
+            {
+                return Err(e);
+            }
+        }
+    };
     let resampled = resample_to_16k(&mono, src_rate)?;
     write_wav_i16(dst, &resampled)?;
     Ok(())
@@ -173,6 +193,89 @@ fn write_wav_i16(dst: &Path, samples: &[f32]) -> AppResult<()> {
         .finalize()
         .map_err(|e| AppError::Audio(e.to_string()))?;
     Ok(())
+}
+
+// ── Ogg/Opus за фичей `opus` (symphonia Opus не декодирует) ─────────────────
+#[cfg(feature = "opus")]
+mod opus {
+    use std::path::Path;
+
+    use audiopus::coder::Decoder;
+    use audiopus::{Channels, SampleRate};
+    use ogg::reading::PacketReader;
+
+    use crate::error::{AppError, AppResult};
+
+    /// Декодирует Ogg/Opus (например, голосовое из мессенджера) в моно f32 16 кГц
+    /// напрямую (libopus сам ресемплит до 16 кГц). Возвращает (сэмплы, 16000).
+    pub fn decode_ogg_opus_16k_mono(src: &Path) -> AppResult<(Vec<f32>, u32)> {
+        let file = std::fs::File::open(src)?;
+        let mut reader = PacketReader::new(file);
+
+        let mut channels: usize = 1;
+        let mut pre_skip_48k: u32 = 0;
+        let mut decoder: Option<Decoder> = None;
+        let mut interleaved: Vec<i16> = Vec::new();
+        // Запас: максимум 120 мс при 48 кГц на 2 канала (с лихвой для 16 кГц).
+        let mut buf = vec![0i16; 5760 * 2];
+        let mut pkt_index = 0usize;
+
+        loop {
+            let packet = match reader.read_packet() {
+                Ok(Some(p)) => p,
+                Ok(None) => break,
+                Err(e) => return Err(AppError::Audio(format!("ogg: {e}"))),
+            };
+            let data = &packet.data;
+            if pkt_index == 0 {
+                // OpusHead: магия(8) ver(1) channels(1) pre-skip(2 LE) ...
+                if data.len() < 12 || &data[0..8] != b"OpusHead" {
+                    return Err(AppError::Audio("не Ogg/Opus".into()));
+                }
+                channels = data[9] as usize;
+                pre_skip_48k = u16::from_le_bytes([data[10], data[11]]) as u32;
+                let ch = if channels >= 2 {
+                    Channels::Stereo
+                } else {
+                    Channels::Mono
+                };
+                decoder = Some(
+                    Decoder::new(SampleRate::Hz16000, ch)
+                        .map_err(|e| AppError::Audio(format!("opus decoder: {e}")))?,
+                );
+            } else if pkt_index == 1 {
+                // OpusTags — пропускаем.
+            } else if let Some(dec) = decoder.as_mut() {
+                let ch = channels.clamp(1, 2);
+                let n = dec
+                    .decode(Some(&data[..]), &mut buf[..], false)
+                    .map_err(|e| AppError::Audio(format!("opus decode: {e}")))?;
+                interleaved.extend_from_slice(&buf[..n * ch]);
+            }
+            pkt_index += 1;
+        }
+
+        if decoder.is_none() || interleaved.is_empty() {
+            return Err(AppError::Audio("opus: пустой поток".into()));
+        }
+
+        let ch = channels.clamp(1, 2);
+        // pre-skip задан в 48 кГц; на выходе 16 кГц → делим на 3 (сэмплов/канал).
+        let skip = ((pre_skip_48k / 3) as usize * ch).min(interleaved.len());
+        let samples = &interleaved[skip..];
+
+        // Даунмикс в моно + i16 → f32 [-1, 1].
+        let mut mono = Vec::with_capacity(samples.len() / ch + 1);
+        if ch == 1 {
+            mono.extend(samples.iter().map(|&s| s as f32 / 32768.0));
+        } else {
+            for frame in samples.chunks(ch) {
+                let sum: i32 = frame.iter().map(|&x| x as i32).sum();
+                mono.push(sum as f32 / ch as f32 / 32768.0);
+            }
+        }
+        Ok((mono, 16_000))
+    }
 }
 
 #[cfg(test)]

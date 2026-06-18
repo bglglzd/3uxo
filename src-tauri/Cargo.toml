@@ -41,4 +41,6 @@ whisper = ["uxo-core/whisper"]
 gpu = ["whisper", "uxo-core/gpu"]
 # Диаризация (разделение говорящих в импортированных записях).
 diarize = ["uxo-core/diarize"]
+# Декодирование Ogg/Opus (голосовые из мессенджеров).
+opus = ["uxo-core/opus"]
 
