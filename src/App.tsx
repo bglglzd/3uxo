@@ -114,7 +114,7 @@ export default function App() {
           {
             name: "Аудио",
             extensions: [
-              "m4a", "mp3", "wav", "flac", "ogg", "oga",
+              "m4a", "mp3", "wav", "flac", "ogg", "oga", "opus",
               "aac", "aif", "aiff", "caf", "mp4",
             ],
           },
