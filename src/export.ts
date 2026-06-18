@@ -1,4 +1,4 @@
-import type { Meeting, Transcript } from "./types";
+import type { Meeting, Transcript, TranscriptSegment } from "./types";
 import { defaultName } from "./labels";
 
 /// Преобразователь id говорящего в отображаемое имя.
@@ -11,6 +11,37 @@ export function clock(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/// Блок стенограммы: подряд идущие реплики ОДНОГО говорящего склеены в один
+/// блок (до момента, пока не вступит другой). Время — начало блока.
+export interface SpeakerBlock {
+  speaker: string;
+  start_secs: number;
+  end_secs: number;
+  text: string;
+}
+
+/// Склеивает подряд идущие реплики одного говорящего в блоки.
+export function mergeBySpeaker(segments: TranscriptSegment[]): SpeakerBlock[] {
+  const blocks: SpeakerBlock[] = [];
+  for (const s of segments) {
+    const text = s.text.trim();
+    if (!text) continue;
+    const last = blocks[blocks.length - 1];
+    if (last && last.speaker === s.speaker) {
+      last.text = `${last.text} ${text}`;
+      last.end_secs = s.end_secs;
+    } else {
+      blocks.push({
+        speaker: s.speaker,
+        start_secs: s.start_secs,
+        end_secs: s.end_secs,
+        text,
+      });
+    }
+  }
+  return blocks;
+}
+
 /// Простой текст расшифровки.
 export function transcriptToTxt(
   meeting: Meeting,
@@ -21,10 +52,8 @@ export function transcriptToTxt(
   if (meeting.participants) lines.push(`Участники: ${meeting.participants}`);
   if (meeting.topic) lines.push(`Тема: ${meeting.topic}`);
   lines.push("");
-  for (const seg of transcript.segments) {
-    lines.push(
-      `[${clock(seg.start_secs)}] ${nameOf(seg.speaker)}: ${seg.text}`,
-    );
+  for (const b of mergeBySpeaker(transcript.segments)) {
+    lines.push(`[${clock(b.start_secs)}] ${nameOf(b.speaker)}: ${b.text}`);
   }
   return lines.join("\n") + "\n";
 }
@@ -43,11 +72,9 @@ export function transcriptToMd(
   if (meta.length) {
     lines.push(meta.join("  \n"), "");
   }
-  lines.push("## Расшифровка", "");
-  for (const seg of transcript.segments) {
-    lines.push(
-      `- \`${clock(seg.start_secs)}\` **${nameOf(seg.speaker)}:** ${seg.text}`,
-    );
+  lines.push("## Стенограмма", "");
+  for (const b of mergeBySpeaker(transcript.segments)) {
+    lines.push(`- \`${clock(b.start_secs)}\` **${nameOf(b.speaker)}:** ${b.text}`);
   }
   return lines.join("\n") + "\n";
 }
