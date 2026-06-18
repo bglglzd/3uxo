@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Auris",
-  "version": "0.5.3",
+  "mainBinaryName": "Auris",
+  "version": "0.5.4",
   "identifier": "com.3uxo.app",
   "build": {
     "beforeDevCommand": "npm run dev",

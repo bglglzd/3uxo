@@ -44,7 +44,7 @@ export function logError(context: string, e: unknown): void {
 /// Полный текст лога с шапкой (версия, окружение) — для отправки в баг-репорт.
 export function getLogText(): string {
   const header = [
-    "=== 3uxo diagnostics ===",
+    "=== Auris diagnostics ===",
     `time: ${stamp()}`,
     `env: ${appInfo || (typeof navigator !== "undefined" ? navigator.userAgent : "")}`,
     `entries: ${entries.length}`,
