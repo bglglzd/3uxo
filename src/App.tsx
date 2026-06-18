@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 import { getSettings } from "./settings";
+import { resolveProcesses } from "./autorecord";
 import type { Meeting, TranscribeState } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { AurisMark } from "./components/AurisMark";
@@ -43,10 +44,18 @@ export default function App() {
     void checkForUpdates();
   }, []);
 
-  // Регистрируем сохранённую горячую клавишу старт/стоп записи при запуске
-  // (бэкенд по умолчанию ставит Ctrl+Shift+R; здесь применяем выбор пользователя).
+  // При запуске применяем сохранённые настройки записи: горячую клавишу
+  // (бэкенд по умолчанию ставит Ctrl+Shift+R) и конфиг авто-записи звонков.
   useEffect(() => {
-    api.updateHotkey(getSettings().hotkey).catch(() => {});
+    const s = getSettings();
+    api.updateHotkey(s.hotkey).catch(() => {});
+    api
+      .setAutorecord(
+        s.autoRecord.enabled,
+        resolveProcesses(s.autoRecord.apps),
+        s.autoRecord.autoStop,
+      )
+      .catch(() => {});
   }, []);
 
   // Таймер записи.

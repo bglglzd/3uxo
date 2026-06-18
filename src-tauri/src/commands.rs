@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
@@ -64,12 +64,38 @@ fn meeting_transcript_text(data_root: &Path, id: &str) -> AppResult<String> {
     Ok(uxo_core::ai::transcript_to_text(&transcript))
 }
 
+/// Конфиг авто-записи звонков (читается фоновым монитором).
+#[derive(Default, Clone)]
+pub struct AutoRecordCfg {
+    pub enabled: bool,
+    /// Имена процессов (.exe) для слежения за аудио-сессиями.
+    pub processes: Vec<String>,
+    pub auto_stop: bool,
+}
+
 /// Глобальное состояние приложения.
 pub struct AppState {
     pub data_root: PathBuf,
     pub repo: Mutex<Repo>,
     pub recorder: Box<dyn Recorder>,
     pub active: Mutex<Option<ActiveRecording>>,
+    /// Настройки авто-записи; фоновый монитор опрашивает их и стартует/стопит.
+    pub autorecord: Arc<Mutex<AutoRecordCfg>>,
+}
+
+/// Обновляет конфиг авто-записи (вызывается фронтом при загрузке и сохранении
+/// настроек). Сам мониторинг ведёт фоновый поток (см. lib.rs).
+#[tauri::command]
+pub fn set_autorecord(
+    state: tauri::State<AppState>,
+    enabled: bool,
+    processes: Vec<String>,
+    auto_stop: bool,
+) {
+    let mut cfg = state.autorecord.lock().unwrap();
+    cfg.enabled = enabled;
+    cfg.processes = processes;
+    cfg.auto_stop = auto_stop;
 }
 
 #[tauri::command]

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getSettings, saveSettings } from "../settings";
 import type { AppSettings } from "../types";
 import { api } from "../api";
-import { AUTO_RECORD_APPS, customProcs } from "../autorecord";
+import { AUTO_RECORD_APPS, customProcs, resolveProcesses } from "../autorecord";
 import { CopyLogButton } from "./CopyLogButton";
 import { HotkeyCapture } from "./HotkeyCapture";
 
@@ -68,6 +68,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     } catch {
       // регистрация может не удаться (занято/неверно) — настройка всё равно
       // сохранена; пользователь увидит при следующем старте/проверит.
+    }
+    // Применяем конфиг авто-записи к фоновому монитору.
+    try {
+      await api.setAutorecord(
+        s.autoRecord.enabled,
+        resolveProcesses(s.autoRecord.apps),
+        s.autoRecord.autoStop,
+      );
+    } catch {
+      // не критично — применится при следующем запуске
     }
     onClose();
   };

@@ -94,6 +94,14 @@ export const api = {
   updateHotkey: (accelerator: string | null): Promise<void> =>
     inv("update_hotkey", { accelerator: accelerator || null }),
 
+  /// Обновить конфиг авто-записи звонков (фоновый монитор аудио-сессий).
+  setAutorecord: (
+    enabled: boolean,
+    processes: string[],
+    autoStop: boolean,
+  ): Promise<void> =>
+    inv("set_autorecord", { enabled, processes, autoStop }),
+
   async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
     const path: string = await inv("track_path", { id, trackFile });
     return convertFileSrc(path);

@@ -100,6 +100,40 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Фоновый монитор авто-записи: каждые ~2.5с проверяет аудио-сессии выбранных
+/// приложений (`AppState.autorecord`) и стартует/стопит запись. Останавливает
+/// только то, что начал сам (`auto_active`), не трогая ручную запись.
+fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+    use tauri::Manager;
+    std::thread::spawn(move || {
+        let mut auto_active = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(2500));
+            let (enabled, processes, auto_stop) = {
+                let cfg = app.state::<AppState>().autorecord.lock().unwrap();
+                (cfg.enabled, cfg.processes.clone(), cfg.auto_stop)
+            };
+            if !enabled || processes.is_empty() {
+                auto_active = false;
+                continue;
+            }
+            let recording = app.state::<AppState>().active.lock().unwrap().is_some();
+            // Ручная остановка извне — сбрасываем флаг авто-записи.
+            if !recording {
+                auto_active = false;
+            }
+            let call = uxo_core::call_detector::any_active_call(&processes);
+            if call && !recording {
+                toggle_and_notify(&app);
+                auto_active = true;
+            } else if !call && recording && auto_active && auto_stop {
+                toggle_and_notify(&app);
+                auto_active = false;
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -147,10 +181,14 @@ pub fn run() {
                 repo: Mutex::new(repo),
                 recorder: build_recorder(),
                 active: Mutex::new(None),
+                autorecord: std::sync::Arc::new(Mutex::new(
+                    commands::AutoRecordCfg::default(),
+                )),
             });
 
             setup_global_shortcut(app)?;
             setup_tray(app)?;
+            spawn_autorecord_monitor(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -178,6 +216,7 @@ pub fn run() {
             commands::save_text_file,
             commands::export_audio,
             commands::get_backend_log,
+            commands::set_autorecord,
             update_hotkey,
         ])
         .run(tauri::generate_context!())

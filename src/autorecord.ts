@@ -41,9 +41,22 @@ export const AUTO_RECORD_APPS: AutoRecordApp[] = [
 ];
 
 const KNOWN_KEYS = new Set(AUTO_RECORD_APPS.map((a) => a.key));
+const BY_KEY = new Map(AUTO_RECORD_APPS.map((a) => [a.key, a]));
 
 /// Записи из настроек, не входящие в каталог, — это добавленные пользователем
 /// имена процессов (custom).
 export function customProcs(apps: string[]): string[] {
   return apps.filter((a) => !KNOWN_KEYS.has(a));
+}
+
+/// Разворачивает выбранные ключи приложений + кастомные процессы в плоский
+/// список имён процессов (.exe) для бэкенд-монитора. Без дублей.
+export function resolveProcesses(apps: string[]): string[] {
+  const out = new Set<string>();
+  for (const a of apps) {
+    const known = BY_KEY.get(a);
+    if (known) known.processes.forEach((p) => out.add(p));
+    else out.add(a);
+  }
+  return [...out];
 }
