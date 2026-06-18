@@ -64,6 +64,13 @@ export const api = {
     inv("literary_text", { id, config }),
   getLiterary: (id: string): Promise<string | null> =>
     inv("get_literary", { id }),
+  briefSummary: (id: string, config: AiConfig): Promise<string> =>
+    inv("brief_summary", { id, config }),
+  getBrief: (id: string): Promise<string | null> => inv("get_brief", { id }),
+  analyze: (id: string, config: AiConfig): Promise<string> =>
+    inv("analyze", { id, config }),
+  getAnalysis: (id: string): Promise<string | null> =>
+    inv("get_analysis", { id }),
   ask: (id: string, config: AiConfig, question: string): Promise<string> =>
     inv("ask", { id, config, question }),
   updateMeetingMeta: (

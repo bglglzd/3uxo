@@ -828,47 +828,6 @@ textarea::placeholder {
   color: var(--text);
 }
 
-/* Export dropdown menu */
-.export-menu {
-  position: relative;
-  display: inline-flex;
-}
-.popover-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-}
-.export-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 31;
-  min-width: 180px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  background: var(--glass-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid var(--glass-border-strong);
-  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
-}
-.export-pop button {
-  border: none;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  padding: 9px 10px;
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.export-pop button:hover {
-  background: var(--hover);
-}
-
 /* Import drop zone (modal) */
 .import-modal {
   width: min(520px, 100%);

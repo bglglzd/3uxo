@@ -26,18 +26,20 @@ const transcript: Transcript = {
 };
 
 describe("export", () => {
-  it("txt includes title, speakers and timestamps", () => {
+  it("txt groups by speaker: header line + paragraph", () => {
     const txt = transcriptToTxt(meeting, transcript);
     expect(txt).toContain("Созвон с Иваном");
-    expect(txt).toContain("[0:00] Я: Привет");
-    expect(txt).toContain("[1:05] Собеседник: Здравствуй");
+    expect(txt).toContain("[0:00] Я\nПривет");
+    expect(txt).toContain("[1:05] Собеседник\nЗдравствуй");
   });
 
-  it("md has heading and bullet lines", () => {
+  it("md groups by speaker: bold header + paragraph", () => {
     const md = transcriptToMd(meeting, transcript);
     expect(md).toContain("# Созвон с Иваном");
     expect(md).toContain("**Участники:** Иван");
-    expect(md).toMatch(/- `0:00` \*\*Я:\*\* Привет/);
+    expect(md).toContain("## Стенограмма");
+    expect(md).toContain("**[0:00] Я**");
+    expect(md).toContain("Привет");
   });
 
   it("merges consecutive same-speaker segments into blocks until interrupted", () => {
@@ -65,7 +67,7 @@ describe("export", () => {
       ],
     };
     const txt = transcriptToTxt(meeting2, t);
-    expect(txt).toContain("[0:00] Я: Раз два");
+    expect(txt).toContain("[0:00] Я\nРаз два");
     expect(txt).not.toContain("[0:03]");
   });
 

@@ -19,8 +19,12 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 
 vi.mock("../api", () => ({
   api: {
+    getBrief: vi.fn(async () => null),
+    briefSummary: vi.fn(async () => "краткое резюме"),
     getSummary: vi.fn(async () => null),
     summarize: vi.fn(async () => "выжимка"),
+    getAnalysis: vi.fn(async () => null),
+    analyze: vi.fn(async () => "ии-анализ"),
     getLiterary: vi.fn(async () => null),
     literaryText: vi.fn(async () => "литературный текст"),
     suggestMetadata: vi.fn(async () => ({ title: "T", participants: "P", topic: "Y" })),
@@ -59,6 +63,20 @@ describe("AiPanel", () => {
     render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: /Литературный текст/i }));
     expect(await screen.findByText("литературный текст")).toBeInTheDocument();
+  });
+
+  it("creates a brief summary", async () => {
+    vi.mocked(api.briefSummary).mockResolvedValue("краткое резюме");
+    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Краткое резюме" }));
+    expect(await screen.findByText("краткое резюме")).toBeInTheDocument();
+  });
+
+  it("creates an AI analysis", async () => {
+    vi.mocked(api.analyze).mockResolvedValue("ии-анализ");
+    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "ИИ-анализ" }));
+    expect(await screen.findByText("ии-анализ")).toBeInTheDocument();
   });
 
   it("suggests metadata and saves it", async () => {
