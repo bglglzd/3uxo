@@ -6,7 +6,14 @@ import { api } from "../api";
 import { getLabels, setLabels as saveLabels, nameForSpeaker, defaultName } from "../labels";
 import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
-import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
+import {
+  clock,
+  transcriptToTxt,
+  transcriptToMd,
+  stenogramToTxt,
+  stenogramToMd,
+  exportFileName,
+} from "../export";
 import { TranscriptView } from "./TranscriptView";
 import { AiPanel } from "./AiPanel";
 import { CopyLogButton } from "./CopyLogButton";
@@ -166,10 +173,29 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     }
   };
 
-  // Стенограмма: формат (txt/md) выбирается в диалоге сохранения.
+  const nameOf = (id: string) => nameForSpeaker(labels, id);
+
+  // Обычный экспорт расшифровки (по реплике в строке) — TXT или MD.
+  const exportAs = async (fmt: "txt" | "md") => {
+    if (!transcript) return;
+    const content =
+      fmt === "txt"
+        ? transcriptToTxt(meeting, transcript, nameOf)
+        : transcriptToMd(meeting, transcript, nameOf);
+    try {
+      const path = await save({
+        defaultPath: exportFileName(meeting, fmt),
+        filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
+      });
+      if (path) await api.saveTextFile(path, content);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  // Стенограмма (сгруппировано по говорящему, абзацы); формат — в диалоге.
   const exportStenogram = async () => {
     if (!transcript) return;
-    const nameOf = (id: string) => nameForSpeaker(labels, id);
     try {
       const path = await save({
         defaultPath: exportFileName(meeting, "txt"),
@@ -180,8 +206,8 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       });
       if (!path) return;
       const content = path.toLowerCase().endsWith(".md")
-        ? transcriptToMd(meeting, transcript, nameOf)
-        : transcriptToTxt(meeting, transcript, nameOf);
+        ? stenogramToMd(meeting, transcript, nameOf)
+        : stenogramToTxt(meeting, transcript, nameOf);
       await api.saveTextFile(path, content);
     } catch (e) {
       setError(String(e));
@@ -354,10 +380,16 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             </span>
           ) : hasTranscript ? (
             <div className="btn-row">
+              <button className="btn ghost" onClick={() => exportAs("txt")}>
+                ⬇ TXT
+              </button>
+              <button className="btn ghost" onClick={() => exportAs("md")}>
+                ⬇ MD
+              </button>
               <button
                 className="btn ghost"
                 onClick={exportStenogram}
-                title="Скачать стенограмму (.txt / .md)"
+                title="Сгруппированная стенограмма (.txt / .md)"
               >
                 ⬇ Стенограмма
               </button>
