@@ -1423,7 +1423,8 @@ textarea::placeholder {
 }
 .modal-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   /* Липкий стеклянный футер: Save/Cancel всегда достижимы в длинной модалке. */
@@ -1438,6 +1439,15 @@ textarea::placeholder {
 .modal-actions .btn {
   padding-top: 10px;
   padding-bottom: 10px;
+}
+.modal-version {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.modal-actions-btns {
+  display: flex;
+  gap: 8px;
 }
 .confirm-modal {
   width: min(440px, 100%);
