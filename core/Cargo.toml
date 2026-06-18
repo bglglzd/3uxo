@@ -21,6 +21,10 @@ tempfile = "3"
 # чистым Rust — для импорта записей с телефонов и диктофонов.
 symphonia = { version = "0.5", features = ["all"] }
 rubato = "0.15"
+# Ogg/Opus (голосовые из мессенджеров) — symphonia Opus не декодирует.
+# libopus вендорится audiopus_sys и собирается из исходников (cmake).
+ogg = { version = "0.9", optional = true }
+audiopus = { version = "0.2", optional = true }
 whisper-rs = { version = "0.16", optional = true }
 # Диаризация (разделение говорящих): segmentation-3.0 + wespeaker, инференс на
 # Burn (чистый Rust, без ONNX-рантайма). Тяжёлая — только за фичей `diarize`.
@@ -28,6 +32,8 @@ native-pyannote-rs = { version = "=0.1.4", optional = true }
 
 [features]
 whisper = ["dep:whisper-rs"]
+# Декодирование Ogg/Opus (libopus). Тяжёлая C-сборка — отдельно.
+opus = ["dep:ogg", "dep:audiopus"]
 # Диаризация (разделение говорящих). Тяжёлые ML-зависимости (Burn) — отдельно.
 diarize = ["dep:native-pyannote-rs"]
 # GPU-ускорение через Vulkan (быстро на NVIDIA/AMD/Intel; рантайм vulkan-1.dll

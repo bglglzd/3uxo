@@ -60,6 +60,7 @@ jobs:
       - name: Set LIBCLANG_PATH
         shell: pwsh
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-      # Компиляция приложения с whisper + diarize (без GPU/Vulkan).
-      - name: cargo check (app + whisper + diarize)
-        run: cargo check -p app-3uxo --features whisper,diarize
+      # Компиляция приложения с whisper + diarize + opus (без GPU/Vulkan).
+      # opus тянет libopus (audiopus_sys, cmake — есть на раннере).
+      - name: cargo check (app + whisper + diarize + opus)
+        run: cargo check -p app-3uxo --features whisper,diarize,opus
