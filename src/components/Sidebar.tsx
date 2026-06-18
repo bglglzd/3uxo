@@ -39,8 +39,21 @@ export function Sidebar(p: Props) {
   return (
     <aside className={p.open ? "sidebar open" : "sidebar"}>
       <div className="brand">
-        <b>3uxo</b>
-        <span>третье ухо</span>
+        <svg
+          className="brand-mark"
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle className="bm-dot" cx="9" cy="23" r="3" />
+          <path className="bm-w1" d="M9 15 A 8 8 0 0 1 17 23" />
+          <path className="bm-w2" d="M9 10 A 13 13 0 0 1 22 23" />
+          <path className="bm-w3" d="M9 5 A 18 18 0 0 1 27 23" />
+        </svg>
+        <div className="brand-text">
+          <b>3uxo</b>
+          <span>третье ухо</span>
+        </div>
       </div>
 
       <RecordButton
@@ -88,6 +101,22 @@ export function Sidebar(p: Props) {
       </div>
 
       <div className="sidebar-footer">
+        <div className="privacy-note">
+          <svg
+            className="pn-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          <span>Работает локально · открытый код</span>
+        </div>
         <div className="theme-switch" role="group" aria-label="Тема оформления">
           <button
             className={theme === "light" ? "active" : ""}

@@ -172,6 +172,30 @@ export default function App() {
               Нажми «Начать запись», чтобы записать созвон, или выбери встречу
               слева.
             </p>
+            <div className="privacy-card">
+              <svg
+                className="privacy-shield"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6l-8-3Z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+              <div className="privacy-card-text">
+                <strong>Приватно по умолчанию</strong>
+                <p>
+                  Запись, расшифровка и разделение голосов выполняются{" "}
+                  <b>локально на вашем устройстве</b> — аудио и тексты никуда не
+                  загружаются. ИИ-функции (резюме, анализ) — по желанию и через
+                  ваш ключ. Открытый код.
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </main>
