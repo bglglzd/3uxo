@@ -25,6 +25,31 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           наружу без твоего ключа.
         </p>
 
+        <div className="settings-privacy">
+          <svg
+            className="sp-shield"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 2l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+          <div className="sp-text">
+            <div className="sp-title">
+              Хранить всё локально <span className="sp-always">Всегда вкл</span>
+            </div>
+            <p>
+              Записи, расшифровка и разделение голосов не покидают устройство.
+              ИИ-функции — опционально, через ваш ключ ниже.
+            </p>
+          </div>
+        </div>
+
         <h4>Искусственный интеллект</h4>
         <div className="field">
           <label>Base URL</label>
@@ -57,7 +82,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <h4>Whisper · расшифровка</h4>
         <p className="hint">
-          Расшифровка идёт локально, внутри приложения. Нужную модель 3uxo
+          Расшифровка идёт локально, внутри приложения. Нужную модель Auris
           скачает сам один раз при первой расшифровке — ставить ничего не нужно.
         </p>
         <div className="field">

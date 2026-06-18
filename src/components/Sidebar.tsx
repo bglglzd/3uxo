@@ -3,6 +3,7 @@ import type { Meeting, TranscribeState } from "../types";
 import { getTheme, setTheme, type Theme } from "../theme";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
+import { AurisMark } from "./AurisMark";
 
 interface Props {
   meetings: Meeting[];
@@ -39,20 +40,15 @@ export function Sidebar(p: Props) {
   return (
     <aside className={p.open ? "sidebar open" : "sidebar"}>
       <div className="brand">
-        <svg
-          className="brand-mark"
-          viewBox="0 0 32 32"
-          fill="none"
-          aria-hidden="true"
-        >
-          <circle className="bm-dot" cx="9" cy="23" r="3" />
-          <path className="bm-w1" d="M9 15 A 8 8 0 0 1 17 23" />
-          <path className="bm-w2" d="M9 10 A 13 13 0 0 1 22 23" />
-          <path className="bm-w3" d="M9 5 A 18 18 0 0 1 27 23" />
-        </svg>
-        <div className="brand-text">
-          <b>3uxo</b>
-          <span>третье ухо</span>
+        <AurisMark size={30} />
+        <div className="brand-lockup">
+          <span className="brand-word">auris</span>
+          <span className="brand-divider" />
+          <span className="brand-desc">
+            ваше
+            <br />
+            третье ухо
+          </span>
         </div>
       </div>
 
