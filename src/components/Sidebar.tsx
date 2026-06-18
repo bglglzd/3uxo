@@ -51,7 +51,21 @@ export function Sidebar(p: Props) {
       />
 
       <button className="import-btn" onClick={p.onImport}>
-        📥 Импорт записи
+        <svg
+          className="btn-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3v11" />
+          <path d="m8 10.5 4 4 4-4" />
+          <path d="M5 20h14" />
+        </svg>
+        Импорт записи
       </button>
 
       <div className="search">
