@@ -44,6 +44,15 @@ gpu = ["whisper", "whisper-rs/vulkan"]
 # поэтому воркспейс собирается без WASAPI.
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.15"
+# Сырой Win32 для детекта звонка по аудио-сессиям (IAudioSessionManager2).
+# Версия совпадает с той, что тянет wasapi 0.15 — без дублирования в дереве.
+windows = { version = "0.57", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
@@ -64,12 +64,38 @@ fn meeting_transcript_text(data_root: &Path, id: &str) -> AppResult<String> {
     Ok(uxo_core::ai::transcript_to_text(&transcript))
 }
 
+/// Конфиг авто-записи звонков (читается фоновым монитором).
+#[derive(Default, Clone)]
+pub struct AutoRecordCfg {
+    pub enabled: bool,
+    /// Имена процессов (.exe) для слежения за аудио-сессиями.
+    pub processes: Vec<String>,
+    pub auto_stop: bool,
+}
+
 /// Глобальное состояние приложения.
 pub struct AppState {
     pub data_root: PathBuf,
     pub repo: Mutex<Repo>,
     pub recorder: Box<dyn Recorder>,
     pub active: Mutex<Option<ActiveRecording>>,
+    /// Настройки авто-записи; фоновый монитор опрашивает их и стартует/стопит.
+    pub autorecord: Arc<Mutex<AutoRecordCfg>>,
+}
+
+/// Обновляет конфиг авто-записи (вызывается фронтом при загрузке и сохранении
+/// настроек). Сам мониторинг ведёт фоновый поток (см. lib.rs).
+#[tauri::command]
+pub fn set_autorecord(
+    state: tauri::State<AppState>,
+    enabled: bool,
+    processes: Vec<String>,
+    auto_stop: bool,
+) {
+    let mut cfg = state.autorecord.lock().unwrap();
+    cfg.enabled = enabled;
+    cfg.processes = processes;
+    cfg.auto_stop = auto_stop;
 }
 
 #[tauri::command]
@@ -81,7 +107,7 @@ pub fn start_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResu
     let id = uuid::Uuid::new_v4().to_string();
     let rec = service::start_recording(state.recorder.as_ref(), &state.data_root, id.clone())?;
     *active = Some(rec);
-    notify(&app, "🔴 3uxo — запись начата", "Идёт запись звонка");
+    notify(&app, "🔴 Auris — запись начата", "Идёт запись звонка");
     Ok(id)
 }
 
@@ -103,7 +129,7 @@ pub async fn stop_recording(
         let repo = state.repo.lock().unwrap();
         service::stop_recording(state.recorder.as_ref(), &repo, &current, created_at)?
     };
-    notify(&app, "✅ 3uxo — запись сохранена", &meeting.title);
+    notify(&app, "✅ Auris — запись сохранена", &meeting.title);
     Ok(meeting)
 }
 
@@ -127,7 +153,7 @@ pub async fn import_recording(
     .map_err(|e| AppError::Audio(format!("import join: {e}")))??;
 
     state.repo.lock().unwrap().insert(&meeting)?;
-    notify(&app, "📥 3uxo — запись импортирована", &meeting.title);
+    notify(&app, "📥 Auris — запись импортирована", &meeting.title);
     Ok(meeting)
 }
 
@@ -216,7 +242,7 @@ pub async fn transcribe(
             service::transcribe_to_file(&transcriber, &state.data_root, &id)?
         };
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
-        notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
+        notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
         return Ok(transcript);
     }
 
@@ -354,7 +380,7 @@ pub async fn transcribe(
         service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         flog(&state.data_root, "transcribe done");
-        notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
+        notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }
     #[cfg(not(feature = "whisper"))]
