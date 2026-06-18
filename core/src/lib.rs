@@ -5,6 +5,8 @@
 pub mod ai;
 pub mod audio;
 pub mod cli_transcriber;
+pub mod decode;
+pub mod diarize;
 pub mod error;
 pub mod model;
 pub mod recorder;

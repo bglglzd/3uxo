@@ -22,6 +22,15 @@ pub struct Meeting {
     pub folder: String,
     /// recorded | transcribed | summarized (в Плане 1 всегда "recorded").
     pub status: String,
+    /// Источник встречи: "recorded" (записана приложением, 2 дорожки) или
+    /// "imported" (импортированный файл, одна дорожка `audio.wav`).
+    #[serde(default = "default_source")]
+    pub source: String,
+}
+
+/// Дефолт для `source` — на случай старых записей без этого поля.
+fn default_source() -> String {
+    "recorded".to_string()
 }
 
 #[cfg(test)]
@@ -39,6 +48,7 @@ mod tests {
             duration_secs: 42,
             folder: "abc".into(),
             status: "recorded".into(),
+            source: "recorded".into(),
         };
         let json = serde_json::to_string(&m).unwrap();
         let back: Meeting = serde_json::from_str(&json).unwrap();

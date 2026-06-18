@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Meeting, TranscribeState } from "../types";
+import { getTheme, setTheme, type Theme } from "../theme";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
 
@@ -9,8 +10,11 @@ interface Props {
   recording: boolean;
   elapsed: number;
   progress: Record<string, TranscribeState>;
+  importError?: string;
+  open?: boolean;
   onStart: () => void;
   onStop: () => void;
+  onImport: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenSettings: () => void;
@@ -18,6 +22,13 @@ interface Props {
 
 export function Sidebar(p: Props) {
   const [q, setQ] = useState("");
+  const [theme, setThemeState] = useState<Theme>(() => getTheme());
+
+  const pickTheme = (t: Theme) => {
+    setTheme(t);
+    setThemeState(t);
+  };
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return p.meetings;
@@ -27,7 +38,7 @@ export function Sidebar(p: Props) {
   }, [p.meetings, q]);
 
   return (
-    <aside className="sidebar">
+    <aside className={p.open ? "sidebar open" : "sidebar"}>
       <div className="brand">
         <b>3uxo</b>
         <span>третье ухо</span>
@@ -39,6 +50,11 @@ export function Sidebar(p: Props) {
         onStart={p.onStart}
         onStop={p.onStop}
       />
+
+      <button className="import-btn" onClick={p.onImport}>
+        📥 Импорт записи
+      </button>
+      {p.importError && <div className="ai-error">{p.importError}</div>}
 
       <div className="search">
         <input
@@ -59,9 +75,25 @@ export function Sidebar(p: Props) {
         />
       </div>
 
-      <button className="settings-trigger" onClick={p.onOpenSettings}>
-        ⚙ Настройки
-      </button>
+      <div className="sidebar-footer">
+        <div className="theme-switch" role="group" aria-label="Тема оформления">
+          <button
+            className={theme === "light" ? "active" : ""}
+            onClick={() => pickTheme("light")}
+          >
+            ☀ Светлая
+          </button>
+          <button
+            className={theme === "dark" ? "active" : ""}
+            onClick={() => pickTheme("dark")}
+          >
+            🌙 Тёмная
+          </button>
+        </div>
+        <button className="settings-trigger" onClick={p.onOpenSettings}>
+          ⚙ Настройки
+        </button>
+      </div>
     </aside>
   );
 }

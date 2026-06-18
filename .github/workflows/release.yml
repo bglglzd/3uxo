@@ -54,5 +54,5 @@ jobs:
           prerelease: false
           # Генерирует и прикладывает latest.json для авто-обновления.
           includeUpdaterJson: true
-          # Встроенный whisper.cpp с GPU-ускорением (Vulkan).
-          args: --features gpu
+          # Встроенный whisper.cpp с GPU-ускорением (Vulkan) + диаризация (Burn).
+          args: --features gpu,diarize

@@ -107,6 +107,30 @@ pub async fn stop_recording(
     Ok(meeting)
 }
 
+/// Импортирует внешнюю аудиозапись (m4a/mp3/wav/flac/ogg…) как новую встречу.
+/// Тяжёлый декод уходит в фон (`spawn_blocking`), поэтому окно не зависает.
+#[tauri::command]
+pub async fn import_recording(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> AppResult<Meeting> {
+    let data_root = state.data_root.clone();
+    let id = uuid::Uuid::new_v4().to_string();
+    let created_at = chrono::Utc::now().to_rfc3339();
+
+    // Декод + ресемпл в audio.wav — вне async-потока (без обращения к БД).
+    let meeting = tauri::async_runtime::spawn_blocking(move || {
+        service::import_to_meeting(&data_root, id, &PathBuf::from(path), created_at)
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("import join: {e}")))??;
+
+    state.repo.lock().unwrap().insert(&meeting)?;
+    notify(&app, "📥 3uxo — запись импортирована", &meeting.title);
+    Ok(meeting)
+}
+
 #[tauri::command]
 pub fn list_meetings(state: tauri::State<AppState>) -> AppResult<Vec<Meeting>> {
     state.repo.lock().unwrap().list()
@@ -168,7 +192,16 @@ pub async fn transcribe(
     state: tauri::State<'_, AppState>,
     id: String,
     options: TranscribeOptions,
+    // Сколько голосов в записи: для импорта — всего говорящих (None = авто);
+    // для записи — число собеседников (>=2 включает диаризацию системной дорожки).
+    speaker_count: Option<u32>,
 ) -> AppResult<Transcript> {
+    // Импортированная встреча — одна дорожка audio.wav; записанная — mic+system.
+    let imported = state.repo.lock().unwrap().get(&id)?.source == "imported";
+    // Помечаем использованным во всех конфигурациях фич (используется ниже только
+    // в путях с диаризацией).
+    let _ = speaker_count;
+
     // Явно указанный внешний whisper-CLI — используем его (без прогресса).
     if options
         .whisper_path
@@ -177,7 +210,11 @@ pub async fn transcribe(
         .unwrap_or(false)
     {
         let transcriber = CliTranscriber::new(options);
-        let transcript = service::transcribe_to_file(&transcriber, &state.data_root, &id)?;
+        let transcript = if imported {
+            service::transcribe_single_to_file(&transcriber, &state.data_root, &id)?
+        } else {
+            service::transcribe_to_file(&transcriber, &state.data_root, &id)?
+        };
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         notify(&app, "📝 3uxo — расшифровка готова", "Текст разговора готов");
         return Ok(transcript);
@@ -191,9 +228,10 @@ pub async fn transcribe(
         use uxo_core::transcript::merge_tracks;
         use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
-        flog(&state.data_root, &format!("transcribe start id={id}"));
-        let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
-        let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+        flog(
+            &state.data_root,
+            &format!("transcribe start id={id} imported={imported}"),
+        );
 
         // Прогресс из НАШЕГО цикла: фаза + процент + счётчик окон (done/total).
         let emit = |stage: &str, percent: f32, done: usize, total: usize| {
@@ -209,7 +247,7 @@ pub async fn transcribe(
             );
         };
 
-        // Модель грузится ОДИН раз на обе дорожки; скачивание — с прогрессом.
+        // Модель грузится ОДИН раз; скачивание — с прогрессом.
         emit("loading", 0.0, 0, 0);
         flog(&state.data_root, "transcribe: ensure model + load");
         let transcriber = WhisperTranscriber::managed(
@@ -219,21 +257,100 @@ pub async fn transcribe(
             &|frac| emit("download", frac * 100.0, 0, 0),
         )?;
 
-        emit("mic", 0.0, 0, 0);
-        flog(&state.data_root, "transcribe: mic track");
-        let mic_segs =
-            transcriber.transcribe_windowed(&mic_path, DEFAULT_WINDOW_SECS, &|done, total| {
-                emit("mic", (done as f32 / total as f32) * 50.0, done, total);
-            })?;
+        let transcript = if imported {
+            // Импорт — одна дорожка audio.wav. С диаризацией текст идёт 0..50%,
+            // разделение голосов 50..100%; без фичи — текст 0..100%, один говорящий.
+            let audio_path = service::track_path(&state.data_root, &id, "audio.wav")?;
+            emit("mic", 0.0, 0, 0);
+            flog(&state.data_root, "transcribe: imported audio");
 
-        emit("system", 50.0, 0, 0);
-        flog(&state.data_root, "transcribe: system track");
-        let system_segs =
-            transcriber.transcribe_windowed(&system_path, DEFAULT_WINDOW_SECS, &|done, total| {
-                emit("system", 50.0 + (done as f32 / total as f32) * 50.0, done, total);
-            })?;
+            #[cfg(feature = "diarize")]
+            let text_scale = 50.0f32;
+            #[cfg(not(feature = "diarize"))]
+            let text_scale = 100.0f32;
 
-        let transcript = merge_tracks(mic_segs, system_segs);
+            let segs = transcriber.transcribe_windowed(
+                &audio_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| emit("mic", (done as f32 / total as f32) * text_scale, done, total),
+            )?;
+
+            #[cfg(feature = "diarize")]
+            {
+                use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
+                use uxo_core::transcript::assign_speakers;
+                // Потолок числа голосов: выбранный пользователем или авто (0).
+                let max_speakers = speaker_count.unwrap_or(0) as usize;
+                // Модели диаризации скачиваются при первом запуске (фаза download).
+                emit("diarize", 50.0, 0, 0);
+                flog(&state.data_root, "transcribe: diarize (ensure models + run)");
+                let diarizer = PyannoteDiarizer::managed(&state.data_root, max_speakers, &|frac| {
+                    emit("download", 50.0 + frac * 40.0, 0, 0)
+                })?;
+                emit("diarize", 90.0, 0, 0);
+                let diar = diarizer.diarize(&audio_path)?;
+                assign_speakers(segs, diar)
+            }
+            #[cfg(not(feature = "diarize"))]
+            {
+                uxo_core::transcript::single_speaker(segs, "spk0")
+            }
+        } else {
+            let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
+            let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+
+            // При >=2 собеседниках системную дорожку («Собеседник») делим по
+            // голосам диаризацией; микрофон — всегда один «Я».
+            #[cfg(feature = "diarize")]
+            let will_diarize = speaker_count.unwrap_or(1) >= 2;
+            #[cfg(not(feature = "diarize"))]
+            let will_diarize = false;
+            let sys_end = if will_diarize { 85.0 } else { 100.0 };
+
+            emit("mic", 0.0, 0, 0);
+            flog(&state.data_root, "transcribe: mic track");
+            let mic_segs = transcriber.transcribe_windowed(
+                &mic_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| emit("mic", (done as f32 / total as f32) * 50.0, done, total),
+            )?;
+
+            emit("system", 50.0, 0, 0);
+            flog(&state.data_root, "transcribe: system track");
+            let system_segs = transcriber.transcribe_windowed(
+                &system_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| {
+                    emit("system", 50.0 + (done as f32 / total as f32) * (sys_end - 50.0), done, total)
+                },
+            )?;
+
+            #[cfg(feature = "diarize")]
+            {
+                if will_diarize {
+                    use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
+                    use uxo_core::transcript::{assign_speakers, merge_transcripts, single_speaker};
+                    let interlocutors = speaker_count.unwrap_or(0) as usize;
+                    emit("diarize", sys_end, 0, 0);
+                    flog(&state.data_root, "transcribe: diarize system track");
+                    let diarizer =
+                        PyannoteDiarizer::managed(&state.data_root, interlocutors, &|frac| {
+                            emit("download", sys_end + frac * (100.0 - sys_end), 0, 0)
+                        })?;
+                    let sys_diar = diarizer.diarize(&system_path)?;
+                    let them = assign_speakers(system_segs, sys_diar);
+                    let me = single_speaker(mic_segs, "me");
+                    merge_transcripts(me, them)
+                } else {
+                    merge_tracks(mic_segs, system_segs)
+                }
+            }
+            #[cfg(not(feature = "diarize"))]
+            {
+                merge_tracks(mic_segs, system_segs)
+            }
+        };
+
         service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         flog(&state.data_root, "transcribe done");
@@ -302,6 +419,27 @@ pub async fn summarize(
 #[tauri::command]
 pub fn get_summary(state: tauri::State<AppState>, id: String) -> AppResult<Option<String>> {
     service::load_summary(&state.data_root, &id)
+}
+
+/// Литературный пересказ: ИИ переписывает расшифровку в связный текст, сохраняя
+/// детали. Сохраняется в `literary.md`.
+#[tauri::command]
+pub async fn literary_text(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+) -> AppResult<String> {
+    let text = meeting_transcript_text(&state.data_root, &id)?;
+    let backend = HttpChatBackend::new(config);
+    // Длинные разговоры переписываем по частям и склеиваем (без сворачивания).
+    let literary = uxo_core::ai::to_literary_long(&backend, &text)?;
+    service::save_literary(&state.data_root, &id, &literary)?;
+    Ok(literary)
+}
+
+#[tauri::command]
+pub fn get_literary(state: tauri::State<AppState>, id: String) -> AppResult<Option<String>> {
+    service::load_literary(&state.data_root, &id)
 }
 
 #[tauri::command]

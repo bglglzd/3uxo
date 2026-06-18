@@ -31,14 +31,26 @@ function whisperOptions(w: WhisperConfig) {
 export const api = {
   startRecording: (): Promise<string> => inv("start_recording"),
   stopRecording: (): Promise<Meeting> => inv("stop_recording"),
+  importRecording: (path: string): Promise<Meeting> =>
+    inv("import_recording", { path }),
   listMeetings: (): Promise<Meeting[]> => inv("list_meetings"),
   getMeeting: (id: string): Promise<Meeting> => inv("get_meeting", { id }),
   deleteMeeting: (id: string): Promise<void> => inv("delete_meeting", { id }),
   isRecording: (): Promise<boolean> => inv("is_recording"),
 
-  transcribe: (id: string, whisper: WhisperConfig): Promise<Transcript> => {
-    logInfo(`transcribe start id=${id} model=${whisper.model || "small"}`);
-    return inv("transcribe", { id, options: whisperOptions(whisper) });
+  transcribe: (
+    id: string,
+    whisper: WhisperConfig,
+    speakerCount?: number | null,
+  ): Promise<Transcript> => {
+    logInfo(
+      `transcribe start id=${id} model=${whisper.model || "small"} speakers=${speakerCount ?? "auto"}`,
+    );
+    return inv("transcribe", {
+      id,
+      options: whisperOptions(whisper),
+      speakerCount: speakerCount ?? null,
+    });
   },
   getTranscript: (id: string): Promise<Transcript | null> =>
     inv("get_transcript", { id }),
@@ -48,6 +60,10 @@ export const api = {
   summarize: (id: string, config: AiConfig): Promise<string> =>
     inv("summarize", { id, config }),
   getSummary: (id: string): Promise<string | null> => inv("get_summary", { id }),
+  literaryText: (id: string, config: AiConfig): Promise<string> =>
+    inv("literary_text", { id, config }),
+  getLiterary: (id: string): Promise<string | null> =>
+    inv("get_literary", { id }),
   ask: (id: string, config: AiConfig, question: string): Promise<string> =>
     inv("ask", { id, config, question }),
   updateMeetingMeta: (

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
-use crate::transcript::{Speaker, Transcript};
+use crate::transcript::{speaker_label, Transcript};
 
 /// Настройки доступа к OpenAI-совместимому ИИ.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -71,13 +71,7 @@ pub fn transcript_to_text(transcript: &Transcript) -> String {
     transcript
         .segments
         .iter()
-        .map(|s| {
-            let who = match s.speaker {
-                Speaker::Me => "Я",
-                Speaker::Them => "Собеседник",
-            };
-            format!("{who}: {}", s.text)
-        })
+        .map(|s| format!("{}: {}", speaker_label(&s.speaker), s.text))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -169,6 +163,37 @@ pub fn summarize_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppRe
         Разделы: краткое резюме, ключевые темы, решения, задачи и договорённости. \
         Не повторяйся, убери дубли. По-русски.";
     backend.chat(system, &combined)
+}
+
+/// Переписывает расшифровку в связный литературный текст (один проход).
+pub fn to_literary_text(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    let system = "Перепиши расшифровку разговора в связный, гладкий литературный текст. \
+        Сохрани ВСЕ обсуждаемые факты, детали, имена, числа и смысл; ничего не \
+        выдумывай и не добавляй того, чего не было. Убери оговорки, повторы, \
+        слова-паразиты и обрывы фраз. Оформи абзацами, по-русски. Без заголовков \
+        и без вступлений вроде «в этом разговоре» — сразу текст.";
+    backend.chat(system, transcript_text)
+}
+
+/// Литературный текст для разговора любой длины. Короткий — один проход;
+/// длинный — переписываем каждую часть и СКЛЕИВАЕМ (не сворачиваем, в отличие
+/// от выжимки), чтобы сохранить полноту изложения.
+pub fn to_literary_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    if transcript_text.len() <= SUMMARY_CHUNK_CHARS {
+        return to_literary_text(backend, transcript_text);
+    }
+    let chunks = split_chunks(transcript_text, SUMMARY_CHUNK_CHARS);
+    let total = chunks.len();
+    let mut parts = Vec::with_capacity(total);
+    for (i, chunk) in chunks.iter().enumerate() {
+        let system = "Перепиши ЭТУ ЧАСТЬ разговора в связный литературный текст, \
+            сохраняя все детали, факты и смысл именно этого фрагмента. Убери оговорки, \
+            повторы и слова-паразиты. Без вступлений и выводов — только переложение \
+            этой части. Оформи абзацами, по-русски.";
+        let user = format!("Часть {}/{} разговора:\n\n{}", i + 1, total, chunk);
+        parts.push(backend.chat(system, &user)?);
+    }
+    Ok(parts.join("\n\n"))
 }
 
 /// Ответ на вопрос пользователя по расшифровке.
@@ -277,6 +302,25 @@ mod tests {
         assert_eq!(answer_question(&b2, "разговор", "вопрос?").unwrap(), "ответ");
         let last2 = b2.last.lock().unwrap().clone().unwrap();
         assert!(last2.1.contains("разговор") && last2.1.contains("вопрос?"));
+    }
+
+    #[test]
+    fn literary_short_is_single_pass() {
+        let b = MockChatBackend::new("связный текст");
+        let out = to_literary_long(&b, "Я: привет\nСобеседник: здравствуй").unwrap();
+        assert_eq!(out, "связный текст");
+        assert_eq!(*b.calls.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn literary_long_rewrites_each_chunk_and_joins() {
+        let line = "Я: довольно длинная строка разговора для проверки разбиения\n";
+        let big = line.repeat((SUMMARY_CHUNK_CHARS / line.len()) * 2 + 10);
+        let b = MockChatBackend::new("часть");
+        let out = to_literary_long(&b, &big).unwrap();
+        // Склейка (не сворачивание): несколько частей через пустую строку.
+        assert!(out.contains("часть\n\nчасть"), "joined output: {out:?}");
+        assert!(*b.calls.lock().unwrap() >= 2);
     }
 
     /// Поднимает локальный HTTP-сервер, отвечающий OpenAI-подобным JSON.

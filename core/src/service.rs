@@ -70,7 +70,57 @@ pub fn stop_recording(
         duration_secs,
         folder: active.id.clone(),
         status: "recorded".into(),
+        source: "recorded".into(),
     };
+    repo.insert(&meeting)?;
+    Ok(meeting)
+}
+
+/// Декодирует внешний аудиофайл (телефон/диктофон) в `audio.wav` (16 кГц
+/// моно) и строит запись о встрече с `source = "imported"`, НЕ трогая БД —
+/// тяжёлый декод можно гонять в фоне (`spawn_blocking`). Заголовок — из имени
+/// исходного файла. Вставку в БД делает вызывающий (см. [`import_recording`]).
+pub fn import_to_meeting(
+    data_root: &Path,
+    id: String,
+    src: &Path,
+    created_at: String,
+) -> AppResult<Meeting> {
+    validate_id(&id)?;
+    let dir = meeting_dir(data_root, &id);
+    std::fs::create_dir_all(&dir)?;
+    let dst = dir.join("audio.wav");
+    crate::decode::decode_to_wav_16k_mono(src, &dst)?;
+    let duration_secs = wav_duration_secs(&dst)?;
+    let title = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Импортированная запись")
+        .to_string();
+    Ok(Meeting {
+        id: id.clone(),
+        created_at,
+        title,
+        participants: String::new(),
+        topic: String::new(),
+        duration_secs,
+        folder: id,
+        status: "recorded".into(),
+        source: "imported".into(),
+    })
+}
+
+/// Импортирует внешнюю аудиозапись как новую встречу: декодирует и сохраняет
+/// её в БД. Удобно для тестов; в GUI декод и вставка разнесены (см. команду).
+pub fn import_recording(
+    repo: &Repo,
+    data_root: &Path,
+    id: String,
+    src: &Path,
+    created_at: String,
+) -> AppResult<Meeting> {
+    let meeting = import_to_meeting(data_root, id, src, created_at)?;
     repo.insert(&meeting)?;
     Ok(meeting)
 }
@@ -89,7 +139,7 @@ pub fn delete_meeting(repo: &Repo, data_root: &Path, id: &str) -> AppResult<()> 
 /// Абсолютный путь к файлу дорожки встречи (для проигрывания во фронтенде).
 pub fn track_path(data_root: &Path, id: &str, track_file: &str) -> AppResult<PathBuf> {
     validate_id(id)?;
-    let allowed = ["mic.wav", "system.wav"];
+    let allowed = ["mic.wav", "system.wav", "audio.wav"];
     if !allowed.contains(&track_file) {
         return Err(AppError::InvalidInput(format!(
             "unknown track file: {track_file}"
@@ -115,6 +165,22 @@ pub fn transcribe_to_file(
     let mic = transcriber.transcribe(&dir.join("mic.wav"))?;
     let system = transcriber.transcribe(&dir.join("system.wav"))?;
     let transcript = merge_tracks(mic, system);
+    let json = serde_json::to_string_pretty(&transcript)?;
+    std::fs::write(dir.join("transcript.json"), json)?;
+    Ok(transcript)
+}
+
+/// Расшифровка ОДНОЙ дорожки (`audio.wav`) импортированной встречи: пишет
+/// `transcript.json`, всем сегментам один говорящий `spk0` (диаризация — M3).
+pub fn transcribe_single_to_file(
+    transcriber: &dyn Transcriber,
+    data_root: &Path,
+    id: &str,
+) -> AppResult<Transcript> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    let segs = transcriber.transcribe(&dir.join("audio.wav"))?;
+    let transcript = crate::transcript::single_speaker(segs, "spk0");
     let json = serde_json::to_string_pretty(&transcript)?;
     std::fs::write(dir.join("transcript.json"), json)?;
     Ok(transcript)
@@ -174,12 +240,31 @@ pub fn load_summary(data_root: &Path, id: &str) -> AppResult<Option<String>> {
     Ok(Some(std::fs::read_to_string(path)?))
 }
 
+/// Сохраняет литературный пересказ встречи в файл `literary.md`.
+pub fn save_literary(data_root: &Path, id: &str, text: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("literary.md"), text)?;
+    Ok(())
+}
+
+/// Читает сохранённый литературный пересказ, если есть.
+pub fn load_literary(data_root: &Path, id: &str) -> AppResult<Option<String>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join("literary.md");
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(std::fs::read_to_string(path)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::recorder::MockRecorder;
     use crate::transcriber::MockTranscriber;
-    use crate::transcript::{Segment, Speaker};
+    use crate::transcript::Segment;
 
     fn setup() -> (tempfile::TempDir, Repo, MockRecorder) {
         let dir = tempfile::tempdir().unwrap();
@@ -283,11 +368,49 @@ mod tests {
         let transcript = transcribe_meeting(&t, &repo, dir.path(), "m1").unwrap();
 
         assert_eq!(transcript.segments.len(), 2);
-        assert_eq!(transcript.segments[0].speaker, Speaker::Me);
-        assert_eq!(transcript.segments[1].speaker, Speaker::Them);
+        assert_eq!(transcript.segments[0].speaker, "me");
+        assert_eq!(transcript.segments[1].speaker, "them");
         assert_eq!(repo.get("m1").unwrap().status, "transcribed");
         // и читается обратно
         let loaded = load_transcript(dir.path(), "m1").unwrap().unwrap();
         assert_eq!(loaded, transcript);
+    }
+
+    #[test]
+    fn import_recording_decodes_and_inserts() {
+        let (dir, repo, _rec) = setup();
+        // «Файл с телефона»: простой WAV (16 кГц моно), имя с пробелом.
+        let src = dir.path().join("voice memo.wav");
+        crate::audio::write_silence_wav(&src, 1).unwrap();
+
+        let m = import_recording(
+            &repo,
+            dir.path(),
+            "imp1".into(),
+            &src,
+            "2026-06-04T10:00:00Z".into(),
+        )
+        .unwrap();
+
+        assert_eq!(m.source, "imported");
+        assert_eq!(m.title, "voice memo");
+        assert!(dir.path().join("meetings/imp1/audio.wav").exists());
+        assert_eq!(repo.get("imp1").unwrap().source, "imported");
+    }
+
+    #[test]
+    fn transcribe_single_writes_one_speaker() {
+        let (dir, repo, _rec) = setup();
+        let src = dir.path().join("rec.wav");
+        crate::audio::write_silence_wav(&src, 1).unwrap();
+        import_recording(&repo, dir.path(), "imp2".into(), &src, "2026-06-04T10:00:00Z".into())
+            .unwrap();
+
+        // MockTranscriber для не-"mic.wav" (т.е. audio.wav) отдаёт system-сегменты.
+        let t = MockTranscriber::new(vec![], vec![seg(0.0, "первая"), seg(1.0, "вторая")]);
+        let transcript = transcribe_single_to_file(&t, dir.path(), "imp2").unwrap();
+
+        assert_eq!(transcript.segments.len(), 2);
+        assert!(transcript.segments.iter().all(|s| s.speaker == "spk0"));
     }
 }

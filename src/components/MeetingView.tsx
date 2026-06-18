@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
 import { api } from "../api";
-import { getLabels, setLabels as saveLabels } from "../labels";
+import { getLabels, setLabels as saveLabels, nameForSpeaker, defaultName } from "../labels";
 import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
 import { clock, transcriptToTxt, transcriptToMd, exportFileName } from "../export";
@@ -14,11 +14,23 @@ import { CopyLogButton } from "./CopyLogButton";
 interface Props {
   meeting: Meeting;
   transState?: TranscribeState;
-  onTranscribe: () => void;
+  onTranscribe: (speakerCount: number | null) => void;
   onMetaSaved: () => void;
 }
 
+/// Русское склонение слова по числу: 1 голос, 2 голоса, 5 голосов.
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
 export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: Props) {
+  // Импортированная запись — одна дорожка audio.wav (без разделения «Я/Собеседник»).
+  const isImported = meeting.source === "imported";
+
   const micRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
 
@@ -36,7 +48,20 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [topic, setTopic] = useState(meeting.topic);
   const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
 
-  const updateLabel = (key: "me" | "them", value: string) => {
+  // Сколько голосов в записи (для диаризации). Импорт: "auto"|2..8; запись: 1..8.
+  const [speakerSel, setSpeakerSel] = useState<string>(
+    () =>
+      localStorage.getItem(`3uxo.speakers.${meeting.id}`) ??
+      (isImported ? "auto" : "1"),
+  );
+  const updateSpeakerSel = (v: string) => {
+    setSpeakerSel(v);
+    localStorage.setItem(`3uxo.speakers.${meeting.id}`, v);
+  };
+  const speakerCountValue = (): number | null =>
+    speakerSel === "auto" ? null : Number(speakerSel);
+
+  const updateLabel = (key: string, value: string) => {
     const next = { ...labels, [key]: value };
     setLbls(next);
     saveLabels(meeting.id, next);
@@ -50,10 +75,15 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setPlaying(false);
     setError("");
     setLbls(getLabels(meeting.id));
-    api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
-    api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
+    if (isImported) {
+      api.trackUrl(meeting.id, "audio.wav").then(setMicUrl).catch(() => {});
+      setSysUrl("");
+    } else {
+      api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
+      api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
+    }
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
-  }, [meeting.id]);
+  }, [meeting.id, isImported]);
 
   // Перезагрузка расшифровки, когда фоновая задача завершилась.
   useEffect(() => {
@@ -72,14 +102,27 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       ? "Скачивание модели"
       : stage === "loading"
         ? "Загрузка модели в память"
-        : stage === "system"
-          ? "Дорожка собеседника"
-          : "Дорожка «Я»";
+        : stage === "diarize"
+          ? "Разделение голосов"
+          : stage === "system"
+            ? "Дорожка собеседника"
+            : isImported
+              ? "Расшифровка"
+              : "Дорожка «Я»";
   const shownError = error || transState?.error || "";
 
   const activeIndex = useMemo(
     () => (transcript ? activeSegmentIndex(transcript.segments, time) : -1),
     [transcript, time],
+  );
+
+  // Уникальные говорящие в расшифровке (для переименования импортированных).
+  const speakers = useMemo(
+    () =>
+      transcript
+        ? Array.from(new Set(transcript.segments.map((s) => s.speaker)))
+        : [],
+    [transcript],
   );
 
   const togglePlay = () => {
@@ -125,10 +168,11 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
 
   const exportAs = async (fmt: "txt" | "md") => {
     if (!transcript) return;
+    const nameOf = (id: string) => nameForSpeaker(labels, id);
     const content =
       fmt === "txt"
-        ? transcriptToTxt(meeting, transcript, labels)
-        : transcriptToMd(meeting, transcript, labels);
+        ? transcriptToTxt(meeting, transcript, nameOf)
+        : transcriptToMd(meeting, transcript, nameOf);
     try {
       const path = await save({
         defaultPath: exportFileName(meeting, fmt),
@@ -142,6 +186,25 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
 
   const pct = duration > 0 ? (time / duration) * 100 : 0;
   const hasTranscript = !!transcript && transcript.segments.length > 0;
+
+  const speakerOptions = isImported ? [2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
+  const speakerSelect = (
+    <select
+      className="speaker-count"
+      value={speakerSel}
+      onChange={(e) => updateSpeakerSel(e.target.value)}
+      title="Сколько голосов в записи — для разделения говорящих"
+    >
+      {isImported && <option value="auto">Голосов: авто</option>}
+      {speakerOptions.map((n) => (
+        <option key={n} value={String(n)}>
+          {isImported
+            ? `${n} ${plural(n, "голос", "голоса", "голосов")}`
+            : `${n} ${plural(n, "собеседник", "собеседника", "собеседников")}`}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <div className="mv">
@@ -173,24 +236,40 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             placeholder="тема"
           />
         </div>
-        <div className="mv-meta-row speakers-row">
-          <label className="speaker-edit">
-            <span>Имя дорожки «Я»</span>
-            <input
-              className="chip-input"
-              value={labels.me}
-              onChange={(e) => updateLabel("me", e.target.value)}
-            />
-          </label>
-          <label className="speaker-edit">
-            <span>Имя собеседника</span>
-            <input
-              className="chip-input"
-              value={labels.them}
-              onChange={(e) => updateLabel("them", e.target.value)}
-            />
-          </label>
-        </div>
+        {!isImported && (
+          <div className="mv-meta-row speakers-row">
+            <label className="speaker-edit">
+              <span>Имя дорожки «Я»</span>
+              <input
+                className="chip-input"
+                value={nameForSpeaker(labels, "me")}
+                onChange={(e) => updateLabel("me", e.target.value)}
+              />
+            </label>
+            <label className="speaker-edit">
+              <span>Имя собеседника</span>
+              <input
+                className="chip-input"
+                value={nameForSpeaker(labels, "them")}
+                onChange={(e) => updateLabel("them", e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+        {isImported && speakers.length > 0 && (
+          <div className="mv-meta-row speakers-row">
+            {speakers.map((sp) => (
+              <label className="speaker-edit" key={sp}>
+                <span>{defaultName(sp)}</span>
+                <input
+                  className="chip-input"
+                  value={nameForSpeaker(labels, sp)}
+                  onChange={(e) => updateLabel(sp, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {shownError && (
@@ -226,15 +305,26 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           </div>
         </div>
         <div className="track-downloads">
-          <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
-            ⬇ Аудио «Я»
-          </button>
-          <button
-            className="btn ghost"
-            onClick={() => downloadAudio("system.wav", "Собеседник")}
-          >
-            ⬇ Аудио собеседника
-          </button>
+          {isImported ? (
+            <button
+              className="btn ghost"
+              onClick={() => downloadAudio("audio.wav", "запись")}
+            >
+              ⬇ Скачать аудио
+            </button>
+          ) : (
+            <>
+              <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
+                ⬇ Аудио «Я»
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => downloadAudio("system.wav", "Собеседник")}
+              >
+                ⬇ Аудио собеседника
+              </button>
+            </>
+          )}
         </div>
         <audio
           ref={micRef}
@@ -266,18 +356,25 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <button className="btn ghost" onClick={() => exportAs("md")}>
                 ⬇ MD
               </button>
+              {speakerSelect}
               <button
                 className="btn ghost"
-                onClick={onTranscribe}
+                onClick={() => onTranscribe(speakerCountValue())}
                 title="Перерасшифровать заново"
               >
                 ↻ Заново
               </button>
             </div>
           ) : (
-            <button className="btn primary" onClick={onTranscribe}>
-              Расшифровать
-            </button>
+            <div className="btn-row">
+              {speakerSelect}
+              <button
+                className="btn primary"
+                onClick={() => onTranscribe(speakerCountValue())}
+              >
+                Расшифровать
+              </button>
+            </div>
           )}
         </div>
         {transcribing ? (
