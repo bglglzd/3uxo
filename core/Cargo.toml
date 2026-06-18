@@ -17,6 +17,10 @@ hound = "3"
 thiserror = "1"
 ureq = { version = "2", features = ["json"] }
 tempfile = "3"
+# Декодирование произвольных аудиоформатов (m4a/aac, mp3, flac, ogg, wav…)
+# чистым Rust — для импорта записей с телефонов и диктофонов.
+symphonia = { version = "0.5", features = ["all"] }
+rubato = "0.15"
 whisper-rs = { version = "0.16", optional = true }
 
 [features]
