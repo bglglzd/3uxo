@@ -335,6 +335,25 @@ pub async fn transcribe(
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
 
+            // Нормализуем записанные дорожки тем же декодером, что и импорт
+            // (decode_to_wav_16k_mono: symphonia + ресемпл в 16кГц/моно/i16).
+            // Импортированные файлы whisper расшифровывает, а «сырой» WASAPI-WAV —
+            // нет; прогон через декодер выравнивает форматы. Best-effort: при
+            // ошибке (напр. пустая дорожка) берём исходный файл.
+            let norm = |src: &Path| -> PathBuf {
+                let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("track");
+                let dst = src.with_file_name(format!("{stem}_norm.wav"));
+                match uxo_core::decode::decode_to_wav_16k_mono(src, &dst) {
+                    Ok(()) => dst,
+                    Err(e) => {
+                        flog(&state.data_root, &format!("normalize {stem} failed: {e}"));
+                        src.to_path_buf()
+                    }
+                }
+            };
+            let mic_path = norm(&mic_path);
+            let system_path = norm(&system_path);
+
             // При >=2 собеседниках системную дорожку («Собеседник») делим по
             // голосам диаризацией; микрофон — всегда один «Я».
             #[cfg(feature = "diarize")]
@@ -360,6 +379,15 @@ pub async fn transcribe(
                     emit("system", 50.0 + (done as f32 / total as f32) * (sys_end - 50.0), done, total)
                 },
             )?;
+
+            flog(
+                &state.data_root,
+                &format!(
+                    "transcribed: mic={} segs, system={} segs",
+                    mic_segs.len(),
+                    system_segs.len()
+                ),
+            );
 
             #[cfg(feature = "diarize")]
             {
