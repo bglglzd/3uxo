@@ -42,7 +42,8 @@ export function mergeBySpeaker(segments: TranscriptSegment[]): SpeakerBlock[] {
   return blocks;
 }
 
-/// Простой текст расшифровки.
+/// Стенограмма в виде текста: каждый блок — заголовок «[время] Имя», затем
+/// абзац с объединённой репликой; блоки разделены пустой строкой.
 export function transcriptToTxt(
   meeting: Meeting,
   transcript: Transcript,
@@ -52,13 +53,16 @@ export function transcriptToTxt(
   if (meeting.participants) lines.push(`Участники: ${meeting.participants}`);
   if (meeting.topic) lines.push(`Тема: ${meeting.topic}`);
   lines.push("");
-  for (const b of mergeBySpeaker(transcript.segments)) {
-    lines.push(`[${clock(b.start_secs)}] ${nameOf(b.speaker)}: ${b.text}`);
-  }
+  const blocks = mergeBySpeaker(transcript.segments);
+  blocks.forEach((b, i) => {
+    lines.push(`[${clock(b.start_secs)}] ${nameOf(b.speaker)}`);
+    lines.push(b.text);
+    if (i < blocks.length - 1) lines.push("");
+  });
   return lines.join("\n") + "\n";
 }
 
-/// Markdown-версия расшифровки.
+/// Стенограмма в Markdown: блок — жирный заголовок «[время] Имя» и абзац текста.
 export function transcriptToMd(
   meeting: Meeting,
   transcript: Transcript,
@@ -74,7 +78,7 @@ export function transcriptToMd(
   }
   lines.push("## Стенограмма", "");
   for (const b of mergeBySpeaker(transcript.segments)) {
-    lines.push(`- \`${clock(b.start_secs)}\` **${nameOf(b.speaker)}:** ${b.text}`);
+    lines.push(`**[${clock(b.start_secs)}] ${nameOf(b.speaker)}**`, "", b.text, "");
   }
   return lines.join("\n") + "\n";
 }

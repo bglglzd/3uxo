@@ -38,7 +38,6 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [sysUrl, setSysUrl] = useState("");
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState("");
-  const [exportOpen, setExportOpen] = useState(false);
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -167,19 +166,23 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     }
   };
 
-  const exportAs = async (fmt: "txt" | "md") => {
+  // Стенограмма: формат (txt/md) выбирается в диалоге сохранения.
+  const exportStenogram = async () => {
     if (!transcript) return;
     const nameOf = (id: string) => nameForSpeaker(labels, id);
-    const content =
-      fmt === "txt"
-        ? transcriptToTxt(meeting, transcript, nameOf)
-        : transcriptToMd(meeting, transcript, nameOf);
     try {
       const path = await save({
-        defaultPath: exportFileName(meeting, fmt),
-        filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
+        defaultPath: exportFileName(meeting, "txt"),
+        filters: [
+          { name: "Текст", extensions: ["txt"] },
+          { name: "Markdown", extensions: ["md"] },
+        ],
       });
-      if (path) await api.saveTextFile(path, content);
+      if (!path) return;
+      const content = path.toLowerCase().endsWith(".md")
+        ? transcriptToMd(meeting, transcript, nameOf)
+        : transcriptToTxt(meeting, transcript, nameOf);
+      await api.saveTextFile(path, content);
     } catch (e) {
       setError(String(e));
     }
@@ -351,44 +354,13 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             </span>
           ) : hasTranscript ? (
             <div className="btn-row">
-              <div className="export-menu">
-                <button
-                  className="btn ghost"
-                  onClick={() => setExportOpen((v) => !v)}
-                  aria-haspopup="menu"
-                  aria-expanded={exportOpen}
-                >
-                  ⬇ Стенограмма ▾
-                </button>
-                {exportOpen && (
-                  <>
-                    <div
-                      className="popover-backdrop"
-                      onClick={() => setExportOpen(false)}
-                    />
-                    <div className="export-pop" role="menu">
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          setExportOpen(false);
-                          exportAs("txt");
-                        }}
-                      >
-                        Текст (.txt)
-                      </button>
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          setExportOpen(false);
-                          exportAs("md");
-                        }}
-                      >
-                        Markdown (.md)
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                className="btn ghost"
+                onClick={exportStenogram}
+                title="Скачать стенограмму (.txt / .md)"
+              >
+                ⬇ Стенограмма
+              </button>
               {speakerSelect}
               <button
                 className="btn ghost"

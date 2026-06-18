@@ -11,7 +11,9 @@ interface Props {
 }
 
 export function AiPanel({ meeting, onMetaSaved }: Props) {
+  const [brief, setBrief] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
   const [literary, setLiterary] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -19,10 +21,14 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
   const [answer, setAnswer] = useState("");
 
   useEffect(() => {
+    setBrief(null);
     setSummary(null);
+    setAnalysis(null);
     setLiterary(null);
     setAnswer("");
+    api.getBrief(meeting.id).then(setBrief).catch(() => {});
     api.getSummary(meeting.id).then(setSummary).catch(() => {});
+    api.getAnalysis(meeting.id).then(setAnalysis).catch(() => {});
     api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
   }, [meeting.id]);
 
@@ -36,40 +42,33 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     return s.ai;
   };
 
+  // Запускает ИИ-действие под ключом `key`, складывая результат через `set`.
+  const run = async (
+    key: string,
+    fn: (id: string, cfg: ReturnType<typeof getSettings>["ai"]) => Promise<string>,
+    set?: (v: string) => void,
+  ) => {
+    const c = aiCfg();
+    if (!c || busy) return;
+    setBusy(key);
+    try {
+      const res = await fn(meeting.id, c);
+      if (set) set(res);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const doSuggest = async () => {
     const c = aiCfg();
-    if (!c) return;
+    if (!c || busy) return;
     setBusy("suggest");
     try {
       const m = await api.suggestMetadata(meeting.id, c);
       await api.updateMeetingMeta(meeting.id, m.title, m.participants, m.topic);
       onMetaSaved();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const doSummarize = async () => {
-    const c = aiCfg();
-    if (!c) return;
-    setBusy("sum");
-    try {
-      setSummary(await api.summarize(meeting.id, c));
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const doLiterary = async () => {
-    const c = aiCfg();
-    if (!c) return;
-    setBusy("lit");
-    try {
-      setLiterary(await api.literaryText(meeting.id, c));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -109,6 +108,23 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     }
   };
 
+  const block = (title: string, content: string | null, suffix: string) =>
+    content ? (
+      <div className="ai-block">
+        <div className="ai-block-head">
+          <span className="ai-block-title">{title}</span>
+          <button className="btn ghost" onClick={() => exportText(content, suffix)}>
+            ⬇ Экспорт
+          </button>
+        </div>
+        <div className="summary-text">
+          <Markdown>{content}</Markdown>
+        </div>
+      </div>
+    ) : null;
+
+  const nothing = !brief && !summary && !analysis && !literary;
+
   return (
     <div className="card">
       <div className="card-head">
@@ -118,10 +134,32 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
           <button className="btn" onClick={doSuggest} disabled={busy !== ""}>
             {busy === "suggest" ? "…" : "Авто-заголовок"}
           </button>
-          <button className="btn" onClick={doSummarize} disabled={busy !== ""}>
+          <button
+            className="btn"
+            onClick={() => run("brief", api.briefSummary, setBrief)}
+            disabled={busy !== ""}
+          >
+            {busy === "brief" ? "…" : "Краткое резюме"}
+          </button>
+          <button
+            className="btn"
+            onClick={() => run("sum", api.summarize, setSummary)}
+            disabled={busy !== ""}
+          >
             {busy === "sum" ? "Думаю…" : "Выжимка"}
           </button>
-          <button className="btn" onClick={doLiterary} disabled={busy !== ""}>
+          <button
+            className="btn"
+            onClick={() => run("analyze", api.analyze, setAnalysis)}
+            disabled={busy !== ""}
+          >
+            {busy === "analyze" ? "Анализ…" : "ИИ-анализ"}
+          </button>
+          <button
+            className="btn"
+            onClick={() => run("lit", api.literaryText, setLiterary)}
+            disabled={busy !== ""}
+          >
             {busy === "lit" ? "Пишу…" : "Литературный текст"}
           </button>
         </div>
@@ -129,41 +167,17 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
       <div className="card-body">
         {error && <div className="ai-error">{error}</div>}
 
-        {summary ? (
-          <div className="ai-block">
-            <div className="ai-block-head">
-              <span className="ai-block-title">Выжимка</span>
-              <button
-                className="btn ghost"
-                onClick={() => exportText(summary, "выжимка")}
-              >
-                ⬇ Экспорт
-              </button>
-            </div>
-            <div className="summary-text">
-              <Markdown>{summary}</Markdown>
-            </div>
-          </div>
-        ) : (
-          <p className="muted">Выжимки пока нет — нажми «Выжимка».</p>
+        {nothing && (
+          <p className="muted">
+            Выбери, что построить по встрече: краткое резюме, выжимку, ИИ-анализ
+            или литературный текст.
+          </p>
         )}
 
-        {literary && (
-          <div className="ai-block">
-            <div className="ai-block-head">
-              <span className="ai-block-title">Литературный текст</span>
-              <button
-                className="btn ghost"
-                onClick={() => exportText(literary, "текст")}
-              >
-                ⬇ Экспорт
-              </button>
-            </div>
-            <div className="summary-text">
-              <Markdown>{literary}</Markdown>
-            </div>
-          </div>
-        )}
+        {block("Краткое резюме", brief, "резюме")}
+        {block("Выжимка", summary, "выжимка")}
+        {block("ИИ-анализ", analysis, "анализ")}
+        {block("Литературный текст", literary, "текст")}
 
         <div className="ask-row">
           <input

@@ -442,6 +442,44 @@ pub fn get_literary(state: tauri::State<AppState>, id: String) -> AppResult<Opti
     service::load_literary(&state.data_root, &id)
 }
 
+/// Краткое резюме (TL;DR). Сохраняется в `brief.md`.
+#[tauri::command]
+pub async fn brief_summary(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+) -> AppResult<String> {
+    let text = meeting_transcript_text(&state.data_root, &id)?;
+    let backend = HttpChatBackend::new(config);
+    let brief = uxo_core::ai::brief_summary_long(&backend, &text)?;
+    service::save_brief(&state.data_root, &id, &brief)?;
+    Ok(brief)
+}
+
+#[tauri::command]
+pub fn get_brief(state: tauri::State<AppState>, id: String) -> AppResult<Option<String>> {
+    service::load_brief(&state.data_root, &id)
+}
+
+/// ИИ-анализ разговора. Сохраняется в `analysis.md`.
+#[tauri::command]
+pub async fn analyze(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+) -> AppResult<String> {
+    let text = meeting_transcript_text(&state.data_root, &id)?;
+    let backend = HttpChatBackend::new(config);
+    let analysis = uxo_core::ai::analyze_long(&backend, &text)?;
+    service::save_analysis(&state.data_root, &id, &analysis)?;
+    Ok(analysis)
+}
+
+#[tauri::command]
+pub fn get_analysis(state: tauri::State<AppState>, id: String) -> AppResult<Option<String>> {
+    service::load_analysis(&state.data_root, &id)
+}
+
 #[tauri::command]
 pub async fn ask(
     state: tauri::State<'_, AppState>,
