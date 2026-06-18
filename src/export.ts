@@ -1,15 +1,8 @@
-import type { Meeting, Transcript, Speaker } from "./types";
+import type { Meeting, Transcript } from "./types";
+import { defaultName } from "./labels";
 
-export interface SpeakerNames {
-  me: string;
-  them: string;
-}
-
-const DEFAULT_NAMES: SpeakerNames = { me: "Я", them: "Собеседник" };
-
-function speakerLabel(s: Speaker, names: SpeakerNames): string {
-  return s === "me" ? names.me : names.them;
-}
+/// Преобразователь id говорящего в отображаемое имя.
+export type NameOf = (speakerId: string) => string;
 
 export function clock(secs: number): string {
   const safe = Math.max(0, Math.floor(secs));
@@ -22,7 +15,7 @@ export function clock(secs: number): string {
 export function transcriptToTxt(
   meeting: Meeting,
   transcript: Transcript,
-  names: SpeakerNames = DEFAULT_NAMES,
+  nameOf: NameOf = defaultName,
 ): string {
   const lines: string[] = [meeting.title || "Встреча"];
   if (meeting.participants) lines.push(`Участники: ${meeting.participants}`);
@@ -30,7 +23,7 @@ export function transcriptToTxt(
   lines.push("");
   for (const seg of transcript.segments) {
     lines.push(
-      `[${clock(seg.start_secs)}] ${speakerLabel(seg.speaker, names)}: ${seg.text}`,
+      `[${clock(seg.start_secs)}] ${nameOf(seg.speaker)}: ${seg.text}`,
     );
   }
   return lines.join("\n") + "\n";
@@ -40,7 +33,7 @@ export function transcriptToTxt(
 export function transcriptToMd(
   meeting: Meeting,
   transcript: Transcript,
-  names: SpeakerNames = DEFAULT_NAMES,
+  nameOf: NameOf = defaultName,
 ): string {
   const lines: string[] = [`# ${meeting.title || "Встреча"}`, ""];
   const meta: string[] = [];
@@ -53,7 +46,7 @@ export function transcriptToMd(
   lines.push("## Расшифровка", "");
   for (const seg of transcript.segments) {
     lines.push(
-      `- \`${clock(seg.start_secs)}\` **${speakerLabel(seg.speaker, names)}:** ${seg.text}`,
+      `- \`${clock(seg.start_secs)}\` **${nameOf(seg.speaker)}:** ${seg.text}`,
     );
   }
   return lines.join("\n") + "\n";

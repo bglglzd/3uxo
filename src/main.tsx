@@ -8,6 +8,10 @@ import "@fontsource-variable/jetbrains-mono";
 import App from "./App";
 import "./App.css";
 import { logError, logInfo, setAppInfo } from "./log";
+import { initTheme } from "./theme";
+
+// Применяем тему до рендера, чтобы не было вспышки светлого/тёмного.
+initTheme();
 
 // Глобальный перехват ошибок → в диагностический лог.
 window.addEventListener("error", (e) =>

@@ -13,12 +13,19 @@ vi.mock("../settings", () => ({
   isAiConfigured: () => true,
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: vi.fn(async () => null),
+}));
+
 vi.mock("../api", () => ({
   api: {
     getSummary: vi.fn(async () => null),
     summarize: vi.fn(async () => "выжимка"),
+    getLiterary: vi.fn(async () => null),
+    literaryText: vi.fn(async () => "литературный текст"),
     suggestMetadata: vi.fn(async () => ({ title: "T", participants: "P", topic: "Y" })),
     updateMeetingMeta: vi.fn(async () => {}),
+    saveTextFile: vi.fn(async () => {}),
     ask: vi.fn(async () => "ответ"),
   },
 }));
@@ -43,8 +50,15 @@ describe("AiPanel", () => {
   it("creates a summary", async () => {
     vi.mocked(api.summarize).mockResolvedValue("выжимка");
     render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: /Сделать выжимку/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Выжимка" }));
     expect(await screen.findByText("выжимка")).toBeInTheDocument();
+  });
+
+  it("creates a literary text", async () => {
+    vi.mocked(api.literaryText).mockResolvedValue("литературный текст");
+    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /Литературный текст/i }));
+    expect(await screen.findByText("литературный текст")).toBeInTheDocument();
   });
 
   it("suggests metadata and saves it", async () => {
