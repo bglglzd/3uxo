@@ -110,14 +110,21 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         loop {
             std::thread::sleep(std::time::Duration::from_millis(2500));
             let (enabled, processes, auto_stop) = {
-                let cfg = app.state::<AppState>().autorecord.lock().unwrap();
+                // Привязываем State к переменной: иначе временное значение из
+                // app.state() дропается до использования гарда (E0716).
+                let state = app.state::<AppState>();
+                let cfg = state.autorecord.lock().unwrap();
                 (cfg.enabled, cfg.processes.clone(), cfg.auto_stop)
             };
             if !enabled || processes.is_empty() {
                 auto_active = false;
                 continue;
             }
-            let recording = app.state::<AppState>().active.lock().unwrap().is_some();
+            let recording = {
+                let state = app.state::<AppState>();
+                let active = state.active.lock().unwrap();
+                active.is_some()
+            };
             // Ручная остановка извне — сбрасываем флаг авто-записи.
             if !recording {
                 auto_active = false;
