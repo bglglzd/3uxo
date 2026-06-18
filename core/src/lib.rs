@@ -1,4 +1,4 @@
-//! 3uxo core domain logic: data model, storage, audio helpers, recorder
+//! Auris core domain logic: data model, storage, audio helpers, recorder
 //! abstraction and service layer. Deliberately free of any GUI/Tauri
 //! dependency so it builds and tests on any platform.
 
