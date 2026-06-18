@@ -12,10 +12,10 @@ describe("RecordButton", () => {
     expect(onStart).toHaveBeenCalledOnce();
   });
 
-  it("shows 'Остановить' when recording and calls onStop on click", async () => {
+  it("shows 'Завершить запись' when recording and calls onStop on click", async () => {
     const onStop = vi.fn();
     render(<RecordButton recording={true} onStart={vi.fn()} onStop={onStop} />);
-    const btn = screen.getByRole("button", { name: /Остановить/i });
+    const btn = screen.getByRole("button", { name: /Завершить запись/i });
     await userEvent.click(btn);
     expect(onStop).toHaveBeenCalledOnce();
   });

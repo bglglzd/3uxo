@@ -4,6 +4,7 @@ import { api } from "./api";
 import { getSettings } from "./settings";
 import type { Meeting, TranscribeState } from "./types";
 import { Sidebar } from "./components/Sidebar";
+import { AurisMark } from "./components/AurisMark";
 import { MeetingView } from "./components/MeetingView";
 import { SettingsModal } from "./components/SettingsModal";
 import { ImportModal } from "./components/ImportModal";
@@ -166,7 +167,12 @@ export default function App() {
           />
         ) : (
           <div className="empty">
-            <div className="ear">👂</div>
+            <div className="empty-mark">
+              <span className="ripple-ring" />
+              <span className="ripple-ring d1" />
+              <span className="ripple-ring d2" />
+              <AurisMark size={90} />
+            </div>
             <h2>Выбери встречу</h2>
             <p>
               Нажми «Начать запись», чтобы записать созвон, или выбери встречу

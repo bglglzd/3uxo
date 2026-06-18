@@ -2,8 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { getVersion } from "@tauri-apps/api/app";
 // Локальные шрифты (бандлятся в сборку, без CDN/утечек).
-import "@fontsource-variable/bricolage-grotesque";
+// Auris: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text.
 import "@fontsource-variable/manrope";
+import "@fontsource-variable/golos-text";
 import "@fontsource-variable/jetbrains-mono";
 import App from "./App";
 import "./App.css";
@@ -22,7 +23,7 @@ window.addEventListener("unhandledrejection", (e) =>
 );
 
 getVersion()
-  .then((v) => setAppInfo(`3uxo ${v} · ${navigator.userAgent}`))
+  .then((v) => setAppInfo(`Auris ${v} · ${navigator.userAgent}`))
   .catch(() => setAppInfo(navigator.userAgent));
 logInfo("app started");
 

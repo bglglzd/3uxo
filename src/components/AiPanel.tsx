@@ -129,6 +129,9 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     <div className="card">
       <div className="card-head">
         <h3>ИИ-ассистент</h3>
+        <span className="ai-key-pill" title="ИИ-функции работают через ваш API-ключ">
+          ИИ · ваш ключ
+        </span>
         <div className="spacer" />
         <div className="btn-row">
           <button className="btn" onClick={doSuggest} disabled={busy !== ""}>

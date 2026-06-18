@@ -1,25 +1,19 @@
 /* ============================================================
-   3uxo — Liquid Glass
-   Display: Bricolage Grotesque · UI: Manrope · Mono: JetBrains Mono
+   Auris — ваше третье ухо
+   Display/лого: Manrope · UI/текст: Golos Text · Mono: JetBrains Mono
    Tokens for dark (default) + light ([data-theme="light"]).
    ============================================================ */
 
 :root {
-  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
-  --font-ui: "Manrope Variable", system-ui, sans-serif;
+  /* Auris: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text. */
+  --font-display: "Manrope Variable", system-ui, sans-serif;
+  --font-ui: "Golos Text Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 
-  --radius: 22px;
-  --radius-sm: 14px;
+  --radius: 16px;
+  --radius-card: 14px;
+  --radius-sm: 11px;
   --radius-pill: 999px;
-
-  /* Accents (shared across themes) */
-  --accent: #6ea8fe;
-  --accent-strong: #4d8dfd;
-  --cyan: #5ee0d0;
-  --rec: #ff6b63;
-  --rec-glow: rgba(255, 107, 99, 0.4);
-  --on-accent: #06152e;
 }
 
 /* ---------- Dark theme (default) ---------- */
@@ -27,64 +21,169 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --app-bg: #070a10;
-  --app-mesh:
-    radial-gradient(1100px 700px at 82% -8%, rgba(110, 168, 254, 0.22), transparent 60%),
-    radial-gradient(900px 600px at -5% 10%, rgba(94, 224, 208, 0.16), transparent 55%),
-    radial-gradient(900px 800px at 50% 115%, rgba(123, 97, 234, 0.16), transparent 55%);
+  /* Brand */
+  --brand-a: #4e8bf5;
+  --brand-b: #2bcad8;
+  --brand-grad: linear-gradient(150deg, #4e8bf5, #2bcad8);
+  --accent: #4e8bf5;
+  --accent-strong: #6a9ef7;
+  --teal: #2bcad8;
+  --cyan: #2bcad8;
+  --teal-ink: #2bcad8;
+  --rec: #ff6552;
+  --rec-glow: rgba(255, 101, 82, 0.3);
+  --record-grad: linear-gradient(150deg, #ff6552, #ff8a5b);
+  --violet: #9b7cf0;
+  --on-accent: #06131f;
 
-  --glass: rgba(22, 28, 42, 0.55);
-  --glass-strong: rgba(32, 40, 58, 0.66);
-  --glass-soft: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-border-strong: rgba(255, 255, 255, 0.16);
-  --glass-hi: rgba(255, 255, 255, 0.14);
-  --glass-shadow: 0 22px 60px -28px rgba(0, 0, 0, 0.8);
-  --glass-shadow-soft: 0 10px 30px -18px rgba(0, 0, 0, 0.7);
+  /* Background */
+  --app-bg: #0b1623;
+  --app-grad: linear-gradient(160deg, #0c1825, #0a1320);
 
-  --text: #eef1f7;
-  --text-dim: #aab3c5;
-  --text-faint: #6f7a8e;
+  /* Surfaces */
+  --surface: #13212f;
+  --surface-soft: #182838;
+  --surface-2: #1b2c3d;
+  --glass: rgba(18, 31, 45, 0.55);
+  --glass-strong: rgba(27, 44, 61, 0.7);
+  --glass-soft: #13212f;
+  --glass-border: #1d2c3b;
+  --glass-border-strong: #25384a;
+  --glass-hi: rgba(255, 255, 255, 0.05);
+  --glass-shadow: 0 24px 60px -30px rgba(8, 16, 28, 0.8);
+  --glass-shadow-soft: 0 12px 34px -22px rgba(8, 16, 28, 0.8);
 
-  --field-bg: rgba(255, 255, 255, 0.06);
-  --field-border: rgba(255, 255, 255, 0.12);
-  --hover: rgba(255, 255, 255, 0.07);
-  --track: rgba(255, 255, 255, 0.12);
-  --bubble-them: rgba(255, 255, 255, 0.08);
-  --scrollbar: rgba(255, 255, 255, 0.16);
+  /* Text */
+  --text: #eaf1f8;
+  --text-dim: #b9cbd9;
+  --text-faint: #768c9e;
+
+  /* Fields / misc */
+  --field-bg: #13212f;
+  --field-border: #25384a;
+  --hover: rgba(255, 255, 255, 0.05);
+  --track: #22344a;
+  --bubble-them: #182838;
+  --scrollbar: rgba(255, 255, 255, 0.14);
+  --focus-ring: 0 0 0 4px rgba(78, 139, 245, 0.18);
 }
 
 /* ---------- Light theme ---------- */
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --app-bg: #eaeef6;
-  --app-mesh:
-    radial-gradient(1100px 700px at 82% -8%, rgba(110, 168, 254, 0.35), transparent 60%),
-    radial-gradient(900px 600px at -5% 10%, rgba(94, 224, 208, 0.28), transparent 55%),
-    radial-gradient(900px 800px at 50% 115%, rgba(150, 130, 250, 0.28), transparent 55%);
+  --brand-a: #2e6fe0;
+  --brand-b: #11b3c6;
+  --brand-grad: linear-gradient(150deg, #2e6fe0, #11b3c6);
+  --accent: #2e6fe0;
+  --accent-strong: #2660c8;
+  --teal: #0fa8b8;
+  --cyan: #0fa8b8;
+  --teal-ink: #0a8f80;
+  --rec: #f0533b;
+  --rec-glow: rgba(240, 83, 59, 0.3);
+  --record-grad: linear-gradient(150deg, #f0533b, #f97c4a);
+  --violet: #7c5ce0;
+  --on-accent: #ffffff;
 
-  --glass: rgba(255, 255, 255, 0.55);
-  --glass-strong: rgba(255, 255, 255, 0.72);
-  --glass-soft: rgba(255, 255, 255, 0.45);
-  /* Тёмные тонкие границы — на светлом стекле белые края не видны. */
-  --glass-border: rgba(31, 45, 80, 0.12);
-  --glass-border-strong: rgba(31, 45, 80, 0.2);
-  /* Белый блик сверху оставляем для эффекта стекла. */
-  --glass-hi: rgba(255, 255, 255, 0.95);
-  --glass-shadow: 0 22px 50px -26px rgba(35, 50, 90, 0.4);
-  --glass-shadow-soft: 0 10px 26px -16px rgba(35, 50, 90, 0.3);
+  --app-bg: #e9f0f8;
+  --app-grad: linear-gradient(160deg, #eef4fa, #e6eef6);
 
-  --text: #1a2233;
-  --text-dim: #4a5468;
-  --text-faint: #5b6678;
+  --surface: #ffffff;
+  --surface-soft: #f5f8fb;
+  --surface-2: #eef2f7;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.8);
+  --glass-soft: #ffffff;
+  --glass-border: #e2e9f0;
+  --glass-border-strong: #dde6ef;
+  --glass-hi: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 24px 60px -28px rgba(20, 40, 70, 0.28);
+  --glass-shadow-soft: 0 12px 32px -20px rgba(20, 40, 70, 0.16);
 
-  --field-bg: rgba(255, 255, 255, 0.6);
-  --field-border: rgba(31, 45, 80, 0.14);
-  --hover: rgba(31, 45, 80, 0.06);
-  --track: rgba(31, 45, 80, 0.16);
-  --bubble-them: rgba(255, 255, 255, 0.78);
-  --scrollbar: rgba(31, 45, 80, 0.2);
+  --text: #0e2233;
+  --text-dim: #3a4d5c;
+  --text-faint: #6b7e8f;
+
+  --field-bg: #ffffff;
+  --field-border: #e2e9f0;
+  --hover: #eef4fb;
+  --track: #e3ebf2;
+  --bubble-them: #f5f8fb;
+  --scrollbar: rgba(31, 45, 80, 0.18);
+  --focus-ring: 0 0 0 4px rgba(46, 111, 224, 0.12);
+}
+
+/* Цвета аватаров спикеров (С1 primary, С2 teal, С3 violet, далее) */
+:root,
+:root[data-theme="dark"] {
+  --spk-0: #4e8bf5;
+  --spk-1: #2bcad8;
+  --spk-2: #9b7cf0;
+  --spk-3: #f0a868;
+  --spk-4: #7ee787;
+  --spk-5: #ff9ec7;
+}
+:root[data-theme="light"] {
+  --spk-0: #2e6fe0;
+  --spk-1: #0fa8b8;
+  --spk-2: #7c5ce0;
+  --spk-3: #e08a3c;
+  --spk-4: #3aa657;
+  --spk-5: #d96aa0;
+}
+
+/* ---------- Brand animations (Auris) ---------- */
+@keyframes ripple {
+  0% {
+    transform: scale(0.65);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+@keyframes recpulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.78);
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+@keyframes wv {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Кольца-эхо оставляем — это брендовый, мягкий, неагрессивный пульс (явный
+     запрос продукта). Глушим только более «активные» анимации. */
+  .record .rec-glyph,
+  .eq-bar,
+  .type-caret {
+    animation: none !important;
+  }
 }
 
 * {
@@ -143,7 +242,7 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: 312px 1fr;
   height: 100vh;
-  background: var(--app-mesh), var(--app-bg);
+  background: var(--app-grad);
   background-attachment: fixed;
 }
 
@@ -171,149 +270,139 @@ textarea::placeholder {
   box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
 }
 
+/* Сигнатура-лок-ап: знак + auris │ ваше третье ухо */
 .brand {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 11px;
-  padding: 4px 8px 2px;
+  padding: 2px 6px 14px;
 }
-.brand-mark {
-  width: 30px;
-  height: 30px;
+.auris-mark {
   flex: none;
+  display: block;
 }
-.brand-mark .bm-dot {
-  fill: var(--accent);
+.auris-mark .am-a {
+  stop-color: var(--brand-a);
 }
-.brand-mark path {
-  fill: none;
-  stroke-width: 2.2;
-  stroke-linecap: round;
+.auris-mark .am-b {
+  stop-color: var(--brand-b);
 }
-.brand-mark .bm-w1 {
-  stroke: var(--cyan);
-}
-.brand-mark .bm-w2 {
-  stroke: var(--accent);
-}
-.brand-mark .bm-w3 {
-  stroke: var(--accent-strong);
-  opacity: 0.85;
-}
-.brand-text {
+.brand-lockup {
   display: flex;
-  flex-direction: column;
-  line-height: 1.05;
+  align-items: center;
+  gap: 9px;
 }
-.brand b {
+.brand-word {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 24px;
+  font-size: 20px;
   letter-spacing: -0.02em;
-  background: linear-gradient(120deg, var(--text), var(--cyan) 55%, var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text);
+  line-height: 1;
 }
-/* В светлой теме светлый cyan-стоп делал середину слова невидимой — затемняем. */
-:root[data-theme="light"] .brand b {
-  background: linear-gradient(120deg, var(--text), var(--accent-strong) 55%, #1d9c8e);
-  -webkit-background-clip: text;
-  background-clip: text;
+.brand-divider {
+  width: 1px;
+  height: 22px;
+  flex: none;
+  background: var(--glass-border-strong);
 }
-.brand span {
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+.brand-desc {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.25;
   color: var(--text-faint);
-  margin-top: 4px;
 }
 
-/* Record button */
+/* Record button — Auris: idle = brand-grad + пульсирующая точка;
+   запись = record-grad + квадрат-stop. */
 .record {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  border: 1px solid var(--glass-border-strong);
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--glass-soft);
-  color: var(--text);
-  padding: 14px 16px;
-  font-size: 14.5px;
+  background: var(--brand-grad);
+  color: #fff;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 var(--glass-hi);
-  transition: transform 0.12s ease, border-color 0.2s ease, box-shadow 0.2s ease,
-    background 0.2s ease;
+  box-shadow: 0 5px 14px -2px rgba(46, 111, 224, 0.42);
+  transition: filter 0.18s ease, box-shadow 0.18s ease;
+}
+:root[data-theme="dark"] .record {
+  color: var(--on-accent);
+  font-weight: 700;
+  box-shadow: 0 5px 16px -2px rgba(43, 202, 216, 0.32);
 }
 .record:hover {
-  border-color: var(--accent-strong);
-  background: var(--hover);
+  filter: brightness(1.05);
 }
-.record .dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--rec);
-  box-shadow: 0 0 0 0 var(--rec-glow);
+.record .rec-glyph {
   flex: none;
 }
-.record.is-recording {
-  border-color: rgba(255, 107, 99, 0.55);
-  background: linear-gradient(180deg, rgba(255, 107, 99, 0.18), var(--glass-soft));
+.record .rec-glyph.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+  animation: recpulse 1.6s ease-in-out infinite;
 }
-.record.is-recording .dot {
-  animation: pulse 1.4s ease-out infinite;
+:root[data-theme="dark"] .record .rec-glyph.dot {
+  background: var(--rec);
+  box-shadow: 0 0 0 3px rgba(255, 101, 82, 0.3);
+}
+.record .rec-glyph.stop {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #fff;
+}
+.record.is-recording {
+  background: var(--record-grad);
+  color: #fff;
+  box-shadow: 0 5px 16px -2px rgba(240, 83, 59, 0.42);
 }
 .record .timer {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--rec);
-}
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 var(--rec-glow);
-  }
-  70% {
-    box-shadow: 0 0 0 9px rgba(255, 107, 99, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 107, 99, 0);
-  }
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  opacity: 0.92;
 }
 
-/* Тот же вид, что у кнопки записи: единый шрифт/размер/рамка, символ и текст
-   по центру. */
+/* Import — контурная (Auris): поверхность + рамка, приглушённая иконка download. */
 .import-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 9px;
   width: 100%;
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--radius-sm);
-  background: var(--glass-soft);
-  color: var(--text);
-  padding: 14px 16px;
-  font-size: 14.5px;
-  font-weight: 600;
-  box-shadow: inset 0 1px 0 var(--glass-hi);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  background: var(--surface);
+  color: var(--text-dim);
+  height: 42px;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 .import-btn:hover {
-  border-color: var(--accent-strong);
+  border-color: var(--accent);
+  color: var(--text);
   background: var(--hover);
 }
-/* Монохромная иконка в цвет текста — единый стиль с точкой записи, без
-   цветной эмодзи. */
 .btn-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex: none;
+  color: var(--text-faint);
 }
 
 /* Search */
@@ -432,9 +521,10 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   font-size: 11px;
-  color: var(--text-faint);
+  font-weight: 500;
+  color: var(--teal-ink);
   padding: 2px 4px;
   text-align: center;
 }
@@ -442,7 +532,7 @@ textarea::placeholder {
   width: 13px;
   height: 13px;
   flex: none;
-  color: var(--cyan);
+  color: var(--teal-ink);
 }
 .settings-trigger {
   border: 1px solid var(--field-border);
@@ -514,51 +604,88 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 40px;
 }
-.empty .ear {
-  font-size: 56px;
-  filter: drop-shadow(0 8px 20px rgba(110, 168, 254, 0.35));
+/* Знак с кольцами-эхо (пустое состояние) */
+.empty-mark {
+  position: relative;
+  width: 184px;
+  height: 184px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.empty-mark .auris-mark {
+  position: relative;
+  z-index: 1;
+}
+/* Кольца-эхо: пульсируют от знака наружу. Центрируем через margin (transform
+   занят анимацией scale). 3 кольца со сдвигом 1s по 3s → непрерывный пульс. */
+.ripple-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 86px;
+  height: 86px;
+  margin: -43px 0 0 -43px;
+  border-radius: 50%;
+  border: 2px solid var(--teal);
+  opacity: 0;
+  animation: ripple 3s ease-out infinite;
+}
+.ripple-ring.d1 {
+  border-color: var(--brand-a);
+  animation-delay: 1s;
+}
+.ripple-ring.d2 {
+  border-color: var(--teal);
+  animation-delay: 2s;
 }
 .empty h2 {
   font-family: var(--font-display);
-  color: var(--text-dim);
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 .empty p {
-  max-width: 34ch;
+  max-width: 38ch;
   margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-faint);
   text-wrap: balance;
 }
 .empty .privacy-card {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  max-width: 42ch;
-  margin-top: 6px;
-  padding: 14px 16px;
+  gap: 14px;
+  max-width: 44ch;
+  margin-top: 12px;
+  padding: 16px 18px;
   text-align: left;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--glass-soft);
-  box-shadow: inset 0 1px 0 var(--glass-hi);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--glass-shadow-soft);
 }
 .empty .privacy-shield {
   width: 22px;
   height: 22px;
   flex: none;
-  color: var(--cyan);
+  color: var(--teal-ink);
   margin-top: 1px;
 }
 .empty .privacy-card strong {
   display: block;
-  color: var(--text-dim);
+  color: var(--text);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13.5px;
-  margin-bottom: 4px;
+  font-size: 14.5px;
+  margin-bottom: 5px;
 }
 .empty .privacy-card p {
   max-width: none;
@@ -647,12 +774,10 @@ textarea::placeholder {
 
 /* Card (glass) */
 .card {
-  background: var(--glass);
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  background: var(--surface);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
-  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-hi);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow-soft);
 }
 .card-head {
   display: flex;
@@ -750,86 +875,104 @@ textarea::placeholder {
 .transcript {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px;
+  gap: 2px;
+  padding: 12px;
   max-height: 56vh;
   overflow-y: auto;
   scroll-behavior: smooth;
 }
+/* Auris: лента-список — аватар-инициалы + имя/таймкод + реплика. */
 .turn {
   display: flex;
-  flex-direction: column;
-  max-width: 78%;
-}
-.turn.me {
-  align-self: flex-end;
-  align-items: flex-end;
-}
-.turn.them {
-  align-self: flex-start;
-  align-items: flex-start;
-}
-.turn .who {
-  font-size: 11px;
-  color: var(--text-faint);
-  margin: 0 6px 3px;
-  font-weight: 600;
-}
-.bubble {
-  position: relative;
-  padding: 10px 14px;
-  font-size: 14.5px;
-  line-height: 1.45;
-  border-radius: 20px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  word-break: break-word;
-  transition: box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease;
+  transition: background 0.15s ease;
 }
-.turn.me .bubble {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: #06152e;
-  border-bottom-right-radius: 7px;
-  font-weight: 550;
-  box-shadow: 0 8px 20px -12px rgba(110, 168, 254, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+.turn:hover {
+  background: var(--hover);
 }
-.turn.them .bubble {
-  background: var(--bubble-them);
+.turn.active {
+  background: var(--hover);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.turn-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+}
+.turn-body {
+  min-width: 0;
+  flex: 1;
+}
+.turn-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 2px;
+}
+.turn-name {
+  font-weight: 700;
+  font-size: 13px;
   color: var(--text);
-  border: 1px solid var(--glass-border);
-  border-bottom-left-radius: 7px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
-.bubble:hover {
-  filter: brightness(1.06);
-}
-.turn .stamp {
+.turn-time {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-faint);
-  margin: 4px 6px 0;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
-.turn:hover .stamp,
-.turn.active .stamp {
-  opacity: 1;
-}
-.turn.active .bubble {
-  transform: translateY(-1px);
-}
-.turn.me.active .bubble {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4), 0 12px 26px -12px var(--accent);
-}
-.turn.them.active .bubble {
-  box-shadow: 0 0 0 2px var(--accent), 0 12px 26px -12px rgba(110, 168, 254, 0.5);
-  border-color: var(--accent);
+.turn-text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  word-break: break-word;
 }
 .transcript-empty {
   text-align: center;
   color: var(--text-faint);
   padding: 30px;
+}
+
+/* Бейдж «Локально» (teal) в шапке встречи */
+.local-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--teal-ink);
+  background: color-mix(in srgb, var(--teal) 15%, transparent);
+}
+.local-badge svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+/* Pill «ИИ · ваш ключ» (violet) у ИИ-ассистента */
+.ai-key-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--violet);
+  background: color-mix(in srgb, var(--violet) 15%, transparent);
 }
 
 /* Progress */
@@ -841,7 +984,7 @@ textarea::placeholder {
 }
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--cyan), var(--accent));
+  background: var(--brand-grad);
   border-radius: 6px;
   transition: width 0.3s ease;
 }
@@ -864,9 +1007,9 @@ textarea::placeholder {
 }
 /* Заливные кнопки сохраняют заливку и просто слегка осветляются. */
 .btn.primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  background: var(--brand-grad);
   border-color: transparent;
-  filter: brightness(1.07);
+  filter: brightness(1.06);
 }
 .btn.danger:hover:not(:disabled) {
   background: var(--rec);
@@ -878,11 +1021,13 @@ textarea::placeholder {
   cursor: default;
 }
 .btn.primary {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: var(--on-accent);
+  background: var(--brand-grad);
+  color: #fff;
   border-color: transparent;
-  box-shadow: 0 8px 20px -12px rgba(110, 168, 254, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: 0 5px 14px -4px rgba(46, 111, 224, 0.45);
+}
+:root[data-theme="dark"] .btn.primary {
+  color: var(--on-accent);
 }
 .btn.ghost {
   background: transparent;
@@ -1186,6 +1331,51 @@ textarea::placeholder {
   font-size: 13px;
   margin: 0 0 18px;
 }
+/* Privacy-инвариант в настройках (teal) */
+.settings-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 0 0 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--glass-border));
+  background: color-mix(in srgb, var(--teal) 8%, var(--surface));
+}
+.settings-privacy .sp-shield {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--teal-ink);
+}
+.settings-privacy .sp-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.settings-privacy .sp-always {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--teal-ink);
+  background: color-mix(in srgb, var(--teal) 16%, transparent);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+.settings-privacy .sp-text p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
 .modal h4 {
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -1429,5 +1619,10 @@ details.adv[open] summary::before {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Исключение: брендовые кольца-эхо сохраняют мягкую пульсацию (явный запрос
+     продукта — это ключевой визуальный носитель «слушает сейчас»). */
+  .ripple-ring {
+    animation-duration: 3s !important;
   }
 }
