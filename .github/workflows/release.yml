@@ -48,7 +48,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "3uxo ${{ github.ref_name }}"
+          releaseName: "Auris ${{ github.ref_name }}"
           # Сразу публикуем (не черновик), чтобы апдейтер видел новую версию.
           releaseDraft: false
           prerelease: false
