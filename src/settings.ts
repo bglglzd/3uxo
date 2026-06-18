@@ -5,6 +5,8 @@ const KEY = "3uxo.settings";
 const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },
   whisper: { whisperPath: "", model: "medium", language: "ru" },
+  hotkey: "Ctrl+Shift+R",
+  autoRecord: { enabled: false, apps: [], autoStop: true },
 };
 
 export function getSettings(): AppSettings {
@@ -15,6 +17,8 @@ export function getSettings(): AppSettings {
       return {
         ai: { ...DEFAULTS.ai, ...(parsed.ai ?? {}) },
         whisper: { ...DEFAULTS.whisper, ...(parsed.whisper ?? {}) },
+        hotkey: typeof parsed.hotkey === "string" ? parsed.hotkey : DEFAULTS.hotkey,
+        autoRecord: { ...DEFAULTS.autoRecord, ...(parsed.autoRecord ?? {}) },
       };
     }
   } catch {

@@ -48,9 +48,23 @@ export interface WhisperConfig {
   language: string;
 }
 
+/// Авто-запись звонков: следим за аудио-сессиями выбранных приложений и
+/// автоматически стартуем запись при звонке.
+export interface AutoRecordConfig {
+  enabled: boolean;
+  /// Ключи приложений для слежения (см. AUTO_RECORD_APPS в labels/настройках).
+  apps: string[];
+  /// Останавливать запись по завершении звонка.
+  autoStop: boolean;
+}
+
 export interface AppSettings {
   ai: AiConfig;
   whisper: WhisperConfig;
+  /// Глобальная горячая клавиша старт/стоп записи (акселератор Tauri,
+  /// напр. "Ctrl+Shift+R"). Пусто — хоткей выключен.
+  hotkey: string;
+  autoRecord: AutoRecordConfig;
 }
 
 /// Состояние расшифровки одной встречи (живёт на уровне приложения, чтобы

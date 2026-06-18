@@ -8,16 +8,22 @@ describe("settings", () => {
     const s = getSettings();
     expect(s.ai).toEqual({ base_url: "", api_key: "", model: "" });
     expect(s.whisper).toEqual({ whisperPath: "", model: "medium", language: "ru" });
+    expect(s.hotkey).toBe("Ctrl+Shift+R");
+    expect(s.autoRecord).toEqual({ enabled: false, apps: [], autoStop: true });
   });
 
   it("round-trips saved settings", () => {
     saveSettings({
       ai: { base_url: "u", api_key: "k", model: "m" },
       whisper: { whisperPath: "p", model: "wm", language: "ru" },
+      hotkey: "Alt+Shift+5",
+      autoRecord: { enabled: true, apps: ["telegram"], autoStop: false },
     });
     const s = getSettings();
     expect(s.ai.base_url).toBe("u");
     expect(s.whisper.language).toBe("ru");
+    expect(s.hotkey).toBe("Alt+Shift+5");
+    expect(s.autoRecord.apps).toEqual(["telegram"]);
   });
 
   it("merges partial stored settings with defaults", () => {
@@ -38,6 +44,8 @@ describe("settings", () => {
       isAiConfigured({
         ai: { base_url: "u", api_key: "k", model: "m" },
         whisper: { whisperPath: "", model: "", language: "" },
+        hotkey: "Ctrl+Shift+R",
+        autoRecord: { enabled: false, apps: [], autoStop: true },
       }),
     ).toBe(true);
     expect(isAiConfigured(getSettings())).toBe(false);

@@ -4,6 +4,7 @@
 
 pub mod ai;
 pub mod audio;
+pub mod call_detector;
 pub mod cli_transcriber;
 pub mod decode;
 pub mod diarize;
