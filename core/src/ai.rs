@@ -165,6 +165,60 @@ pub fn summarize_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppRe
     backend.chat(system, &combined)
 }
 
+/// Краткое резюме (TL;DR) — несколько предложений (один проход).
+pub fn brief_summary(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    let system = "Дай очень краткое резюме разговора: 2–4 предложения о том, о чём шла \
+        речь и какой главный итог. Без списков и заголовков, по-русски, по делу.";
+    backend.chat(system, transcript_text)
+}
+
+/// Краткое резюме для разговора любой длины: длинный сначала сворачиваем в
+/// выжимку (map-reduce), затем сжимаем до 2–4 предложений.
+pub fn brief_summary_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    if transcript_text.len() <= SUMMARY_CHUNK_CHARS {
+        return brief_summary(backend, transcript_text);
+    }
+    let digest = summarize_long(backend, transcript_text)?;
+    let system = "Сожми эту выжимку до очень краткого резюме в 2–4 предложения: главная \
+        суть и итог. Без списков и заголовков, по-русски.";
+    backend.chat(system, &digest)
+}
+
+/// Аналитический разбор разговора (один проход).
+pub fn analyze(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    let system = "Сделай аналитический разбор разговора в формате Markdown: позиции и \
+        интересы сторон, ключевые аргументы, тон/настроение, принятые решения и \
+        договорённости, открытые вопросы и разногласия, риски, рекомендуемые следующие \
+        шаги. Заголовки (##) и списки. Опирайся только на сказанное, ничего не выдумывай. \
+        По-русски.";
+    backend.chat(system, transcript_text)
+}
+
+/// ИИ-анализ для разговора любой длины (map-reduce, как выжимка).
+pub fn analyze_long(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
+    if transcript_text.len() <= SUMMARY_CHUNK_CHARS {
+        return analyze(backend, transcript_text);
+    }
+    let chunks = split_chunks(transcript_text, SUMMARY_CHUNK_CHARS);
+    let total = chunks.len();
+    let mut partials = Vec::with_capacity(total);
+    for (i, chunk) in chunks.iter().enumerate() {
+        let system = "Проанализируй ОДНУ ЧАСТЬ длинного разговора: позиции сторон, \
+            ключевые моменты, решения, разногласия и риски именно этого фрагмента. \
+            По-русски, без вступлений.";
+        let user = format!("Часть {}/{} разговора:\n\n{}", i + 1, total, chunk);
+        partials.push(backend.chat(system, &user)?);
+    }
+    let combined = partials.join("\n\n---\n\n");
+    if combined.len() > SUMMARY_CHUNK_CHARS {
+        return analyze_long(backend, &combined);
+    }
+    let system = "Объедини анализы частей разговора в единый аналитический разбор \
+        (Markdown: ## и списки): позиции сторон, ключевые аргументы, решения, открытые \
+        вопросы, риски, следующие шаги. Без повторов и дублей. По-русски.";
+    backend.chat(system, &combined)
+}
+
 /// Переписывает расшифровку в связный литературный текст (один проход).
 pub fn to_literary_text(backend: &dyn ChatBackend, transcript_text: &str) -> AppResult<String> {
     let system = "Перепиши расшифровку разговора в связный, гладкий литературный текст. \
@@ -302,6 +356,17 @@ mod tests {
         assert_eq!(answer_question(&b2, "разговор", "вопрос?").unwrap(), "ответ");
         let last2 = b2.last.lock().unwrap().clone().unwrap();
         assert!(last2.1.contains("разговор") && last2.1.contains("вопрос?"));
+    }
+
+    #[test]
+    fn brief_and_analyze_short_are_single_pass() {
+        let b = MockChatBackend::new("кратко");
+        assert_eq!(brief_summary_long(&b, "короткий разговор").unwrap(), "кратко");
+        assert_eq!(*b.calls.lock().unwrap(), 1);
+
+        let a = MockChatBackend::new("анализ");
+        assert_eq!(analyze_long(&a, "короткий разговор").unwrap(), "анализ");
+        assert_eq!(*a.calls.lock().unwrap(), 1);
     }
 
     #[test]

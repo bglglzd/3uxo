@@ -259,6 +259,44 @@ pub fn load_literary(data_root: &Path, id: &str) -> AppResult<Option<String>> {
     Ok(Some(std::fs::read_to_string(path)?))
 }
 
+/// Сохраняет краткое резюме встречи в `brief.md`.
+pub fn save_brief(data_root: &Path, id: &str, text: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("brief.md"), text)?;
+    Ok(())
+}
+
+/// Читает сохранённое краткое резюме, если есть.
+pub fn load_brief(data_root: &Path, id: &str) -> AppResult<Option<String>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join("brief.md");
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(std::fs::read_to_string(path)?))
+}
+
+/// Сохраняет ИИ-анализ встречи в `analysis.md`.
+pub fn save_analysis(data_root: &Path, id: &str, text: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("analysis.md"), text)?;
+    Ok(())
+}
+
+/// Читает сохранённый ИИ-анализ, если есть.
+pub fn load_analysis(data_root: &Path, id: &str) -> AppResult<Option<String>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join("analysis.md");
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(std::fs::read_to_string(path)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
