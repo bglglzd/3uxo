@@ -112,14 +112,15 @@ body {
   color: var(--on-accent);
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
+/* Единый шрифт UI для всех элементов управления (без OS-дефолтов). */
+button,
 input,
 textarea,
 select {
-  font-family: inherit;
+  font-family: var(--font-ui);
+}
+button {
+  cursor: pointer;
 }
 input::placeholder,
 textarea::placeholder {
@@ -218,7 +219,7 @@ textarea::placeholder {
     background 0.2s ease;
 }
 .record:hover {
-  transform: translateY(-1px);
+  border-color: var(--accent-strong);
   background: var(--hover);
 }
 .record .dot {
@@ -430,6 +431,10 @@ textarea::placeholder {
   gap: 6px;
   transition: background 0.18s ease, color 0.18s ease;
 }
+.theme-switch button:hover:not(.active) {
+  background: var(--hover);
+  color: var(--text);
+}
 .theme-switch button.active {
   background: var(--glass-strong);
   color: var(--text);
@@ -595,10 +600,10 @@ textarea::placeholder {
   place-items: center;
   box-shadow: 0 10px 24px -10px rgba(110, 168, 254, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transition: transform 0.12s ease;
+  transition: filter 0.12s ease;
 }
 .play-btn:hover {
-  transform: scale(1.06);
+  filter: brightness(1.08);
 }
 .scrub {
   flex: 1;
@@ -759,7 +764,17 @@ textarea::placeholder {
 .btn:hover:not(:disabled) {
   border-color: var(--accent-strong);
   background: var(--hover);
-  transform: translateY(-1px);
+}
+/* Заливные кнопки сохраняют заливку и просто слегка осветляются. */
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: transparent;
+  filter: brightness(1.07);
+}
+.btn.danger:hover:not(:disabled) {
+  background: var(--rec);
+  border-color: transparent;
+  filter: brightness(1.05);
 }
 .btn:disabled {
   opacity: 0.5;
@@ -800,6 +815,10 @@ textarea::placeholder {
   outline: none;
   cursor: pointer;
   appearance: none;
+}
+.speaker-count:hover {
+  border-color: var(--accent-strong);
+  background: var(--hover);
 }
 .speaker-count:focus {
   border-color: var(--accent-strong);
@@ -885,6 +904,19 @@ textarea::placeholder {
   font-size: 11.5px;
   color: var(--text-faint);
   font-family: var(--font-mono);
+}
+/* Мобильный выбор файла (без перетаскивания). */
+.import-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 8px 8px;
+}
+.import-pick .btn {
+  width: 100%;
+  padding-top: 13px;
+  padding-bottom: 13px;
 }
 
 /* ---------- AI panel ---------- */
