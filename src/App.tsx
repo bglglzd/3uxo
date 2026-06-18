@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { getSettings } from "./settings";
 import type { Meeting, TranscribeState } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { MeetingView } from "./components/MeetingView";
 import { SettingsModal } from "./components/SettingsModal";
+import { ImportModal } from "./components/ImportModal";
 import { checkForUpdates } from "./updater";
 
 type ProgressEvent = {
@@ -23,7 +23,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [importError, setImportError] = useState("");
+  const [showImport, setShowImport] = useState(false);
   // Боковая панель как выезжающее меню на узких экранах (телефон).
   const [navOpen, setNavOpen] = useState(false);
   // Состояние расшифровок по id — живёт на уровне приложения.
@@ -104,34 +104,10 @@ export default function App() {
     if (m?.id) setSelectedId(m.id);
   };
 
-  const handleImport = async () => {
-    setImportError("");
-    let selected: string | string[] | null = null;
-    try {
-      selected = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Аудио",
-            extensions: [
-              "m4a", "mp3", "wav", "flac", "ogg", "oga", "opus",
-              "aac", "aif", "aiff", "caf", "mp4",
-            ],
-          },
-        ],
-      });
-    } catch (e) {
-      setImportError(String(e));
-      return;
-    }
-    if (typeof selected !== "string") return; // отмена выбора файла
-    try {
-      const m = await api.importRecording(selected);
-      await refresh();
-      setSelectedId(m.id);
-    } catch (e) {
-      setImportError(String(e));
-    }
+  const handleImported = async (id: string) => {
+    await refresh();
+    setSelectedId(id);
+    setShowImport(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -158,13 +134,12 @@ export default function App() {
         recording={recording}
         elapsed={elapsed}
         progress={trans}
-        importError={importError}
         open={navOpen}
         onStart={handleStart}
         onStop={handleStop}
         onImport={() => {
           setNavOpen(false);
-          void handleImport();
+          setShowImport(true);
         }}
         onSelect={(id) => {
           setSelectedId(id);
@@ -202,6 +177,12 @@ export default function App() {
       </main>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImported={handleImported}
+        />
+      )}
     </div>
   );
 }
