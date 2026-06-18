@@ -146,10 +146,10 @@ export default function App() {
     <div className="app">
       <button
         className="nav-toggle"
-        aria-label="Меню"
+        aria-label={navOpen ? "Закрыть меню" : "Меню"}
         onClick={() => setNavOpen((v) => !v)}
       >
-        ☰
+        {navOpen ? "✕" : "☰"}
       </button>
 
       <Sidebar
@@ -194,9 +194,8 @@ export default function App() {
             <div className="ear">👂</div>
             <h2>Выбери встречу</h2>
             <p>
-              Нажми «Начать запись», чтобы записать созвон,
-              <br />
-              или выбери встречу слева.
+              Нажми «Начать запись», чтобы записать созвон, или выбери встречу
+              слева.
             </p>
           </div>
         )}

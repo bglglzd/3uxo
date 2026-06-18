@@ -67,15 +67,17 @@
   --glass: rgba(255, 255, 255, 0.55);
   --glass-strong: rgba(255, 255, 255, 0.72);
   --glass-soft: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.75);
-  --glass-border-strong: rgba(255, 255, 255, 0.9);
+  /* Тёмные тонкие границы — на светлом стекле белые края не видны. */
+  --glass-border: rgba(31, 45, 80, 0.12);
+  --glass-border-strong: rgba(31, 45, 80, 0.2);
+  /* Белый блик сверху оставляем для эффекта стекла. */
   --glass-hi: rgba(255, 255, 255, 0.95);
   --glass-shadow: 0 22px 50px -26px rgba(35, 50, 90, 0.4);
   --glass-shadow-soft: 0 10px 26px -16px rgba(35, 50, 90, 0.3);
 
   --text: #1a2233;
   --text-dim: #4a5468;
-  --text-faint: #8893a6;
+  --text-faint: #5b6678;
 
   --field-bg: rgba(255, 255, 255, 0.6);
   --field-border: rgba(31, 45, 80, 0.14);
@@ -118,6 +120,11 @@ input,
 textarea,
 select {
   font-family: inherit;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
 }
 
 /* Reusable Liquid Glass surface */
@@ -178,6 +185,12 @@ select {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+/* В светлой теме светлый cyan-стоп делал середину слова невидимой — затемняем. */
+:root[data-theme="light"] .brand b {
+  background: linear-gradient(120deg, var(--text), var(--accent-strong) 55%, #1d9c8e);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 .brand span {
   font-size: 11px;
@@ -451,6 +464,11 @@ select {
   color: var(--text-dim);
   font-weight: 700;
   margin: 0;
+}
+.empty p {
+  max-width: 34ch;
+  margin: 0;
+  text-wrap: balance;
 }
 
 /* Meeting view */
@@ -1051,8 +1069,19 @@ select {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 22px;
   flex-wrap: wrap;
+  /* Липкий стеклянный футер: Save/Cancel всегда достижимы в длинной модалке. */
+  position: sticky;
+  bottom: -24px;
+  margin: 22px -24px -24px;
+  padding: 14px 24px;
+  background: var(--glass-strong);
+  border-top: 1px solid var(--glass-border);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.modal-actions .btn {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 .confirm-modal {
   width: min(440px, 100%);
@@ -1143,7 +1172,8 @@ details.adv[open] summary::before {
     position: fixed;
     top: 12px;
     left: 12px;
-    z-index: 60;
+    /* Выше панели (z70), чтобы при открытом drawer работать как «закрыть». */
+    z-index: 80;
     width: 44px;
     height: 44px;
     border-radius: 14px;
@@ -1181,6 +1211,10 @@ details.adv[open] summary::before {
     -webkit-backdrop-filter: blur(2px);
     animation: fade 0.2s ease;
   }
+  /* Сдвигаем бренд правее фиксированной кнопки ✕ в открытом меню. */
+  .sidebar .brand {
+    padding-left: 48px;
+  }
 
   .content {
     padding-top: 64px;
@@ -1214,6 +1248,14 @@ details.adv[open] summary::before {
   .import-btn {
     padding-top: 11px;
     padding-bottom: 11px;
+  }
+  .theme-switch button {
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+  .settings-trigger {
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 }
 
