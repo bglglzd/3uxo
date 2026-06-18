@@ -204,6 +204,9 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
     let mut reads: u64 = 0;
     let mut events_ok: u64 = 0;
     let mut samples: u64 = 0;
+    // Пиковая амплитуда (|сэмпл|, 0..32767): ~0 → захвачена тишина/нули (не то
+    // устройство/нет сигнала); большое значение → реальный звук есть.
+    let mut peak: i32 = 0;
 
     let mut queue: VecDeque<u8> = VecDeque::new();
     while !stop.load(Ordering::Relaxed) {
@@ -221,6 +224,10 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
                 queue.pop_front();
             }
             let sample = i16::from_le_bytes([lo, hi]);
+            let amp = (sample as i32).abs();
+            if amp > peak {
+                peak = amp;
+            }
             writer
                 .write_sample(sample)
                 .map_err(|e| AppError::Audio(e.to_string()))?;
@@ -245,7 +252,9 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
 
     dlog(
         &path,
-        &format!("{label}: stop — reads={reads}, events_ok={events_ok}, samples={samples}"),
+        &format!(
+            "{label}: stop — reads={reads}, events_ok={events_ok}, samples={samples}, peak={peak}"
+        ),
     );
 
     audio_client
