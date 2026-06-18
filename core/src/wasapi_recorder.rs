@@ -117,8 +117,28 @@ impl Recorder for WasapiRecorder {
     }
 }
 
+/// Дописывает диагностику захвата в backend-лог. Путь выводим из пути дорожки:
+/// `<data_root>/meetings/<id>/mic.wav` → `<data_root>/3uxo.log` (без проброса
+/// data_root через сигнатуры).
+fn dlog(track_path: &Path, msg: &str) {
+    if let Some(root) = track_path.ancestors().nth(3) {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join("3uxo.log"))
+        {
+            let _ = writeln!(f, "[wasapi] {msg}");
+        }
+    }
+}
+
 /// Поток захвата одной дорожки: открывает устройство, пишет WAV до сигнала stop.
 fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResult<()> {
+    let label = match source {
+        Source::Mic => "mic",
+        Source::Loopback => "system",
+    };
     // COM в каждом потоке свой.
     let _ = wasapi::initialize_mta();
 
@@ -174,12 +194,23 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
     audio_client
         .start_stream()
         .map_err(|e| AppError::Audio(format!("wasapi: start_stream: {e}")))?;
+    dlog(
+        &path,
+        &format!("{label}: stream started (blockalign={blockalign}, min_period={min_time})"),
+    );
+
+    // Диагностика: сколько раз читали, сколько раз событие сработало, сколько
+    // сэмплов записали — чтобы понять, читает ли WASAPI данные вообще.
+    let mut reads: u64 = 0;
+    let mut events_ok: u64 = 0;
+    let mut samples: u64 = 0;
 
     let mut queue: VecDeque<u8> = VecDeque::new();
     while !stop.load(Ordering::Relaxed) {
         capture_client
             .read_from_device_to_deque(&mut queue)
             .map_err(|e| AppError::Audio(format!("wasapi: read: {e}")))?;
+        reads += 1;
 
         // Каждые `blockalign` байт = один моно-сэмпл i16 (LE).
         while queue.len() >= blockalign {
@@ -193,11 +224,19 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
             writer
                 .write_sample(sample)
                 .map_err(|e| AppError::Audio(e.to_string()))?;
+            samples += 1;
         }
 
         // Ждём следующий буфер; таймаут позволяет периодически проверять stop.
-        let _ = h_event.wait_for_event(100);
+        if h_event.wait_for_event(100).is_ok() {
+            events_ok += 1;
+        }
     }
+
+    dlog(
+        &path,
+        &format!("{label}: stop — reads={reads}, events_ok={events_ok}, samples={samples}"),
+    );
 
     audio_client
         .stop_stream()
