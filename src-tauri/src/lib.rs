@@ -28,9 +28,9 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
             let _ = app.emit("recording-changed", now_recording);
             use tauri_plugin_notification::NotificationExt;
             let (title, body) = if now_recording {
-                ("🔴 3uxo — запись начата", "Идёт запись звонка")
+                ("🔴 Auris — запись начата", "Идёт запись звонка")
             } else {
-                ("✅ 3uxo — запись остановлена", "Запись сохранена")
+                ("✅ Auris — запись остановлена", "Запись сохранена")
             };
             let _ = app.notification().builder().title(title).body(body).show();
         }
@@ -40,11 +40,34 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
-/// Регистрирует глобальную горячую клавишу Ctrl+Shift+R (старт/стоп записи).
+/// Регистрирует глобальную горячую клавишу по умолчанию (Ctrl+Shift+R) —
+/// работает сразу при старте, до загрузки фронтенда. Фронтенд при загрузке
+/// перерегистрирует сохранённое сочетание через `update_hotkey`.
 fn setup_global_shortcut(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
     let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR);
     app.global_shortcut().register(shortcut)?;
+    Ok(())
+}
+
+/// Меняет глобальную горячую клавишу старт/стоп записи. Снимает все прежние и
+/// регистрирует новую из акселератора (напр. "Ctrl+Shift+R"). Пустая строка
+/// или None — выключает хоткей. Обработчик (toggle_and_notify) общий для любого
+/// зарегистрированного сочетания.
+#[tauri::command]
+fn update_hotkey(app: tauri::AppHandle, accelerator: Option<String>) -> Result<(), String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    if let Some(acc) = accelerator {
+        let acc = acc.trim();
+        if !acc.is_empty() {
+            let shortcut = Shortcut::from_str(acc)
+                .map_err(|e| format!("неверное сочетание «{acc}»: {e}"))?;
+            gs.register(shortcut).map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -55,7 +78,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::Manager;
 
     let toggle_i = MenuItem::with_id(app, "toggle", "Старт/Стоп записи", true, None::<&str>)?;
-    let open_i = MenuItem::with_id(app, "open", "Открыть 3uxo", true, None::<&str>)?;
+    let open_i = MenuItem::with_id(app, "open", "Открыть Auris", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&toggle_i, &open_i, &quit_i])?;
 
@@ -155,6 +178,7 @@ pub fn run() {
             commands::save_text_file,
             commands::export_audio,
             commands::get_backend_log,
+            update_hotkey,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

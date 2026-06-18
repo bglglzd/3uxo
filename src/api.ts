@@ -89,6 +89,11 @@ export const api = {
 
   getBackendLog: (): Promise<string> => inv("get_backend_log"),
 
+  /// Зарегистрировать глобальную горячую клавишу старт/стоп записи.
+  /// Пустая строка/null — выключить хоткей.
+  updateHotkey: (accelerator: string | null): Promise<void> =>
+    inv("update_hotkey", { accelerator: accelerator || null }),
+
   async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
     const path: string = await inv("track_path", { id, trackFile });
     return convertFileSrc(path);

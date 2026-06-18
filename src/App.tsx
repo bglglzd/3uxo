@@ -43,6 +43,12 @@ export default function App() {
     void checkForUpdates();
   }, []);
 
+  // Регистрируем сохранённую горячую клавишу старт/стоп записи при запуске
+  // (бэкенд по умолчанию ставит Ctrl+Shift+R; здесь применяем выбор пользователя).
+  useEffect(() => {
+    api.updateHotkey(getSettings().hotkey).catch(() => {});
+  }, []);
+
   // Таймер записи.
   useEffect(() => {
     if (!recording) return;
