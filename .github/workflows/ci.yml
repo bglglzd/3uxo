@@ -63,4 +63,4 @@ jobs:
       # Компиляция приложения с whisper + diarize + opus (без GPU/Vulkan).
       # opus тянет libopus (audiopus_sys, cmake — есть на раннере).
       - name: cargo check (app + whisper + diarize + opus)
-        run: cargo check -p app-3uxo --features whisper,diarize,opus
+        run: cargo check -p auris --features whisper,diarize,opus

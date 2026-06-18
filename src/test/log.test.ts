@@ -9,7 +9,7 @@ describe("log", () => {
     logInfo("hello");
     logError("ctx", new Error("boom"));
     const t = getLogText();
-    expect(t).toContain("3uxo diagnostics");
+    expect(t).toContain("Auris diagnostics");
     expect(t).toContain("test-env");
     expect(t).toContain("INFO hello");
     expect(t).toContain("ERROR ctx:");
