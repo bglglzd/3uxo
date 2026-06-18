@@ -129,6 +129,16 @@ pub async fn stop_recording(
         let repo = state.repo.lock().unwrap();
         service::stop_recording(state.recorder.as_ref(), &repo, &current, created_at)?
     };
+    // Диагностика захвата: размеры записанных дорожек. Пустой WAV (~44 байт
+    // заголовка, ~0 с) означает, что WASAPI ничего не захватил — это укажет на
+    // причину «ничего не распознано».
+    for tf in ["mic.wav", "system.wav"] {
+        if let Ok(p) = service::track_path(&state.data_root, &meeting.id, tf) {
+            let sz = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+            let secs = sz.saturating_sub(44) / 32_000; // 16кГц * 2 байта моно
+            flog(&state.data_root, &format!("recorded {tf} = {sz} bytes (~{secs}s)"));
+        }
+    }
     notify(&app, "✅ Auris — запись сохранена", &meeting.title);
     Ok(meeting)
 }

@@ -43,11 +43,18 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 /// Регистрирует глобальную горячую клавишу по умолчанию (Ctrl+Shift+R) —
 /// работает сразу при старте, до загрузки фронтенда. Фронтенд при загрузке
 /// перерегистрирует сохранённое сочетание через `update_hotkey`.
-fn setup_global_shortcut(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_global_shortcut(app: &tauri::App) {
     use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+    let gs = app.global_shortcut();
+    // Снимаем возможную «висящую» регистрацию (от прошлого инстанса), иначе
+    // register() падает «HotKey already registered» и валит весь setup-хук.
+    let _ = gs.unregister_all();
     let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR);
-    app.global_shortcut().register(shortcut)?;
-    Ok(())
+    // Не валим запуск, если не удалось: фронт перерегистрирует через
+    // update_hotkey, плюс есть управление из трея.
+    if let Err(e) = gs.register(shortcut) {
+        eprintln!("setup_global_shortcut: register failed: {e}");
+    }
 }
 
 /// Меняет глобальную горячую клавишу старт/стоп записи. Снимает все прежние и
@@ -193,7 +200,7 @@ pub fn run() {
                 )),
             });
 
-            setup_global_shortcut(app)?;
+            setup_global_shortcut(app);
             setup_tray(app)?;
             spawn_autorecord_monitor(app.handle().clone());
             Ok(())
