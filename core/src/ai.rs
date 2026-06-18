@@ -14,9 +14,35 @@ pub struct AiConfig {
 /// Предложение метаданных встречи от ИИ.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct MetadataSuggestion {
+    #[serde(default, deserialize_with = "string_or_seq")]
     pub title: String,
+    #[serde(default, deserialize_with = "string_or_seq")]
     pub participants: String,
+    #[serde(default, deserialize_with = "string_or_seq")]
     pub topic: String,
+}
+
+/// Модель иногда возвращает поле массивом (напр. participants: ["A","B"]) или
+/// числом вместо строки — приводим к строке (массив → через запятую). Иначе
+/// serde падает «invalid type: sequence, expected a string».
+fn string_or_seq<'de, D>(de: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v = serde_json::Value::deserialize(de)?;
+    Ok(match v {
+        serde_json::Value::String(s) => s,
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::Array(a) => a
+            .into_iter()
+            .map(|x| match x {
+                serde_json::Value::String(s) => s,
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
+        other => other.to_string(),
+    })
 }
 
 /// Абстракция «спросить чат-модель»: даёт system+user, получает текст ответа.
@@ -343,6 +369,18 @@ mod tests {
         let s = suggest_metadata(&b, "t").unwrap();
         assert_eq!(s.title, "X");
         assert_eq!(s.topic, "Y");
+    }
+
+    #[test]
+    fn suggest_metadata_tolerates_array_field() {
+        // Модель вернула participants массивом — раньше это роняло десериализацию.
+        let b = MockChatBackend::new(
+            r#"{"title":"Созвон","participants":["Иван","Пётр"],"topic":"Планы"}"#,
+        );
+        let s = suggest_metadata(&b, "t").unwrap();
+        assert_eq!(s.title, "Созвон");
+        assert_eq!(s.participants, "Иван, Пётр");
+        assert_eq!(s.topic, "Планы");
     }
 
     #[test]

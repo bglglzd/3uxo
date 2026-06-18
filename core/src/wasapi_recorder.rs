@@ -227,9 +227,19 @@ fn capture_loop(path: PathBuf, source: Source, stop: Arc<AtomicBool>) -> AppResu
             samples += 1;
         }
 
-        // Ждём следующий буфер; таймаут позволяет периодически проверять stop.
-        if h_event.wait_for_event(100).is_ok() {
-            events_ok += 1;
+        // Микрофон (Capture) шлёт WASAPI-события — ждём их (эффективно, точно).
+        // Системный звук (loopback/Render) в shared-режиме события НЕ шлёт
+        // (диагностика: events_ok=0), поэтому опрашиваем буфер по короткому
+        // таймеру — иначе системная дорожка остаётся пустой.
+        match source {
+            Source::Mic => {
+                if h_event.wait_for_event(100).is_ok() {
+                    events_ok += 1;
+                }
+            }
+            Source::Loopback => {
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
         }
     }
 
