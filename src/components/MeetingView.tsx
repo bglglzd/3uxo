@@ -38,6 +38,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [sysUrl, setSysUrl] = useState("");
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -350,12 +351,44 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             </span>
           ) : hasTranscript ? (
             <div className="btn-row">
-              <button className="btn ghost" onClick={() => exportAs("txt")}>
-                ⬇ TXT
-              </button>
-              <button className="btn ghost" onClick={() => exportAs("md")}>
-                ⬇ MD
-              </button>
+              <div className="export-menu">
+                <button
+                  className="btn ghost"
+                  onClick={() => setExportOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={exportOpen}
+                >
+                  ⬇ Стенограмма ▾
+                </button>
+                {exportOpen && (
+                  <>
+                    <div
+                      className="popover-backdrop"
+                      onClick={() => setExportOpen(false)}
+                    />
+                    <div className="export-pop" role="menu">
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setExportOpen(false);
+                          exportAs("txt");
+                        }}
+                      >
+                        Текст (.txt)
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setExportOpen(false);
+                          exportAs("md");
+                        }}
+                      >
+                        Markdown (.md)
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               {speakerSelect}
               <button
                 className="btn ghost"
