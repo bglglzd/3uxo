@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { getSettings, saveSettings } from "../settings";
 import type { AppSettings } from "../types";
 import { api } from "../api";
@@ -33,6 +34,15 @@ function Switch({
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<AppSettings>(getSettings());
   const [proc, setProc] = useState("");
+  const [version, setVersion] = useState("");
+
+  // Версия приложения (из tauri.conf). В dev-превью без Tauri вернёт ошибку —
+  // тогда просто не показываем номер.
+  useEffect(() => {
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
 
   const ai = (k: keyof AppSettings["ai"], v: string) =>
     setS({ ...s, ai: { ...s.ai, [k]: v } });
@@ -375,12 +385,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </details>
 
         <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>
-            Отмена
-          </button>
-          <button className="btn primary" onClick={save}>
-            Сохранить
-          </button>
+          <span className="modal-version">
+            {version ? `Auris v${version}` : "Auris"}
+          </span>
+          <div className="modal-actions-btns">
+            <button className="btn ghost" onClick={onClose}>
+              Отмена
+            </button>
+            <button className="btn primary" onClick={save}>
+              Сохранить
+            </button>
+          </div>
         </div>
       </div>
     </div>
