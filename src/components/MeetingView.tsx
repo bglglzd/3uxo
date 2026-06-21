@@ -10,6 +10,7 @@ import {
   clock,
   transcriptToTxt,
   transcriptToMd,
+  transcriptToPlain,
   stenogramToTxt,
   stenogramToMd,
   exportFileName,
@@ -17,11 +18,12 @@ import {
 import { TranscriptView } from "./TranscriptView";
 import { AiPanel } from "./AiPanel";
 import { CopyLogButton } from "./CopyLogButton";
+import { CopyButton } from "./CopyButton";
 
 interface Props {
   meeting: Meeting;
   transState?: TranscribeState;
-  onTranscribe: (speakerCount: number | null) => void;
+  onTranscribe: (speakerCount: number | null, solo: boolean) => void;
   onMetaSaved: () => void;
 }
 
@@ -37,6 +39,10 @@ function plural(n: number, one: string, few: string, many: string): string {
 export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: Props) {
   // Импортированная запись — одна дорожка audio.wav (без разделения «Я/Собеседник»).
   const isImported = meeting.source === "imported";
+  // Соло-режим «я один»: помечается при старте записи (см. App.handleStart).
+  // Расшифровываем только микрофон, один голос «Я», без диаризации.
+  const isSolo =
+    !isImported && localStorage.getItem(`3uxo.solo.${meeting.id}`) === "1";
 
   const micRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
@@ -217,8 +223,16 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const pct = duration > 0 ? (time / duration) * 100 : 0;
   const hasTranscript = !!transcript && transcript.segments.length > 0;
 
+  // Соло-режим расшифровывает только микрофон одним голосом — выбор числа
+  // собеседников не нужен. Вызов передаёт флаг соло в бэкенд.
+  const doTranscribe = () => onTranscribe(isSolo ? 1 : speakerCountValue(), isSolo);
+
   const speakerOptions = isImported ? [2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
-  const speakerSelect = (
+  const speakerSelect = isSolo ? (
+    <span className="solo-badge" title="Заметка для себя — один голос «Я»">
+      🎙 Заметка · один голос
+    </span>
+  ) : (
     <select
       className="speaker-count"
       value={speakerSel}
@@ -291,14 +305,16 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
                 onChange={(e) => updateLabel("me", e.target.value)}
               />
             </label>
-            <label className="speaker-edit">
-              <span>Имя собеседника</span>
-              <input
-                className="chip-input"
-                value={nameForSpeaker(labels, "them")}
-                onChange={(e) => updateLabel("them", e.target.value)}
-              />
-            </label>
+            {!isSolo && (
+              <label className="speaker-edit">
+                <span>Имя собеседника</span>
+                <input
+                  className="chip-input"
+                  value={nameForSpeaker(labels, "them")}
+                  onChange={(e) => updateLabel("them", e.target.value)}
+                />
+              </label>
+            )}
           </div>
         )}
         {isImported && speakers.length > 0 && (
@@ -408,10 +424,15 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               >
                 ⬇ Стенограмма
               </button>
+              <CopyButton
+                text={() => transcriptToPlain(transcript!, nameOf)}
+                label="📋 Копировать"
+                title="Скопировать текст расшифровки без Markdown"
+              />
               {speakerSelect}
               <button
                 className="btn ghost"
-                onClick={() => onTranscribe(speakerCountValue())}
+                onClick={doTranscribe}
                 title="Перерасшифровать заново"
               >
                 ↻ Заново
@@ -420,10 +441,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           ) : (
             <div className="btn-row">
               {speakerSelect}
-              <button
-                className="btn primary"
-                onClick={() => onTranscribe(speakerCountValue())}
-              >
+              <button className="btn primary" onClick={doTranscribe}>
                 Расшифровать
               </button>
             </div>

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   transcriptToTxt,
   transcriptToMd,
+  transcriptToPlain,
+  stripMarkdown,
   stenogramToTxt,
   stenogramToMd,
   exportFileName,
@@ -77,6 +79,38 @@ describe("export", () => {
     expect(md).toContain("## Стенограмма");
     expect(md).toContain("**[0:00] Я**");
     expect(md).toContain("Привет");
+  });
+
+  it("transcriptToPlain: grouped by speaker, no timestamps or markdown", () => {
+    const plain = transcriptToPlain(transcript);
+    expect(plain).toContain("Я: Привет");
+    expect(plain).toContain("Собеседник: Здравствуй");
+    expect(plain).not.toContain("[0:00]");
+    expect(plain).not.toMatch(/[`*#]/);
+  });
+
+  it("stripMarkdown removes common markdown syntax", () => {
+    const md = [
+      "# Заголовок",
+      "",
+      "Текст с **жирным** и *курсивом* и `кодом`.",
+      "",
+      "- пункт один",
+      "- пункт два",
+      "",
+      "Ссылка [сюда](https://example.com) в тексте.",
+      "",
+      "> цитата",
+    ].join("\n");
+    const plain = stripMarkdown(md);
+    expect(plain).toContain("Заголовок");
+    expect(plain).toContain("Текст с жирным и курсивом и кодом.");
+    expect(plain).toContain("пункт один");
+    expect(plain).toContain("Ссылка сюда в тексте.");
+    expect(plain).toContain("цитата");
+    expect(plain).not.toMatch(/[#`*>]/);
+    expect(plain).not.toContain("https://example.com");
+    expect(plain).not.toContain("- пункт");
   });
 
   it("exportFileName sanitizes and adds extension", () => {

@@ -3,7 +3,9 @@ import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting } from "../types";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
+import { stripMarkdown } from "../export";
 import { Markdown } from "./Markdown";
+import { CopyButton } from "./CopyButton";
 
 interface Props {
   meeting: Meeting;
@@ -113,9 +115,16 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
       <div className="ai-block">
         <div className="ai-block-head">
           <span className="ai-block-title">{title}</span>
-          <button className="btn ghost" onClick={() => exportText(content, suffix)}>
-            ⬇ Экспорт
-          </button>
+          <div className="btn-row">
+            <CopyButton
+              text={() => stripMarkdown(content)}
+              label="📋 Копировать"
+              title="Скопировать как обычный текст, без Markdown"
+            />
+            <button className="btn ghost" onClick={() => exportText(content, suffix)}>
+              ⬇ Экспорт
+            </button>
+          </div>
         </div>
         <div className="summary-text">
           <Markdown>{content}</Markdown>
@@ -201,6 +210,14 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
         </div>
         {answer && (
           <div className="ai-answer">
+            <div className="ai-block-head">
+              <span className="ai-block-title">Ответ</span>
+              <CopyButton
+                text={() => stripMarkdown(answer)}
+                label="📋 Копировать"
+                title="Скопировать ответ как обычный текст, без Markdown"
+              />
+            </div>
             <Markdown>{answer}</Markdown>
           </div>
         )}
