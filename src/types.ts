@@ -70,6 +70,9 @@ export interface RecState {
   paused: boolean;
 }
 
+/// Вид ИИ-отчёта (для сохранения отредактированной версии).
+export type ReportKind = "brief" | "summary" | "analysis" | "literary";
+
 export interface AppSettings {
   ai: AiConfig;
   whisper: WhisperConfig;

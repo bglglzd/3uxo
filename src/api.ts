@@ -7,6 +7,7 @@ import type {
   MetadataSuggestion,
   WhisperConfig,
   RecState,
+  ReportKind,
 } from "./types";
 import { logError, logInfo } from "./log";
 
@@ -60,6 +61,12 @@ export const api = {
   },
   getTranscript: (id: string): Promise<Transcript | null> =>
     inv("get_transcript", { id }),
+  /// Сохранить отредактированную расшифровку (правки whisper-ошибок/спикеров).
+  saveTranscript: (id: string, transcript: Transcript): Promise<void> =>
+    inv("save_transcript", { id, transcript }),
+  /// Сохранить отредактированный ИИ-отчёт (brief|summary|analysis|literary).
+  saveReport: (id: string, kind: ReportKind, content: string): Promise<void> =>
+    inv("save_report", { id, kind, content }),
 
   suggestMetadata: (id: string, config: AiConfig): Promise<MetadataSuggestion> =>
     inv("suggest_metadata", { id, config }),
