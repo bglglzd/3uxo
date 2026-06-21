@@ -56,6 +56,18 @@ export interface AutoRecordConfig {
   apps: string[];
   /// Останавливать запись по завершении звонка.
   autoStop: boolean;
+  /// Сколько секунд звонок должен держаться до старта записи — отсекает
+  /// короткие звуки уведомлений (Telegram «дзынь»). 0 — старт сразу.
+  startDelaySecs: number;
+  /// Авто-удалять авто-записи короче этого порога (сек) как мусорные огрызки
+  /// уведомлений. 0 — не удалять.
+  minKeepSecs: number;
+}
+
+/// Состояние записи: идёт ли запись и стоит ли она на паузе.
+export interface RecState {
+  recording: boolean;
+  paused: boolean;
 }
 
 export interface AppSettings {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getLogText } from "../log";
 import { api } from "../api";
+import { copyToClipboard } from "../clipboard";
 
 export function CopyLogButton({ className = "btn ghost" }: { className?: string }) {
   const [done, setDone] = useState(false);
@@ -15,21 +16,7 @@ export function CopyLogButton({ className = "btn ghost" }: { className?: string 
     const text =
       getLogText() +
       (backend ? `\n=== backend log (3uxo.log) ===\n${backend}\n` : "");
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // запасной путь, если clipboard API недоступен
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch {
-        /* ignore */
-      }
-      document.body.removeChild(ta);
-    }
+    await copyToClipboard(text);
     setDone(true);
     setTimeout(() => setDone(false), 1500);
   };

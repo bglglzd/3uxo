@@ -9,11 +9,16 @@ interface Props {
   meetings: Meeting[];
   activeId: string | null;
   recording: boolean;
+  paused: boolean;
   elapsed: number;
+  solo: boolean;
   progress: Record<string, TranscribeState>;
   open?: boolean;
   onStart: () => void;
   onStop: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onSoloChange: (v: boolean) => void;
   onImport: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
@@ -54,10 +59,28 @@ export function Sidebar(p: Props) {
 
       <RecordButton
         recording={p.recording}
+        paused={p.paused}
         elapsed={p.elapsed}
         onStart={p.onStart}
         onStop={p.onStop}
+        onPause={p.onPause}
+        onResume={p.onResume}
       />
+
+      {!p.recording && (
+        <label
+          className={p.solo ? "solo-toggle on" : "solo-toggle"}
+          title="Заметка для себя: один голос «Я», без разделения собеседников"
+        >
+          <input
+            type="checkbox"
+            checked={p.solo}
+            onChange={(e) => p.onSoloChange(e.target.checked)}
+          />
+          <span className="solo-check" aria-hidden="true" />
+          <span className="solo-label">Заметка · я один</span>
+        </label>
+      )}
 
       <button className="import-btn" onClick={p.onImport}>
         <svg
