@@ -395,7 +395,16 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             onClick={togglePlay}
             aria-label={playing ? "Пауза" : "Играть"}
           >
-            {playing ? "❚❚" : "▶"}
+            {playing ? (
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="6" y="5" width="4" height="14" rx="1.2" />
+                <rect x="14" y="5" width="4" height="14" rx="1.2" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M8 5.5v13a1 1 0 0 0 1.52.85l10.5-6.5a1 1 0 0 0 0-1.7L9.52 4.65A1 1 0 0 0 8 5.5Z" />
+              </svg>
+            )}
           </button>
           <div className="scrub">
             <input
