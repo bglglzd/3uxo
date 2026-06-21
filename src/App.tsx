@@ -22,18 +22,30 @@ type ProgressEvent = {
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [recording, setRecording] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [showImport, setShowImport] = useState(false);
   // Боковая панель как выезжающее меню на узких экранах (телефон).
   const [navOpen, setNavOpen] = useState(false);
+  // Соло-режим «я один»: запоминаем выбор между сессиями.
+  const [solo, setSolo] = useState(
+    () => localStorage.getItem("3uxo.solo.pref") === "1",
+  );
   // Состояние расшифровок по id — живёт на уровне приложения.
   const [trans, setTrans] = useState<Record<string, TranscribeState>>({});
 
   const refresh = useCallback(async () => {
     setMeetings(await api.listMeetings());
-    setRecording(await api.isRecording());
+    const st = await api.recordingState();
+    setRecording(st.recording);
+    setPaused(st.paused);
+  }, []);
+
+  const changeSolo = useCallback((v: boolean) => {
+    setSolo(v);
+    localStorage.setItem("3uxo.solo.pref", v ? "1" : "0");
   }, []);
 
   useEffect(() => {
@@ -54,17 +66,23 @@ export default function App() {
         s.autoRecord.enabled,
         resolveProcesses(s.autoRecord.apps),
         s.autoRecord.autoStop,
+        s.autoRecord.startDelaySecs,
+        s.autoRecord.minKeepSecs,
       )
       .catch(() => {});
   }, []);
 
-  // Таймер записи.
+  // Сброс таймера при старте новой записи (false → true).
   useEffect(() => {
-    if (!recording) return;
-    setElapsed(0);
+    if (recording) setElapsed(0);
+  }, [recording]);
+
+  // Таймер записи: тикает, пока идёт запись и она не на паузе.
+  useEffect(() => {
+    if (!recording || paused) return;
     const id = setInterval(() => setElapsed((p) => p + 1), 1000);
     return () => clearInterval(id);
-  }, [recording]);
+  }, [recording, paused]);
 
   // События старта/стопа по горячей клавише / трею.
   useEffect(() => {
@@ -89,10 +107,10 @@ export default function App() {
   }, []);
 
   const startTranscription = useCallback(
-    async (id: string, speakerCount: number | null) => {
+    async (id: string, speakerCount: number | null, soloFlag: boolean) => {
       setTrans((t) => ({ ...t, [id]: { running: true, percent: 0 } }));
       try {
-        await api.transcribe(id, getSettings().whisper, speakerCount);
+        await api.transcribe(id, getSettings().whisper, speakerCount, soloFlag);
         setTrans((t) => ({
           ...t,
           [id]: { running: false, percent: 100, doneToken: (t[id]?.doneToken ?? 0) + 1 },
@@ -109,15 +127,30 @@ export default function App() {
   );
 
   const handleStart = async () => {
-    await api.startRecording();
+    const id = await api.startRecording();
+    // Помечаем встречу как соло, если включён режим «я один» (фронт читает это
+    // при расшифровке — ключ в стиле 3uxo.speakers.*/3uxo.labels.*).
+    if (solo && id) localStorage.setItem(`3uxo.solo.${id}`, "1");
     setRecording(true);
+    setPaused(false);
   };
 
   const handleStop = async () => {
     const m = await api.stopRecording();
     setRecording(false);
+    setPaused(false);
     await refresh();
     if (m?.id) setSelectedId(m.id);
+  };
+
+  const handlePause = async () => {
+    await api.pauseRecording();
+    setPaused(true);
+  };
+
+  const handleResume = async () => {
+    await api.resumeRecording();
+    setPaused(false);
   };
 
   const handleImported = async (id: string) => {
@@ -148,11 +181,16 @@ export default function App() {
         meetings={meetings}
         activeId={selectedId}
         recording={recording}
+        paused={paused}
         elapsed={elapsed}
+        solo={solo}
         progress={trans}
         open={navOpen}
         onStart={handleStart}
         onStop={handleStop}
+        onPause={handlePause}
+        onResume={handleResume}
+        onSoloChange={changeSolo}
         onImport={() => {
           setNavOpen(false);
           setShowImport(true);
@@ -177,7 +215,9 @@ export default function App() {
             key={selected.id}
             meeting={selected}
             transState={trans[selected.id]}
-            onTranscribe={(speakerCount) => startTranscription(selected.id, speakerCount)}
+            onTranscribe={(speakerCount, soloFlag) =>
+              startTranscription(selected.id, speakerCount, soloFlag)
+            }
             onMetaSaved={refresh}
           />
         ) : (

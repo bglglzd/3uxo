@@ -6,6 +6,7 @@ import type {
   AiConfig,
   MetadataSuggestion,
   WhisperConfig,
+  RecState,
 } from "./types";
 import { logError, logInfo } from "./log";
 
@@ -31,25 +32,30 @@ function whisperOptions(w: WhisperConfig) {
 export const api = {
   startRecording: (): Promise<string> => inv("start_recording"),
   stopRecording: (): Promise<Meeting> => inv("stop_recording"),
+  pauseRecording: (): Promise<void> => inv("pause_recording"),
+  resumeRecording: (): Promise<void> => inv("resume_recording"),
   importRecording: (path: string): Promise<Meeting> =>
     inv("import_recording", { path }),
   listMeetings: (): Promise<Meeting[]> => inv("list_meetings"),
   getMeeting: (id: string): Promise<Meeting> => inv("get_meeting", { id }),
   deleteMeeting: (id: string): Promise<void> => inv("delete_meeting", { id }),
   isRecording: (): Promise<boolean> => inv("is_recording"),
+  recordingState: (): Promise<RecState> => inv("recording_state"),
 
   transcribe: (
     id: string,
     whisper: WhisperConfig,
     speakerCount?: number | null,
+    solo?: boolean,
   ): Promise<Transcript> => {
     logInfo(
-      `transcribe start id=${id} model=${whisper.model || "small"} speakers=${speakerCount ?? "auto"}`,
+      `transcribe start id=${id} model=${whisper.model || "small"} speakers=${speakerCount ?? "auto"}${solo ? " solo" : ""}`,
     );
     return inv("transcribe", {
       id,
       options: whisperOptions(whisper),
       speakerCount: speakerCount ?? null,
+      solo: solo ?? null,
     });
   },
   getTranscript: (id: string): Promise<Transcript | null> =>
@@ -99,8 +105,16 @@ export const api = {
     enabled: boolean,
     processes: string[],
     autoStop: boolean,
+    startDelaySecs: number,
+    minKeepSecs: number,
   ): Promise<void> =>
-    inv("set_autorecord", { enabled, processes, autoStop }),
+    inv("set_autorecord", {
+      enabled,
+      processes,
+      autoStop,
+      startDelaySecs,
+      minKeepSecs,
+    }),
 
   async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
     const path: string = await inv("track_path", { id, trackFile });

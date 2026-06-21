@@ -85,6 +85,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         s.autoRecord.enabled,
         resolveProcesses(s.autoRecord.apps),
         s.autoRecord.autoStop,
+        s.autoRecord.startDelaySecs,
+        s.autoRecord.minKeepSecs,
       );
     } catch {
       // не критично — применится при следующем запуске
@@ -252,6 +254,44 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   onChange={(v) => ar({ autoStop: v })}
                   label="Останавливать запись по завершении звонка"
                 />
+              </div>
+
+              <div className="field-row">
+                <div className="field">
+                  <label>Задержка перед стартом, сек</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={s.autoRecord.startDelaySecs}
+                    disabled={!s.autoRecord.enabled}
+                    onChange={(e) =>
+                      ar({ startDelaySecs: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                  />
+                  <span className="hint">
+                    Звонок должен длиться столько секунд подряд, прежде чем
+                    начнётся запись. Отсекает короткие звуки уведомлений
+                    (Telegram «дзынь»). 0 — старт сразу.
+                  </span>
+                </div>
+                <div className="field">
+                  <label>Отбрасывать записи короче, сек</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={s.autoRecord.minKeepSecs}
+                    disabled={!s.autoRecord.enabled}
+                    onChange={(e) =>
+                      ar({ minKeepSecs: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                  />
+                  <span className="hint">
+                    Авто-записи короче порога удаляются как мусорные огрызки
+                    уведомлений. 0 — не удалять.
+                  </span>
+                </div>
               </div>
 
               <div className="hint note">

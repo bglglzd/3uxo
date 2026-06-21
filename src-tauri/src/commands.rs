@@ -71,6 +71,13 @@ pub struct AutoRecordCfg {
     /// Имена процессов (.exe) для слежения за аудио-сессиями.
     pub processes: Vec<String>,
     pub auto_stop: bool,
+    /// Сколько секунд звонок должен держаться непрерывно до старта записи —
+    /// отсекает короткие звуки уведомлений (Telegram «дзынь» ~2 с). 0 — старт
+    /// сразу при первом детекте.
+    pub start_delay_secs: u32,
+    /// Авто-удалять записи короче этого порога (сек), если их начала авто-запись
+    /// (защита от мусорных огрызков-уведомлений). 0 — ничего не удалять.
+    pub min_keep_secs: u32,
 }
 
 /// Глобальное состояние приложения.
@@ -91,11 +98,15 @@ pub fn set_autorecord(
     enabled: bool,
     processes: Vec<String>,
     auto_stop: bool,
+    start_delay_secs: u32,
+    min_keep_secs: u32,
 ) {
     let mut cfg = state.autorecord.lock().unwrap();
     cfg.enabled = enabled;
     cfg.processes = processes;
     cfg.auto_stop = auto_stop;
+    cfg.start_delay_secs = start_delay_secs;
+    cfg.min_keep_secs = min_keep_secs;
 }
 
 #[tauri::command]
@@ -141,6 +152,82 @@ pub async fn stop_recording(
     }
     notify(&app, "✅ Auris — запись сохранена", &meeting.title);
     Ok(meeting)
+}
+
+/// Состояние записи для фронтенда: идёт ли запись и стоит ли она на паузе.
+#[derive(Clone, serde::Serialize)]
+pub struct RecState {
+    pub recording: bool,
+    pub paused: bool,
+}
+
+#[tauri::command]
+pub fn recording_state(state: tauri::State<AppState>) -> RecState {
+    match state.active.lock().unwrap().as_ref() {
+        Some(rec) => RecState {
+            recording: true,
+            paused: rec.current.is_none(),
+        },
+        None => RecState {
+            recording: false,
+            paused: false,
+        },
+    }
+}
+
+/// Ставит текущую запись на паузу (финализирует текущий сегмент). Сегменты
+/// склеятся в один файл на стопе.
+#[tauri::command]
+pub fn pause_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResult<()> {
+    let current = {
+        state
+            .active
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| AppError::InvalidState("not recording".into()))?
+    };
+    let updated = service::pause_recording(state.recorder.as_ref(), current)?;
+    *state.active.lock().unwrap() = Some(updated);
+    notify(&app, "⏸ Auris — пауза", "Запись на паузе");
+    Ok(())
+}
+
+/// Возобновляет запись после паузы (открывает следующий сегмент).
+#[tauri::command]
+pub fn resume_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResult<()> {
+    let current = {
+        state
+            .active
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| AppError::InvalidState("not recording".into()))?
+    };
+    let updated = service::resume_recording(state.recorder.as_ref(), current)?;
+    *state.active.lock().unwrap() = Some(updated);
+    notify(&app, "🔴 Auris — запись продолжена", "Идёт запись");
+    Ok(())
+}
+
+/// Останавливает активную запись и возвращает встречу (или `None`, если записи
+/// не было). Без уведомлений — для использования фоновым монитором авто-записи.
+pub(crate) fn stop_active_recording(state: &AppState) -> AppResult<Option<Meeting>> {
+    let current = { state.active.lock().unwrap().take() };
+    let current = match current {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+    let created_at = chrono::Utc::now().to_rfc3339();
+    let repo = state.repo.lock().unwrap();
+    let meeting = service::stop_recording(state.recorder.as_ref(), &repo, &current, created_at)?;
+    Ok(Some(meeting))
+}
+
+/// Удаляет встречу (БД + папка) — для отбрасывания коротких авто-записей.
+pub(crate) fn discard_meeting(state: &AppState, id: &str) -> AppResult<()> {
+    let repo = state.repo.lock().unwrap();
+    service::delete_meeting(&repo, &state.data_root, id)
 }
 
 /// Импортирует внешнюю аудиозапись (m4a/mp3/wav/flac/ogg…) как новую встречу.
@@ -231,9 +318,14 @@ pub async fn transcribe(
     // Сколько голосов в записи: для импорта — всего говорящих (None = авто);
     // для записи — число собеседников (>=2 включает диаризацию системной дорожки).
     speaker_count: Option<u32>,
+    // Соло-режим «я один» (заметка на один голос): расшифровываем только
+    // микрофон, всем сегментам говорящий «Я», без дорожки собеседника и
+    // диаризации. Игнорируется для импортированных встреч.
+    solo: Option<bool>,
 ) -> AppResult<Transcript> {
     // Импортированная встреча — одна дорожка audio.wav; записанная — mic+system.
     let imported = state.repo.lock().unwrap().get(&id)?.source == "imported";
+    let solo = !imported && solo.unwrap_or(false);
     // Помечаем использованным во всех конфигурациях фич (используется ниже только
     // в путях с диаризацией).
     let _ = speaker_count;
@@ -248,6 +340,8 @@ pub async fn transcribe(
         let transcriber = CliTranscriber::new(options);
         let transcript = if imported {
             service::transcribe_single_to_file(&transcriber, &state.data_root, &id)?
+        } else if solo {
+            service::transcribe_solo_to_file(&transcriber, &state.data_root, &id)?
         } else {
             service::transcribe_to_file(&transcriber, &state.data_root, &id)?
         };
@@ -331,6 +425,32 @@ pub async fn transcribe(
             {
                 uxo_core::transcript::single_speaker(segs, "spk0")
             }
+        } else if solo {
+            // Соло-режим «я один»: расшифровываем только микрофон, всем сегментам
+            // говорящий «Я». Дорожка собеседника и диаризация пропускаются.
+            let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
+            let mic_path = {
+                let dst = mic_path.with_file_name("mic_norm.wav");
+                match uxo_core::decode::decode_to_wav_16k_mono(&mic_path, &dst) {
+                    Ok(()) => dst,
+                    Err(e) => {
+                        flog(&state.data_root, &format!("normalize mic (solo) failed: {e}"));
+                        mic_path
+                    }
+                }
+            };
+            emit("mic", 0.0, 0, 0);
+            flog(&state.data_root, "transcribe: solo mic track");
+            let mic_segs = transcriber.transcribe_windowed(
+                &mic_path,
+                DEFAULT_WINDOW_SECS,
+                &|done, total| emit("mic", (done as f32 / total as f32) * 100.0, done, total),
+            )?;
+            flog(
+                &state.data_root,
+                &format!("transcribed solo: mic={} segs", mic_segs.len()),
+            );
+            uxo_core::transcript::single_speaker(mic_segs, uxo_core::transcript::ME)
         } else {
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let system_path = service::track_path(&state.data_root, &id, "system.wav")?;

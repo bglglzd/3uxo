@@ -1909,3 +1909,122 @@ details.adv[open] summary::before {
   display: block;
   margin-top: 12px;
 }
+
+/* ---------- Запись: пауза/возобновление ---------- */
+.record-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* На паузе — приглушённый янтарный, мягкая пульсация выключена. */
+.record.is-paused {
+  background: var(--record-grad);
+  color: #fff;
+  filter: saturate(0.55) brightness(0.96);
+  box-shadow: 0 5px 16px -4px rgba(240, 83, 59, 0.3);
+}
+.record.is-paused .rec-glyph.stop {
+  opacity: 0.85;
+}
+.record-pause {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.record-pause:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* ---------- Соло-режим «я один» ---------- */
+.solo-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.solo-toggle.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--hover);
+}
+.solo-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.solo-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--glass-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.solo-toggle.on .solo-check {
+  background: var(--brand-grad);
+  border-color: transparent;
+}
+.solo-toggle.on .solo-check::after {
+  content: "✓";
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.solo-label {
+  flex: 1;
+}
+
+/* Бейдж соло-режима в карточке расшифровки. */
+.solo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+
+/* Два поля в строке (настройки авто-записи). */
+.field-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+}
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .field-row {
+    flex-direction: column;
+  }
+}

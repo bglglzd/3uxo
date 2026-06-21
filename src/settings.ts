@@ -6,7 +6,13 @@ const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },
   whisper: { whisperPath: "", model: "medium", language: "ru" },
   hotkey: "Ctrl+Shift+R",
-  autoRecord: { enabled: false, apps: [], autoStop: true },
+  autoRecord: {
+    enabled: false,
+    apps: [],
+    autoStop: true,
+    startDelaySecs: 5,
+    minKeepSecs: 12,
+  },
 };
 
 export function getSettings(): AppSettings {

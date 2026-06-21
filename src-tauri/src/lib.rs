@@ -107,24 +107,40 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+const AUTORECORD_POLL_MS: u64 = 2500;
+
 /// Фоновый монитор авто-записи: каждые ~2.5с проверяет аудио-сессии выбранных
 /// приложений (`AppState.autorecord`) и стартует/стопит запись. Останавливает
 /// только то, что начал сам (`auto_active`), не трогая ручную запись.
+///
+/// Чтобы не записывать короткие звуки уведомлений (Telegram «дзынь» ~2 с):
+/// 1) старт только если звонок держится непрерывно ≥ `start_delay_secs`
+///    (несколько опросов подряд — `active_streak`);
+/// 2) на авто-стопе запись короче `min_keep_secs` удаляется как мусорный огрызок.
 fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     use tauri::Manager;
     std::thread::spawn(move || {
         let mut auto_active = false;
+        // Сколько опросов подряд звонок был активен (для задержки старта).
+        let mut active_streak: u32 = 0;
         loop {
-            std::thread::sleep(std::time::Duration::from_millis(2500));
-            let (enabled, processes, auto_stop) = {
+            std::thread::sleep(std::time::Duration::from_millis(AUTORECORD_POLL_MS));
+            let (enabled, processes, auto_stop, start_delay_secs, min_keep_secs) = {
                 // Привязываем State к переменной: иначе временное значение из
                 // app.state() дропается до использования гарда (E0716).
                 let state = app.state::<AppState>();
                 let cfg = state.autorecord.lock().unwrap();
-                (cfg.enabled, cfg.processes.clone(), cfg.auto_stop)
+                (
+                    cfg.enabled,
+                    cfg.processes.clone(),
+                    cfg.auto_stop,
+                    cfg.start_delay_secs,
+                    cfg.min_keep_secs,
+                )
             };
             if !enabled || processes.is_empty() {
                 auto_active = false;
+                active_streak = 0;
                 continue;
             }
             let recording = {
@@ -137,15 +153,58 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
                 auto_active = false;
             }
             let call = uxo_core::call_detector::any_active_call(&processes);
-            if call && !recording {
+            active_streak = if call { active_streak.saturating_add(1) } else { 0 };
+
+            // Сколько опросов подряд требуется до старта (округление вверх; >=1).
+            let required = (((start_delay_secs as u64 * 1000) + AUTORECORD_POLL_MS - 1)
+                / AUTORECORD_POLL_MS)
+                .max(1) as u32;
+
+            if call && !recording && active_streak >= required {
                 toggle_and_notify(&app);
                 auto_active = true;
             } else if !call && recording && auto_active && auto_stop {
-                toggle_and_notify(&app);
+                auto_stop_and_maybe_discard(&app, min_keep_secs);
                 auto_active = false;
+                active_streak = 0;
             }
         }
     });
+}
+
+/// Авто-стоп записи: останавливает и, если получившаяся запись короче
+/// `min_keep_secs`, удаляет её как мусорный огрызок (звук уведомления).
+fn auto_stop_and_maybe_discard<R: tauri::Runtime>(app: &tauri::AppHandle<R>, min_keep_secs: u32) {
+    use tauri::{Emitter, Manager};
+    let state = app.state::<AppState>();
+    match commands::stop_active_recording(&state) {
+        Ok(Some(meeting)) => {
+            let _ = app.emit("recording-changed", false);
+            if min_keep_secs > 0 && meeting.duration_secs < min_keep_secs as u64 {
+                let _ = commands::discard_meeting(&state, &meeting.id);
+                commands::flog(
+                    &state.data_root,
+                    &format!(
+                        "autorecord: discarded short clip {}s (id={})",
+                        meeting.duration_secs, meeting.id
+                    ),
+                );
+                let _ = app.emit("recording-changed", false);
+            } else {
+                use tauri_plugin_notification::NotificationExt;
+                let _ = app
+                    .notification()
+                    .builder()
+                    .title("✅ Auris — запись остановлена")
+                    .body("Запись сохранена")
+                    .show();
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            let _ = app.emit("recording-error", e.to_string());
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -190,6 +249,20 @@ pub fn run() {
             let db_path = data_root.join("3uxo.db");
             let repo = Repo::open(&db_path).expect("cannot open db");
 
+            // Восстанавливаем записи, оборванные аварийным завершением: склеиваем
+            // осиротевшие сегменты в единый файл (см. фичу «склейка фрагментов»).
+            match uxo_core::service::recover_orphan_recordings(
+                &repo,
+                &data_root,
+                chrono::Utc::now().to_rfc3339(),
+            ) {
+                Ok(n) if n > 0 => {
+                    commands::flog(&data_root, &format!("recovered {n} orphan recording(s)"))
+                }
+                Ok(_) => {}
+                Err(e) => commands::flog(&data_root, &format!("recover orphan failed: {e}")),
+            }
+
             app.manage(AppState {
                 data_root,
                 repo: Mutex::new(repo),
@@ -208,6 +281,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::start_recording,
             commands::stop_recording,
+            commands::pause_recording,
+            commands::resume_recording,
+            commands::recording_state,
             commands::import_recording,
             commands::list_meetings,
             commands::get_meeting,

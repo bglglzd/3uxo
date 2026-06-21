@@ -9,7 +9,13 @@ describe("settings", () => {
     expect(s.ai).toEqual({ base_url: "", api_key: "", model: "" });
     expect(s.whisper).toEqual({ whisperPath: "", model: "medium", language: "ru" });
     expect(s.hotkey).toBe("Ctrl+Shift+R");
-    expect(s.autoRecord).toEqual({ enabled: false, apps: [], autoStop: true });
+    expect(s.autoRecord).toEqual({
+      enabled: false,
+      apps: [],
+      autoStop: true,
+      startDelaySecs: 5,
+      minKeepSecs: 12,
+    });
   });
 
   it("round-trips saved settings", () => {
@@ -17,7 +23,13 @@ describe("settings", () => {
       ai: { base_url: "u", api_key: "k", model: "m" },
       whisper: { whisperPath: "p", model: "wm", language: "ru" },
       hotkey: "Alt+Shift+5",
-      autoRecord: { enabled: true, apps: ["telegram"], autoStop: false },
+      autoRecord: {
+        enabled: true,
+        apps: ["telegram"],
+        autoStop: false,
+        startDelaySecs: 5,
+        minKeepSecs: 12,
+      },
     });
     const s = getSettings();
     expect(s.ai.base_url).toBe("u");
@@ -45,7 +57,13 @@ describe("settings", () => {
         ai: { base_url: "u", api_key: "k", model: "m" },
         whisper: { whisperPath: "", model: "", language: "" },
         hotkey: "Ctrl+Shift+R",
-        autoRecord: { enabled: false, apps: [], autoStop: true },
+        autoRecord: {
+          enabled: false,
+          apps: [],
+          autoStop: true,
+          startDelaySecs: 5,
+          minKeepSecs: 12,
+        },
       }),
     ).toBe(true);
     expect(isAiConfigured(getSettings())).toBe(false);
