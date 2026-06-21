@@ -51,6 +51,9 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [sysUrl, setSysUrl] = useState("");
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState("");
+  // Правка расшифровки: черновик живёт отдельно, пишется в файл по «Сохранить».
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Transcript | null>(null);
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -87,6 +90,8 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setTime(0);
     setPlaying(false);
     setError("");
+    setEditing(false);
+    setDraft(null);
     setLbls(getLabels(meeting.id));
     if (isImported) {
       api.trackUrl(meeting.id, "audio.wav").then(setMicUrl).catch(() => {});
@@ -101,6 +106,9 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   // Перезагрузка расшифровки, когда фоновая задача завершилась.
   useEffect(() => {
     if (transState?.doneToken) {
+      // Новая расшифровка перетирает черновик правок — выходим из режима правки.
+      setEditing(false);
+      setDraft(null);
       api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
     }
   }, [transState?.doneToken, meeting.id]);
@@ -180,6 +188,46 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   };
 
   const nameOf = (id: string) => nameForSpeaker(labels, id);
+
+  // ---- Правка расшифровки ----
+  const startEdit = () => {
+    if (!transcript) return;
+    setDraft({ segments: transcript.segments.map((s) => ({ ...s })) });
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft(null);
+  };
+  const editText = (i: number, text: string) =>
+    setDraft((d) =>
+      d
+        ? { segments: d.segments.map((s, j) => (j === i ? { ...s, text } : s)) }
+        : d,
+    );
+  const editSpeaker = (i: number, speaker: string) =>
+    setDraft((d) =>
+      d
+        ? { segments: d.segments.map((s, j) => (j === i ? { ...s, speaker } : s)) }
+        : d,
+    );
+  const deleteSegment = (i: number) =>
+    setDraft((d) => (d ? { segments: d.segments.filter((_, j) => j !== i) } : d));
+  const saveEdit = async () => {
+    if (!draft) return;
+    // Пустые после правки реплики убираем (очистка текста = удалить строку).
+    const cleaned: Transcript = {
+      segments: draft.segments.filter((s) => s.text.trim().length > 0),
+    };
+    try {
+      await api.saveTranscript(meeting.id, cleaned);
+      setTranscript(cleaned);
+      setEditing(false);
+      setDraft(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
 
   // Обычный экспорт расшифровки (по реплике в строке) — TXT или MD.
   const exportAs = async (fmt: "txt" | "md") => {
@@ -409,6 +457,19 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             <span className="muted transcribing">
               <span className="spin">◜</span> {stageLabel}…
             </span>
+          ) : editing ? (
+            <div className="btn-row">
+              <button className="btn ghost" onClick={cancelEdit}>
+                Отмена
+              </button>
+              <button
+                className="btn primary"
+                onClick={saveEdit}
+                title="Сохранить правки расшифровки"
+              >
+                ✓ Сохранить
+              </button>
+            </div>
           ) : hasTranscript ? (
             <div className="btn-row">
               <button className="btn ghost" onClick={() => exportAs("txt")}>
@@ -429,6 +490,13 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
                 label="📋 Копировать"
                 title="Скопировать текст расшифровки без Markdown"
               />
+              <button
+                className="btn ghost"
+                onClick={startEdit}
+                title="Исправить ошибки распознавания"
+              >
+                ✎ Редактировать
+              </button>
               {speakerSelect}
               <button
                 className="btn ghost"
@@ -462,10 +530,15 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           </div>
         ) : (
           <TranscriptView
-            transcript={transcript}
+            transcript={editing ? draft : transcript}
             activeIndex={activeIndex}
             labels={labels}
             onSeek={seek}
+            editing={editing}
+            speakerOptions={speakers}
+            onEditText={editText}
+            onEditSpeaker={editSpeaker}
+            onDeleteSegment={deleteSegment}
           />
         )}
       </div>

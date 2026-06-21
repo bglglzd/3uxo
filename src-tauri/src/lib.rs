@@ -292,6 +292,8 @@ pub fn run() {
             commands::is_recording,
             commands::transcribe,
             commands::get_transcript,
+            commands::save_transcript,
+            commands::save_report,
             commands::suggest_metadata,
             commands::summarize,
             commands::get_summary,

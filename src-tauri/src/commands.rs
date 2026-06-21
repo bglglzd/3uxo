@@ -574,6 +574,38 @@ pub fn get_transcript(state: tauri::State<AppState>, id: String) -> AppResult<Op
     service::load_transcript(&state.data_root, &id)
 }
 
+/// Сохраняет отредактированную пользователем расшифровку в `transcript.json`.
+/// Статус встречи не меняется; ИИ-функции читают этот же файл, поэтому правки
+/// подхватываются автоматически.
+#[tauri::command]
+pub fn save_transcript(
+    state: tauri::State<AppState>,
+    id: String,
+    transcript: Transcript,
+) -> AppResult<()> {
+    service::save_transcript(&state.data_root, &id, &transcript)
+}
+
+/// Сохраняет отредактированный пользователем ИИ-отчёт. `kind` — какой именно:
+/// "brief" | "summary" | "analysis" | "literary".
+#[tauri::command]
+pub fn save_report(
+    state: tauri::State<AppState>,
+    id: String,
+    kind: String,
+    content: String,
+) -> AppResult<()> {
+    match kind.as_str() {
+        "brief" => service::save_brief(&state.data_root, &id, &content),
+        "summary" => service::save_summary(&state.data_root, &id, &content),
+        "analysis" => service::save_analysis(&state.data_root, &id, &content),
+        "literary" => service::save_literary(&state.data_root, &id, &content),
+        other => Err(AppError::InvalidInput(format!(
+            "unknown report kind: {other}"
+        ))),
+    }
+}
+
 #[tauri::command]
 pub async fn suggest_metadata(
     state: tauri::State<'_, AppState>,
