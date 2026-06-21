@@ -2028,3 +2028,64 @@ details.adv[open] summary::before {
     flex-direction: column;
   }
 }
+
+/* ---------- Правка расшифровки и ИИ-отчётов ---------- */
+.transcript.editing .turn {
+  cursor: default;
+  background: var(--surface);
+}
+.turn-speaker-sel {
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  font-family: var(--font-ui);
+}
+.turn-del {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.turn-del:hover {
+  color: var(--rec);
+  background: var(--hover);
+}
+.turn-edit,
+.ai-edit {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  font-family: var(--font-ui);
+  resize: vertical;
+  outline: none;
+}
+.turn-edit {
+  margin-top: 4px;
+  min-height: 32px;
+}
+.ai-edit {
+  margin-top: 6px;
+  min-height: 140px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.turn-edit:focus,
+.ai-edit:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}

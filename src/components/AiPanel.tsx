@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { Meeting } from "../types";
+import type { Meeting, ReportKind } from "../types";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
 import { stripMarkdown } from "../export";
@@ -21,6 +21,10 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
   const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  // Правка ИИ-отчёта: какой блок редактируется и его черновик.
+  const [editKind, setEditKind] = useState<ReportKind | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setBrief(null);
@@ -28,11 +32,30 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     setAnalysis(null);
     setLiterary(null);
     setAnswer("");
+    setEditKind(null);
     api.getBrief(meeting.id).then(setBrief).catch(() => {});
     api.getSummary(meeting.id).then(setSummary).catch(() => {});
     api.getAnalysis(meeting.id).then(setAnalysis).catch(() => {});
     api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
   }, [meeting.id]);
+
+  const startEdit = (kind: ReportKind, content: string) => {
+    setError("");
+    setEditKind(kind);
+    setDraft(content);
+  };
+  const saveEdit = async (kind: ReportKind, set: (v: string) => void) => {
+    setSaving(true);
+    try {
+      await api.saveReport(meeting.id, kind, draft);
+      set(draft);
+      setEditKind(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const aiCfg = () => {
     const s = getSettings();
@@ -110,27 +133,72 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     }
   };
 
-  const block = (title: string, content: string | null, suffix: string) =>
-    content ? (
+  const block = (
+    title: string,
+    content: string | null,
+    suffix: string,
+    kind: ReportKind,
+    set: (v: string) => void,
+  ) => {
+    if (!content) return null;
+    const isEditing = editKind === kind;
+    return (
       <div className="ai-block">
         <div className="ai-block-head">
           <span className="ai-block-title">{title}</span>
-          <div className="btn-row">
-            <CopyButton
-              text={() => stripMarkdown(content)}
-              label="📋 Копировать"
-              title="Скопировать как обычный текст, без Markdown"
-            />
-            <button className="btn ghost" onClick={() => exportText(content, suffix)}>
-              ⬇ Экспорт
-            </button>
+          {isEditing ? (
+            <div className="btn-row">
+              <button
+                className="btn ghost"
+                onClick={() => setEditKind(null)}
+                disabled={saving}
+              >
+                Отмена
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => saveEdit(kind, set)}
+                disabled={saving}
+                title="Сохранить правки отчёта"
+              >
+                {saving ? "…" : "✓ Сохранить"}
+              </button>
+            </div>
+          ) : (
+            <div className="btn-row">
+              <CopyButton
+                text={() => stripMarkdown(content)}
+                label="📋 Копировать"
+                title="Скопировать как обычный текст, без Markdown"
+              />
+              <button
+                className="btn ghost"
+                onClick={() => startEdit(kind, content)}
+                title="Исправить текст отчёта"
+              >
+                ✎ Редактировать
+              </button>
+              <button className="btn ghost" onClick={() => exportText(content, suffix)}>
+                ⬇ Экспорт
+              </button>
+            </div>
+          )}
+        </div>
+        {isEditing ? (
+          <textarea
+            className="ai-edit"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={Math.min(24, Math.max(6, draft.split("\n").length + 1))}
+          />
+        ) : (
+          <div className="summary-text">
+            <Markdown>{content}</Markdown>
           </div>
-        </div>
-        <div className="summary-text">
-          <Markdown>{content}</Markdown>
-        </div>
+        )}
       </div>
-    ) : null;
+    );
+  };
 
   const nothing = !brief && !summary && !analysis && !literary;
 
@@ -186,10 +254,10 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
           </p>
         )}
 
-        {block("Краткое резюме", brief, "резюме")}
-        {block("Выжимка", summary, "выжимка")}
-        {block("ИИ-анализ", analysis, "анализ")}
-        {block("Литературный текст", literary, "текст")}
+        {block("Краткое резюме", brief, "резюме", "brief", setBrief)}
+        {block("Выжимка", summary, "выжимка", "summary", setSummary)}
+        {block("ИИ-анализ", analysis, "анализ", "analysis", setAnalysis)}
+        {block("Литературный текст", literary, "текст", "literary", setLiterary)}
 
         <div className="ask-row">
           <input
