@@ -824,6 +824,11 @@ textarea::placeholder {
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
   transition: filter 0.12s ease;
 }
+.play-btn svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
 .play-btn:hover {
   filter: brightness(1.08);
 }
