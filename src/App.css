@@ -2094,3 +2094,66 @@ details.adv[open] summary::before {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
+
+/* ---------- Сквозные исправления ---------- */
+.fix-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.fix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 4px 8px 4px 12px;
+}
+.fix-chip .fix-from {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+.fix-chip .fix-to {
+  font-weight: 600;
+}
+.fix-arrow {
+  color: var(--text-faint);
+}
+.fix-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px;
+}
+.fix-chip button:hover {
+  color: var(--rec);
+}
+.fix-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fix-add input {
+  flex: 1;
+  min-width: 140px;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 13px;
+  outline: none;
+}
+.fix-add input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
