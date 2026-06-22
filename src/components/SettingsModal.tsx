@@ -404,6 +404,38 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
         </details>
 
+        {/* ---------- Сквозные исправления ---------- */}
+        <details className="settings-section">
+          <summary>
+            <span className="sec-title">Сквозные исправления</span>
+            <span className="sec-sub">Единое написание имён и терминов</span>
+            <span className="sec-chev" aria-hidden="true">
+              ⌄
+            </span>
+          </summary>
+          <div className="sec-body">
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">
+                  Исправлять слово сразу во всех текстах
+                </div>
+                <div className="hint">
+                  Исправили фамилию, название компании или термин в одном месте —
+                  Auris применит это написание ко всей расшифровке и всем
+                  ИИ-отчётам (резюме, выжимка, анализ, литературный текст), а
+                  также к новым отчётам. Блок «Сквозные исправления» появится в
+                  карточке встречи.
+                </div>
+              </div>
+              <Switch
+                on={s.fixEverywhere}
+                onChange={(v) => setS({ ...s, fixEverywhere: v })}
+                label="Исправлять слово сразу во всех текстах"
+              />
+            </div>
+          </div>
+        </details>
+
         {/* ---------- Диагностика ---------- */}
         <details className="settings-section">
           <summary>

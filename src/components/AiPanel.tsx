@@ -4,15 +4,18 @@ import type { Meeting, ReportKind } from "../types";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
 import { stripMarkdown } from "../export";
+import { getFixes, applyFixes } from "../fixes";
 import { Markdown } from "./Markdown";
 import { CopyButton } from "./CopyButton";
 
 interface Props {
   meeting: Meeting;
   onMetaSaved: () => void;
+  /// Меняется, когда сквозные исправления применены извне — перечитать отчёты.
+  refreshToken?: number;
 }
 
-export function AiPanel({ meeting, onMetaSaved }: Props) {
+export function AiPanel({ meeting, onMetaSaved, refreshToken }: Props) {
   const [brief, setBrief] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
@@ -38,6 +41,16 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     api.getAnalysis(meeting.id).then(setAnalysis).catch(() => {});
     api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
   }, [meeting.id]);
+
+  // Перечитать отчёты после применения сквозных исправлений (refreshToken растёт).
+  useEffect(() => {
+    if (!refreshToken) return;
+    api.getBrief(meeting.id).then(setBrief).catch(() => {});
+    api.getSummary(meeting.id).then(setSummary).catch(() => {});
+    api.getAnalysis(meeting.id).then(setAnalysis).catch(() => {});
+    api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken]);
 
   const startEdit = (kind: ReportKind, content: string) => {
     setError("");
@@ -68,16 +81,31 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
   };
 
   // Запускает ИИ-действие под ключом `key`, складывая результат через `set`.
+  // Если включены сквозные исправления — применяет их к свежесгенерированному
+  // отчёту и пересохраняет (новый текст тоже получает единое написание).
   const run = async (
     key: string,
     fn: (id: string, cfg: ReturnType<typeof getSettings>["ai"]) => Promise<string>,
     set?: (v: string) => void,
+    kind?: ReportKind,
   ) => {
     const c = aiCfg();
     if (!c || busy) return;
     setBusy(key);
     try {
-      const res = await fn(meeting.id, c);
+      let res = await fn(meeting.id, c);
+      const fixes = getFixes(meeting.id);
+      if (kind && getSettings().fixEverywhere && fixes.length) {
+        const fixed = applyFixes(res, fixes);
+        if (fixed !== res) {
+          res = fixed;
+          try {
+            await api.saveReport(meeting.id, kind, res);
+          } catch {
+            /* пересохранение не критично — текст уже на экране */
+          }
+        }
+      }
       if (set) set(res);
     } catch (e) {
       setError(String(e));
@@ -216,28 +244,28 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
           </button>
           <button
             className="btn"
-            onClick={() => run("brief", api.briefSummary, setBrief)}
+            onClick={() => run("brief", api.briefSummary, setBrief, "brief")}
             disabled={busy !== ""}
           >
             {busy === "brief" ? "…" : "Краткое резюме"}
           </button>
           <button
             className="btn"
-            onClick={() => run("sum", api.summarize, setSummary)}
+            onClick={() => run("sum", api.summarize, setSummary, "summary")}
             disabled={busy !== ""}
           >
             {busy === "sum" ? "Думаю…" : "Выжимка"}
           </button>
           <button
             className="btn"
-            onClick={() => run("analyze", api.analyze, setAnalysis)}
+            onClick={() => run("analyze", api.analyze, setAnalysis, "analysis")}
             disabled={busy !== ""}
           >
             {busy === "analyze" ? "Анализ…" : "ИИ-анализ"}
           </button>
           <button
             className="btn"
-            onClick={() => run("lit", api.literaryText, setLiterary)}
+            onClick={() => run("lit", api.literaryText, setLiterary, "literary")}
             disabled={busy !== ""}
           >
             {busy === "lit" ? "Пишу…" : "Литературный текст"}

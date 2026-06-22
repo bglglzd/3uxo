@@ -30,6 +30,7 @@ describe("settings", () => {
         startDelaySecs: 5,
         minKeepSecs: 12,
       },
+      fixEverywhere: true,
     });
     const s = getSettings();
     expect(s.ai.base_url).toBe("u");
@@ -64,6 +65,7 @@ describe("settings", () => {
           startDelaySecs: 5,
           minKeepSecs: 12,
         },
+        fixEverywhere: true,
       }),
     ).toBe(true);
     expect(isAiConfigured(getSettings())).toBe(false);

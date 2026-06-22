@@ -13,6 +13,7 @@ const DEFAULTS: AppSettings = {
     startDelaySecs: 5,
     minKeepSecs: 12,
   },
+  fixEverywhere: true,
 };
 
 export function getSettings(): AppSettings {
@@ -25,6 +26,10 @@ export function getSettings(): AppSettings {
         whisper: { ...DEFAULTS.whisper, ...(parsed.whisper ?? {}) },
         hotkey: typeof parsed.hotkey === "string" ? parsed.hotkey : DEFAULTS.hotkey,
         autoRecord: { ...DEFAULTS.autoRecord, ...(parsed.autoRecord ?? {}) },
+        fixEverywhere:
+          typeof parsed.fixEverywhere === "boolean"
+            ? parsed.fixEverywhere
+            : DEFAULTS.fixEverywhere,
       };
     }
   } catch {

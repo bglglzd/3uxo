@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
+import type {
+  Meeting,
+  Transcript,
+  TranscribeState,
+  TrackFile,
+  ReportKind,
+} from "../types";
 import { api } from "../api";
+import { getSettings } from "../settings";
 import { getLabels, setLabels as saveLabels, nameForSpeaker, defaultName } from "../labels";
 import type { SpeakerLabels } from "../labels";
+import {
+  getFixes,
+  setFixes as persistFixes,
+  applyFixes,
+  applyFixesToTranscript,
+} from "../fixes";
+import type { Fix } from "../fixes";
 import { activeSegmentIndex } from "../playback";
 import {
   clock,
@@ -54,6 +68,14 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   // Правка расшифровки: черновик живёт отдельно, пишется в файл по «Сохранить».
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Transcript | null>(null);
+  // Сквозные исправления: словарь замен встречи + ввод нового + busy + сигнал
+  // перезагрузки ИИ-отчётов после применения.
+  const [fixes, setFixesState] = useState<Fix[]>(() => getFixes(meeting.id));
+  const [fixFrom, setFixFrom] = useState("");
+  const [fixTo, setFixTo] = useState("");
+  const [applyingFixes, setApplyingFixes] = useState(false);
+  const [reportsToken, setReportsToken] = useState(0);
+  const fixEnabled = getSettings().fixEverywhere;
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -92,6 +114,9 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setError("");
     setEditing(false);
     setDraft(null);
+    setFixesState(getFixes(meeting.id));
+    setFixFrom("");
+    setFixTo("");
     setLbls(getLabels(meeting.id));
     if (isImported) {
       api.trackUrl(meeting.id, "audio.wav").then(setMicUrl).catch(() => {});
@@ -228,6 +253,56 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       setError(String(e));
     }
   };
+
+  // ---- Сквозные исправления ----
+  const reportGetters: [ReportKind, (id: string) => Promise<string | null>][] = [
+    ["brief", api.getBrief],
+    ["summary", api.getSummary],
+    ["analysis", api.getAnalysis],
+    ["literary", api.getLiterary],
+  ];
+  // Применяет переданные замены к расшифровке и всем ИИ-отчётам встречи.
+  const applyFixList = async (list: Fix[]) => {
+    if (list.length === 0) return;
+    setApplyingFixes(true);
+    try {
+      if (transcript) {
+        const next = applyFixesToTranscript(transcript, list);
+        setTranscript(next);
+        await api.saveTranscript(meeting.id, next);
+      }
+      for (const [kind, get] of reportGetters) {
+        const content = await get(meeting.id);
+        if (!content) continue;
+        const fixed = applyFixes(content, list);
+        if (fixed !== content) await api.saveReport(meeting.id, kind, fixed);
+      }
+      // Сигналим ИИ-панели перечитать отчёты с диска.
+      setReportsToken((t) => t + 1);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setApplyingFixes(false);
+    }
+  };
+  const addFix = async () => {
+    const from = fixFrom.trim();
+    const to = fixTo.trim();
+    if (!from || applyingFixes) return;
+    const fix: Fix = { from, to };
+    const next = [...fixes, fix];
+    setFixesState(next);
+    persistFixes(meeting.id, next);
+    setFixFrom("");
+    setFixTo("");
+    await applyFixList([fix]);
+  };
+  const removeFix = (i: number) => {
+    const next = fixes.filter((_, j) => j !== i);
+    setFixesState(next);
+    persistFixes(meeting.id, next);
+  };
+  const reapplyAll = () => applyFixList(fixes);
 
   // Обычный экспорт расшифровки (по реплике в строке) — TXT или MD.
   const exportAs = async (fmt: "txt" | "md") => {
@@ -552,7 +627,91 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
         )}
       </div>
 
-      <AiPanel meeting={meeting} onMetaSaved={onMetaSaved} />
+      {fixEnabled && hasTranscript && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Сквозные исправления</h3>
+            <span
+              className="ai-key-pill"
+              title="Единое написание имён, компаний и терминов во всех текстах"
+            >
+              во всех текстах
+            </span>
+            <div className="spacer" />
+            {fixes.length > 0 && (
+              <button
+                className="btn ghost"
+                onClick={reapplyAll}
+                disabled={applyingFixes}
+                title="Применить все исправления к расшифровке и ИИ-отчётам заново"
+              >
+                {applyingFixes ? "Применяю…" : "↻ Применить ко всем"}
+              </button>
+            )}
+          </div>
+          <div className="card-body">
+            <p className="muted" style={{ marginTop: 0 }}>
+              Исправьте написание фамилии, компании или термина один раз — Auris
+              заменит его во всей расшифровке и во всех ИИ-отчётах (и в новых
+              тоже).
+            </p>
+            {fixes.length > 0 && (
+              <div className="fix-list">
+                {fixes.map((f, i) => (
+                  <span className="fix-chip" key={`${f.from}-${i}`}>
+                    <span className="fix-from">{f.from}</span>
+                    <span className="fix-arrow" aria-hidden="true">
+                      →
+                    </span>
+                    <span className="fix-to">{f.to || "—"}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFix(i)}
+                      aria-label={`Убрать исправление ${f.from}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="fix-add">
+              <input
+                value={fixFrom}
+                onChange={(e) => setFixFrom(e.target.value)}
+                placeholder="как написано (напр. Иваноф)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addFix();
+                }}
+              />
+              <span className="fix-arrow" aria-hidden="true">
+                →
+              </span>
+              <input
+                value={fixTo}
+                onChange={(e) => setFixTo(e.target.value)}
+                placeholder="как надо (напр. Иванов)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addFix();
+                }}
+              />
+              <button
+                className="btn primary"
+                onClick={addFix}
+                disabled={applyingFixes || !fixFrom.trim()}
+              >
+                {applyingFixes ? "…" : "Исправить везде"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AiPanel
+        meeting={meeting}
+        onMetaSaved={onMetaSaved}
+        refreshToken={reportsToken}
+      />
     </div>
   );
 }
