@@ -96,17 +96,19 @@ impl Recorder for WasapiRecorder {
                 .ok_or_else(|| AppError::InvalidState("not recording".into()))?
         };
         running.stop.store(true, Ordering::Relaxed);
-        // Дожидаемся завершения потоков; ошибки внутри потока пробрасываем.
-        let mic_res = running
-            .mic
-            .join()
-            .map_err(|_| AppError::Audio("mic capture thread panicked".into()))?;
-        let sys_res = running
-            .system
-            .join()
-            .map_err(|_| AppError::Audio("system capture thread panicked".into()))?;
-        mic_res?;
-        sys_res?;
+        // Дожидаемся ОБОИХ потоков (даже если один завершился ошибкой), чтобы
+        // захват гарантированно прекратился и файлы дорожек закрылись. Ошибки
+        // потока НЕ роняют остановку: пользователь нажал «стоп» — запись обязана
+        // остановиться и сохраниться. Диагностика самих потоков уже в 3uxo.log
+        // (reads/events_ok/samples/peak), её писать в момент join не нужно.
+        let mic_join = running.mic.join();
+        let sys_join = running.system.join();
+        if mic_join.is_err() || matches!(&mic_join, Ok(Err(_))) {
+            dlog(&running.mic_path, "stop: mic capture thread ended with error");
+        }
+        if sys_join.is_err() || matches!(&sys_join, Ok(Err(_))) {
+            dlog(&running.mic_path, "stop: system capture thread ended with error");
+        }
 
         let duration_secs = wav_duration_secs(&running.mic_path).unwrap_or(0);
         Ok(RecordingResult { duration_secs })

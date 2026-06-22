@@ -123,6 +123,11 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         let mut auto_active = false;
         // Сколько опросов подряд звонок был активен (для задержки старта).
         let mut active_streak: u32 = 0;
+        // Запись на прошлом опросе — чтобы заметить ручную остановку.
+        let mut prev_recording = false;
+        // Подавление авто-старта после РУЧНОЙ остановки: не перезапускаем запись,
+        // которую пользователь сам остановил, пока текущий звонок не «отпустит».
+        let mut suppressed = false;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(AUTORECORD_POLL_MS));
             let (enabled, processes, auto_stop, start_delay_secs, min_keep_secs) = {
@@ -141,6 +146,8 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             if !enabled || processes.is_empty() {
                 auto_active = false;
                 active_streak = 0;
+                suppressed = false;
+                prev_recording = false;
                 continue;
             }
             let recording = {
@@ -148,19 +155,28 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
                 let active = state.active.lock().unwrap();
                 active.is_some()
             };
+            // Запись пропала, хотя мы её не начинали авто-режимом → пользователь
+            // остановил вручную. Не хватаем её обратно, пока звонок не закончится.
+            if prev_recording && !recording && !auto_active {
+                suppressed = true;
+            }
             // Ручная остановка извне — сбрасываем флаг авто-записи.
             if !recording {
                 auto_active = false;
             }
             let call = uxo_core::call_detector::any_active_call(&processes);
             active_streak = if call { active_streak.saturating_add(1) } else { 0 };
+            // Сигнал звонка спал — снимаем подавление (следующий звонок запишем).
+            if !call {
+                suppressed = false;
+            }
 
             // Сколько опросов подряд требуется до старта (округление вверх; >=1).
             let required = (((start_delay_secs as u64 * 1000) + AUTORECORD_POLL_MS - 1)
                 / AUTORECORD_POLL_MS)
                 .max(1) as u32;
 
-            if call && !recording && active_streak >= required {
+            if call && !recording && !suppressed && active_streak >= required {
                 toggle_and_notify(&app);
                 auto_active = true;
             } else if !call && recording && auto_active && auto_stop {
@@ -168,6 +184,7 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
                 auto_active = false;
                 active_streak = 0;
             }
+            prev_recording = recording;
         }
     });
 }
