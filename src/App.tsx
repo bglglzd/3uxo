@@ -127,30 +127,52 @@ export default function App() {
   );
 
   const handleStart = async () => {
-    const id = await api.startRecording();
-    // Помечаем встречу как соло, если включён режим «я один» (фронт читает это
-    // при расшифровке — ключ в стиле 3uxo.speakers.*/3uxo.labels.*).
-    if (solo && id) localStorage.setItem(`3uxo.solo.${id}`, "1");
-    setRecording(true);
-    setPaused(false);
+    try {
+      const id = await api.startRecording();
+      // Помечаем встречу как соло, если включён режим «я один» (фронт читает это
+      // при расшифровке — ключ в стиле 3uxo.speakers.*/3uxo.labels.*).
+      if (solo && id) localStorage.setItem(`3uxo.solo.${id}`, "1");
+      setRecording(true);
+      setPaused(false);
+    } catch {
+      // Не оставляем UI в неопределённом состоянии — сверяемся с бэкендом.
+      await refresh();
+    }
   };
 
+  // Остановка ОБЯЗАНА завершиться в UI, даже если бэкенд вернул ошибку: иначе
+  // кнопка «стоп» залипает и кажется, что запись продолжается. Состояние всегда
+  // синхронизируем с бэкендом (recording_state) в finally.
   const handleStop = async () => {
-    const m = await api.stopRecording();
-    setRecording(false);
-    setPaused(false);
-    await refresh();
-    if (m?.id) setSelectedId(m.id);
+    let stopped: Meeting | null = null;
+    try {
+      stopped = await api.stopRecording();
+    } catch {
+      // ошибка уже залогирована в диагностику (api.inv) — продолжаем сброс UI
+    } finally {
+      setRecording(false);
+      setPaused(false);
+      await refresh();
+    }
+    if (stopped?.id) setSelectedId(stopped.id);
   };
 
   const handlePause = async () => {
-    await api.pauseRecording();
-    setPaused(true);
+    try {
+      await api.pauseRecording();
+      setPaused(true);
+    } catch {
+      await refresh();
+    }
   };
 
   const handleResume = async () => {
-    await api.resumeRecording();
-    setPaused(false);
+    try {
+      await api.resumeRecording();
+      setPaused(false);
+    } catch {
+      await refresh();
+    }
   };
 
   const handleImported = async (id: string) => {

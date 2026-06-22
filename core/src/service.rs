@@ -114,9 +114,12 @@ pub fn stop_recording(
     created_at: String,
 ) -> AppResult<Meeting> {
     let mut segments = active.segments.clone();
-    // Если запись шла (не на паузе) — финализируем текущий сегмент.
+    // Если запись шла (не на паузе) — финализируем текущий сегмент. Остановку
+    // рекордера делаем best-effort: даже если поток захвата вернул ошибку, он
+    // уже остановлен (флаг + join внутри stop), и встречу надо собрать и
+    // сохранить — иначе кнопка «стоп» зависнет и запись потеряется.
     if let Some(current) = active.current.clone() {
-        recorder.stop()?;
+        let _ = recorder.stop();
         segments.push(current);
     }
 
@@ -522,6 +525,39 @@ mod tests {
         assert!(dir.path().join("meetings/m1/mic.wav").exists());
         assert!(!dir.path().join("meetings/m1/mic.part0.wav").exists());
         assert!(!dir.path().join("meetings/m1/mic.part1.wav").exists());
+    }
+
+    /// Рекордер, который пишет дорожки, но возвращает ошибку из stop() —
+    /// эмулирует сбой потока захвата (loopback/микрофон) в момент остановки.
+    struct StopErrRecorder {
+        inner: MockRecorder,
+    }
+    impl Recorder for StopErrRecorder {
+        fn start(&self, mic: &std::path::Path, system: &std::path::Path) -> AppResult<()> {
+            self.inner.start(mic, system)
+        }
+        fn stop(&self) -> AppResult<crate::recorder::RecordingResult> {
+            // Внутренний мок пишет тишину в сегмент и чистит состояние; затем
+            // имитируем ошибку остановки потока.
+            let _ = self.inner.stop();
+            Err(AppError::Audio("simulated stop failure".into()))
+        }
+        fn is_recording(&self) -> bool {
+            self.inner.is_recording()
+        }
+    }
+
+    #[test]
+    fn stop_saves_meeting_even_if_recorder_stop_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = Repo::open_in_memory().unwrap();
+        let rec = StopErrRecorder { inner: MockRecorder::new(2) };
+        let active = start_recording(&rec, dir.path(), "m1".into()).unwrap();
+        // Несмотря на ошибку recorder.stop(), встреча должна сохраниться.
+        let m = stop_recording(&rec, &repo, &active, "2026-06-04T10:00:00Z".into()).unwrap();
+        assert_eq!(m.duration_secs, 2);
+        assert!(dir.path().join("meetings/m1/mic.wav").exists());
+        assert_eq!(repo.get("m1").unwrap().id, "m1");
     }
 
     #[test]
