@@ -248,11 +248,13 @@ fn capture_loop(
         match capture.read_from_device_to_deque(&mut queue) {
             Ok(()) => {}
             Err(e) => match source {
-                Source::Loopback if !gave_up => {
+                Source::Loopback => {
                     dlog(&path, &format!("{label}: read error: {e} — will reopen"));
-                    need_reopen = true;
+                    if !gave_up {
+                        need_reopen = true;
+                    }
                 }
-                _ => return Err(AppError::Audio(format!("wasapi: read: {e}"))),
+                Source::Mic => return Err(AppError::Audio(format!("wasapi: read: {e}"))),
             },
         }
         reads += 1;
