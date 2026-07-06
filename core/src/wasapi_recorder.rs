@@ -245,8 +245,10 @@ fn capture_loop(
         let mut need_reopen = false;
 
         // --- Чтение (для loopback ошибка не фатальна) ---
+        // `read_from_device_to_deque` возвращает BufferFlags (wasapi 0.15) —
+        // флаги буфера нам не нужны, важен лишь факт успешного чтения.
         match capture.read_from_device_to_deque(&mut queue) {
-            Ok(()) => {}
+            Ok(_) => {}
             Err(e) => match source {
                 Source::Loopback => {
                     if !gave_up {
