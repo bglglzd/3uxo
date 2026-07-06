@@ -284,6 +284,7 @@ pub fn run() {
             commands::pause_recording,
             commands::resume_recording,
             commands::recording_state,
+            commands::recording_levels,
             commands::import_recording,
             commands::list_meetings,
             commands::get_meeting,

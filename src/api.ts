@@ -8,6 +8,7 @@ import type {
   WhisperConfig,
   RecState,
   ReportKind,
+  TrackLevels,
 } from "./types";
 import { logError, logInfo } from "./log";
 
@@ -42,6 +43,7 @@ export const api = {
   deleteMeeting: (id: string): Promise<void> => inv("delete_meeting", { id }),
   isRecording: (): Promise<boolean> => inv("is_recording"),
   recordingState: (): Promise<RecState> => inv("recording_state"),
+  recordingLevels: (): Promise<TrackLevels> => inv("recording_levels"),
 
   transcribe: (
     id: string,

@@ -2094,3 +2094,59 @@ details.adv[open] summary::before {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
+
+/* --- Монитор записи: два тайла с бегущей волной --- */
+.rec-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 720px;
+  margin: 48px auto;
+  width: 100%;
+  padding: 0 24px;
+}
+.rec-tile {
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: var(--surface);
+}
+.rec-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.rec-tile-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+.rec-tile-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rec);
+  animation: recpulse 1.6s ease-in-out infinite;
+}
+.rec-wave {
+  width: 100%;
+  height: 56px;
+  display: block;
+}
+.rec-tile--me .rec-wave rect {
+  fill: var(--teal);
+}
+.rec-tile--peer .rec-wave rect {
+  fill: var(--violet);
+}
+.rec-tile-foot {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.rec-ok {
+  color: var(--text-dim);
+}
+.rec-warn {
+  color: var(--rec);
+  font-weight: 600;
+}

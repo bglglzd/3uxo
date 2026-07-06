@@ -3,10 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 import { getSettings } from "./settings";
 import { resolveProcesses } from "./autorecord";
-import type { Meeting, TranscribeState } from "./types";
+import type { Meeting, TranscribeState, TrackLevels } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { AurisMark } from "./components/AurisMark";
 import { MeetingView } from "./components/MeetingView";
+import { RecordingMonitor } from "./components/RecordingMonitor";
 import { SettingsModal } from "./components/SettingsModal";
 import { ImportModal } from "./components/ImportModal";
 import { checkForUpdates } from "./updater";
@@ -26,6 +27,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [levels, setLevels] = useState<TrackLevels>({ mic: 0, system: 0 });
   const [showImport, setShowImport] = useState(false);
   // Боковая панель как выезжающее меню на узких экранах (телефон).
   const [navOpen, setNavOpen] = useState(false);
@@ -81,6 +83,19 @@ export default function App() {
   useEffect(() => {
     if (!recording || paused) return;
     const id = setInterval(() => setElapsed((p) => p + 1), 1000);
+    return () => clearInterval(id);
+  }, [recording, paused]);
+
+  // Живые уровни дорожек: опрос, пока идёт запись и не на паузе.
+  useEffect(() => {
+    if (!recording || paused) return;
+    const id = setInterval(async () => {
+      try {
+        setLevels(await api.recordingLevels());
+      } catch {
+        /* бэкенд недоступен — молча пропускаем кадр */
+      }
+    }, 60);
     return () => clearInterval(id);
   }, [recording, paused]);
 
@@ -210,7 +225,9 @@ export default function App() {
       )}
 
       <main className="content">
-        {selected ? (
+        {recording ? (
+          <RecordingMonitor levels={levels} solo={solo} />
+        ) : selected ? (
           <MeetingView
             key={selected.id}
             meeting={selected}
