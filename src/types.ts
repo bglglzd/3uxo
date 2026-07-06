@@ -95,3 +95,6 @@ export interface TranscribeState {
   /// Меняется при завершении — сигнал перезагрузить расшифровку.
   doneToken?: number;
 }
+
+/** Текущий уровень (пик) дорожек записи, 0..1000. */
+export type TrackLevels = { mic: number; system: number };

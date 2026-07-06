@@ -175,6 +175,13 @@ pub fn recording_state(state: tauri::State<AppState>) -> RecState {
     }
 }
 
+/// Текущий уровень дорожек (0..1000) для живых индикаторов записи.
+/// Не идёт запись → нули. Читается-и-сбрасывается (peak с прошлого опроса).
+#[tauri::command]
+pub fn recording_levels(state: tauri::State<AppState>) -> uxo_core::recorder::TrackLevels {
+    state.recorder.levels()
+}
+
 /// Ставит текущую запись на паузу (финализирует текущий сегмент). Сегменты
 /// склеятся в один файл на стопе.
 #[tauri::command]
