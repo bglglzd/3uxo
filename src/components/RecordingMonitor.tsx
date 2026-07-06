@@ -4,7 +4,6 @@ import type { TrackLevels } from "../types";
 interface Props {
   levels: TrackLevels;
   solo: boolean;
-  elapsed: number;
 }
 
 const HISTORY = 130; // ~8с при опросе 60мс

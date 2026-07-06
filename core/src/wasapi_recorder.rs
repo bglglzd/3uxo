@@ -249,8 +249,8 @@ fn capture_loop(
             Ok(()) => {}
             Err(e) => match source {
                 Source::Loopback => {
-                    dlog(&path, &format!("{label}: read error: {e} — will reopen"));
                     if !gave_up {
+                        dlog(&path, &format!("{label}: read error: {e} — will reopen"));
                         need_reopen = true;
                     }
                 }

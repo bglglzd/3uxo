@@ -5,7 +5,7 @@ import type { TrackLevels } from "../types";
 
 function feed(levels: TrackLevels, times: number) {
   const { rerender } = render(
-    <RecordingMonitor levels={levels} solo={false} elapsed={0} />,
+    <RecordingMonitor levels={levels} solo={false} />,
   );
   // Новый объект-литерал на каждый кадр — меняет идентичность prop, как делает App.
   for (let i = 0; i < times; i++) {
@@ -13,7 +13,6 @@ function feed(levels: TrackLevels, times: number) {
       <RecordingMonitor
         levels={{ mic: levels.mic, system: levels.system }}
         solo={false}
-        elapsed={i}
       />,
     );
   }
@@ -22,7 +21,7 @@ function feed(levels: TrackLevels, times: number) {
 describe("RecordingMonitor", () => {
   it("рисует два тайла: Вы и Собеседник", () => {
     render(
-      <RecordingMonitor levels={{ mic: 0, system: 0 }} solo={false} elapsed={0} />,
+      <RecordingMonitor levels={{ mic: 0, system: 0 }} solo={false} />,
     );
     expect(screen.getByText(/Вы/)).toBeInTheDocument();
     expect(screen.getByText(/Собеседник/)).toBeInTheDocument();
@@ -30,7 +29,7 @@ describe("RecordingMonitor", () => {
 
   it("в solo показывает только тайл «Вы»", () => {
     render(
-      <RecordingMonitor levels={{ mic: 0, system: 0 }} solo={true} elapsed={0} />,
+      <RecordingMonitor levels={{ mic: 0, system: 0 }} solo={true} />,
     );
     expect(screen.getByText(/Вы/)).toBeInTheDocument();
     expect(screen.queryByText(/Собеседник/)).not.toBeInTheDocument();
@@ -38,7 +37,7 @@ describe("RecordingMonitor", () => {
 
   it("не показывает «тишина» в самом начале записи", () => {
     render(
-      <RecordingMonitor levels={{ mic: 500, system: 500 }} solo={false} elapsed={0} />,
+      <RecordingMonitor levels={{ mic: 500, system: 500 }} solo={false} />,
     );
     expect(screen.queryByText(/тишина/i)).not.toBeInTheDocument();
   });

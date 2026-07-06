@@ -226,7 +226,7 @@ export default function App() {
 
       <main className="content">
         {recording ? (
-          <RecordingMonitor levels={levels} solo={solo} elapsed={elapsed} />
+          <RecordingMonitor levels={levels} solo={solo} />
         ) : selected ? (
           <MeetingView
             key={selected.id}
