@@ -1,96 +1,82 @@
-# Auris — ваше третье ухо
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="96" alt="Auris icon" />
+</p>
 
-Локальное десктоп-приложение, которое записывает твои созвоны в **любом**
-приложении (Telegram, Discord, Google Meet, Element/Matrix, браузеры — что угодно),
-расшифровывает их локально и превращает в удобную базу встреч с ИИ-выжимками и
-чатом по расшифровке.
+<h1 align="center">Auris</h1>
 
-Запись идёт **двумя дорожками** — твой микрофон («Я») и системный звук
-(«Собеседник»). Всё хранится на твоём компьютере; наружу уходят только запросы к
-ИИ — по твоему ключу и эндпоинту.
+<p align="center">
+  <strong>Your private, local-first meeting memory for Windows.</strong><br />
+  Record calls, transcribe them on your machine, and turn conversations into useful notes with AI you control.
+</p>
 
-## Возможности
+<p align="center">
+  <a href="https://github.com/bglglzd/3uxo/releases/latest">Download the latest release</a>
+  ·
+  <a href="README.ru.md">Русский</a>
+  ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-- ⏺ Запись созвона по кнопке или горячей клавише **Ctrl+Shift+R** (и из трея).
-- 🎙 Две раздельные дорожки (микрофон + системный звук через WASAPI loopback).
-- 📝 Локальная расшифровка через Whisper, единая лента реплик «Я / Собеседник».
-- 🤖 ИИ по твоему ключу (OpenAI-совместимый base URL): заголовок/участники/тема,
-  выжимка, ответы на вопросы по встрече.
-- 🗂 Библиотека встреч: дата, с кем, тема, прослушивание, удаление.
-- 🔒 Аудио и расшифровки не покидают компьютер.
+## Why Auris
 
-## Стек
+Most meeting tools treat your conversations as someone else's cloud data. Auris is built for a different workflow: recordings and transcripts stay on your Windows PC, local Whisper handles transcription, and AI is an optional layer that uses the provider, endpoint, and key you choose.
 
-Tauri 2 · Rust (workspace: `uxo-core` без GUI + `src-tauri`) · React + TypeScript ·
-SQLite · Whisper (`whisper-rs`, локально) · `wasapi` (захват звука на Windows).
+- **Private by default** — audio and transcripts remain local.
+- **Two-track recording** — your microphone and system audio are captured separately, so conversations stay easier to follow.
+- **Local transcription** — Whisper runs on-device rather than sending raw audio to a hosted transcription service.
+- **Bring your own AI** — connect any OpenAI-compatible endpoint for summaries, meeting metadata, questions, and analysis.
 
-## Статус
+## What it does
 
-Прототип, основная функциональность собрана (Планы 1–5, см. `docs/superpowers/`).
-Платформа №1 — **Windows**; macOS появится позже (заменой слоя захвата звука).
+- Record calls from Windows apps with one button, a tray action, or the global `Ctrl+Shift+R` shortcut.
+- Pause and resume recordings without losing the final meeting file.
+- Import existing audio recordings for transcription.
+- Keep a local library of meetings, speakers, transcripts, and AI reports.
+- Edit transcript entries and generated reports after processing.
+- Export transcripts and reports as plain text or Markdown.
 
-## Сборка и запуск (Windows)
+## How it works
 
-Нужны [Rust](https://rustup.rs) и [Node.js](https://nodejs.org).
+1. Auris records your microphone and Windows system audio as separate tracks.
+2. It transcribes the tracks locally with Whisper and merges them into a single conversation timeline.
+3. When you opt in, an OpenAI-compatible model can create a title, short brief, summary, analysis, literary version, or answer questions about the meeting.
+
+Your AI credentials are stored locally. Only the prompt content you choose to send leaves your device, and only goes to the endpoint you configure.
+
+## Download and use
+
+1. Download the Windows installer from the [latest release](https://github.com/bglglzd/3uxo/releases/latest).
+2. Record a call or import an existing audio file.
+3. Let Auris create a local transcript.
+4. Optionally open **AI settings** and provide an OpenAI-compatible base URL, API key, and model.
+
+Please follow the recording-consent laws that apply to you and everyone in a call.
+
+## Built with
+
+Tauri 2 · Rust · React · TypeScript · SQLite · Whisper (`whisper-rs`) · WASAPI
+
+Auris is Windows-first. The technical repository name remains `3uxo` to preserve existing updater and local-data compatibility; the visible product name is Auris.
+
+## Development
+
+Prerequisites: Windows, Rust, Node.js, CMake, and LLVM/libclang for local Whisper builds.
 
 ```bash
 npm install
-npm run tauri dev                 # запуск в режиме разработки
-npm run tauri build               # установщик в src-tauri/target/release/bundle
+npm test
+npm run build
+npm run tauri dev -- --features gpu,diarize,opus
 ```
 
-### С локальной расшифровкой (Whisper)
-
-Whisper включается cargo-фичей `whisper` (нужны `cmake` и LLVM/`libclang` для
-сборки `whisper.cpp`):
+The domain logic lives in the cross-platform `uxo-core` crate; the Windows desktop layer lives in `src-tauri`.
 
 ```bash
-npm run tauri build -- --features whisper
+cargo test -p uxo-core
 ```
 
-Положи файл модели ggml рядом с данными приложения как `whisper-model.bin`
-(для русского лучше `ggml-medium.bin` или крупнее). Модели:
-<https://huggingface.co/ggerganov/whisper.cpp>.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and [docs/RELEASE.md](docs/RELEASE.md) for release steps.
 
-### Настройка ИИ
+## License
 
-Открой ⚙ «Настройки ИИ» в приложении и укажи **base URL**, **API-ключ** и
-**модель** (подойдёт OpenAI, OpenRouter, локальная Ollama и любой
-OpenAI-совместимый эндпоинт).
-
-## Разработка и тесты
-
-Доменная логика вынесена в крейт `uxo-core` без зависимости от GUI, поэтому
-тестируется на любой ОС (в т.ч. на Linux без GTK):
-
-```bash
-cargo test -p uxo-core            # тесты ядра (модель, хранилище, аудио,
-                                  # расшифровка, ИИ — без GUI)
-npm test                          # тесты фронтенда (vitest)
-npm run build                     # сборка фронтенда
-```
-
-GUI-слой (`src-tauri`) и захват звука/Whisper собираются на Windows (или на
-Linux с установленными пакетами GTK/WebKit).
-
-## Релизы и авто-обновление
-
-Пуш тега `vX.Y.Z` запускает GitHub Actions (`.github/workflows/release.yml`):
-собирается Windows-инсталлятор, подписывается ключом апдейтера и публикуется
-черновик GitHub-релиза вместе с манифестом `latest.json`.
-
-Приложение при запуске проверяет последний релиз и, если вышла новая версия,
-само скачивает и устанавливает подписанное обновление. Обновления проверяются
-по публичному ключу (`plugins.updater.pubkey` в `src-tauri/tauri.conf.json`);
-приватный ключ хранится только в секретах репозитория и в код не попадает.
-
-Чтобы выпустить новую версию: подними `version` в `src-tauri/tauri.conf.json` и
-`package.json`, затем:
-
-```bash
-git tag v0.1.1 && git push origin v0.1.1
-```
-
-## Лицензия
-
-MIT (см. `LICENSE`).
+[MIT](LICENSE)
