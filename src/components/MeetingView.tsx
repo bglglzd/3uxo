@@ -16,6 +16,7 @@ import {
   exportFileName,
 } from "../export";
 import { TranscriptView } from "./TranscriptView";
+import { AudioEditor } from "./AudioEditor";
 import { AiPanel } from "./AiPanel";
 import { CopyLogButton } from "./CopyLogButton";
 import { CopyButton } from "./CopyButton";
@@ -58,6 +59,11 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Отдельный режим — правка аудио (вырезание фрагментов) на таймлайне.
+  const [editorOpen, setEditorOpen] = useState(false);
+  // Версия файлов дорожек: меняется после правки аудио, чтобы <audio> и
+  // длительность перечитались, а не остались в кеше webview.
+  const [audioVersion, setAudioVersion] = useState(0);
 
   const [title, setTitle] = useState(meeting.title);
   const [participants, setParticipants] = useState(meeting.participants);
@@ -93,15 +99,25 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setEditing(false);
     setDraft(null);
     setLbls(getLabels(meeting.id));
-    if (isImported) {
-      api.trackUrl(meeting.id, "audio.wav").then(setMicUrl).catch(() => {});
-      setSysUrl("");
-    } else {
-      api.trackUrl(meeting.id, "mic.wav").then(setMicUrl).catch(() => {});
-      api.trackUrl(meeting.id, "system.wav").then(setSysUrl).catch(() => {});
-    }
+    setEditorOpen(false);
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
   }, [meeting.id, isImported]);
+
+  // Ссылки на дорожки. `audioVersion` подмешивает метку версии в asset-URL:
+  // после правки аудио путь тот же, и без неё webview отдаёт старый файл.
+  useEffect(() => {
+    const bust = audioVersion || undefined;
+    if (isImported) {
+      api.trackUrl(meeting.id, "audio.wav", bust).then(setMicUrl).catch(() => {});
+      setSysUrl("");
+    } else {
+      api.trackUrl(meeting.id, "mic.wav", bust).then(setMicUrl).catch(() => {});
+      api
+        .trackUrl(meeting.id, "system.wav", bust)
+        .then(setSysUrl)
+        .catch(() => {});
+    }
+  }, [meeting.id, isImported, audioVersion]);
 
   // Перезагрузка расшифровки, когда фоновая задача завершилась.
   useEffect(() => {
@@ -173,6 +189,20 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  // Аудио изменилось в редакторе (вырезали фрагменты или вернули оригинал):
+  // перечитываем дорожки, длительность и расшифровку — её времена сдвинулись
+  // вместе со звуком; список встреч обновляем ради новой длительности.
+  const handleAudioApplied = () => {
+    setAudioVersion(Date.now());
+    setDuration(0);
+    setTime(0);
+    setPlaying(false);
+    setEditing(false);
+    setDraft(null);
+    api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
+    onMetaSaved();
   };
 
   const downloadAudio = async (track: TrackFile, label: string) => {
@@ -297,6 +327,17 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       ))}
     </select>
   );
+
+  // Правка аудио — отдельный интерфейс на всё окно (переключение из плеера).
+  if (editorOpen) {
+    return (
+      <AudioEditor
+        meeting={meeting}
+        onClose={() => setEditorOpen(false)}
+        onApplied={handleAudioApplied}
+      />
+    );
+  }
 
   return (
     <div className="mv">
@@ -423,6 +464,18 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
           </div>
         </div>
         <div className="track-downloads">
+          <button
+            className="btn ghost"
+            onClick={() => setEditorOpen(true)}
+            disabled={transcribing}
+            title={
+              transcribing
+                ? "Идёт расшифровка — правка аудио будет доступна после неё"
+                : "Вырезать лишнее из записи на таймлайне громкости"
+            }
+          >
+            ✂ Редактор аудио
+          </button>
           {isImported ? (
             <button
               className="btn ghost"

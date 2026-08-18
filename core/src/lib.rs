@@ -8,6 +8,7 @@ pub mod call_detector;
 pub mod cli_transcriber;
 pub mod decode;
 pub mod diarize;
+pub mod edit;
 pub mod error;
 pub mod model;
 pub mod recorder;

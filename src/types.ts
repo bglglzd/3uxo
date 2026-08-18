@@ -98,3 +98,26 @@ export interface TranscribeState {
 
 /** Текущий уровень (пик) дорожек записи, 0..1000. */
 export type TrackLevels = { mic: number; system: number };
+
+/// Интервал дорожки в секундах — то, что вырезает аудио-редактор.
+/// Имена полей совпадают с `edit::Range` в ядре.
+export interface AudioRange {
+  start_secs: number;
+  end_secs: number;
+}
+
+/// Карта громкости дорожки для таймлайна: по корзине на пиксель.
+/// `peaks`/`rms` — 0..1000, та же шкала, что у живых уровней записи.
+export interface Waveform {
+  peaks: number[];
+  rms: number[];
+  duration_secs: number;
+  sample_rate: number;
+}
+
+/// Состояние аудио-редактора встречи: какие дорожки есть и сохранён ли
+/// оригинал до правок (значит, правку можно отменить).
+export interface AudioEditState {
+  tracks: TrackFile[];
+  has_original: boolean;
+}

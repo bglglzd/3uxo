@@ -1,10 +1,12 @@
 use crate::audio::{concat_wavs, wav_duration_secs};
+use crate::edit::{self, Range};
 use crate::error::{AppError, AppResult};
 use crate::model::Meeting;
 use crate::recorder::Recorder;
 use crate::storage::Repo;
 use crate::transcript::{merge_tracks, single_speaker, Transcript};
 use crate::transcriber::Transcriber;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Активная запись: id, папка и сегменты дорожек.
@@ -303,10 +305,15 @@ pub fn delete_meeting(repo: &Repo, data_root: &Path, id: &str) -> AppResult<()> 
     Ok(())
 }
 
+/// Дорожки, которые может содержать папка встречи: записанная — `mic` +
+/// `system`, импортированная — `audio`. При правке аудио ВСЕ существующие
+/// дорожки режутся одним набором вырезов, иначе «Я» и «Собеседник» разъедутся.
+pub const TRACK_FILES: [&str; 3] = ["mic.wav", "system.wav", "audio.wav"];
+
 /// Абсолютный путь к файлу дорожки встречи (для проигрывания во фронтенде).
 pub fn track_path(data_root: &Path, id: &str, track_file: &str) -> AppResult<PathBuf> {
     validate_id(id)?;
-    let allowed = ["mic.wav", "system.wav", "audio.wav"];
+    let allowed = TRACK_FILES;
     if !allowed.contains(&track_file) {
         return Err(AppError::InvalidInput(format!(
             "unknown track file: {track_file}"
@@ -317,6 +324,138 @@ pub fn track_path(data_root: &Path, id: &str, track_file: &str) -> AppResult<Pat
         return Err(AppError::NotFound(track_file.to_string()));
     }
     Ok(path)
+}
+
+// ── Правка аудио: вырезание фрагментов с сохранением оригинала ───────────────
+
+/// Состояние аудио-редактора встречи для фронтенда.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AudioEditState {
+    /// Существующие дорожки встречи (см. [`TRACK_FILES`]).
+    pub tracks: Vec<String>,
+    /// Сохранён ли оригинал до правок — значит, правку можно отменить.
+    pub has_original: bool,
+}
+
+/// Имя бэкапа дорожки: `mic.wav` → `mic.orig.wav`.
+fn orig_name(track_file: &str) -> String {
+    format!("{}.orig.wav", track_file.trim_end_matches(".wav"))
+}
+
+/// Дорожки встречи, которые реально лежат на диске.
+fn existing_tracks(dir: &Path) -> Vec<String> {
+    TRACK_FILES
+        .iter()
+        .filter(|t| dir.join(t).exists())
+        .map(|t| t.to_string())
+        .collect()
+}
+
+/// Какие дорожки есть у встречи и есть ли бэкап оригинала.
+pub fn audio_edit_state(data_root: &Path, id: &str) -> AppResult<AudioEditState> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    Ok(AudioEditState {
+        tracks: existing_tracks(&dir),
+        has_original: TRACK_FILES.iter().any(|t| dir.join(orig_name(t)).exists()),
+    })
+}
+
+/// Однократно копирует дорожки (и расшифровку) в `*.orig.*` — снимок «как было
+/// до правок», чтобы правку всегда можно было отменить. Существующий бэкап НЕ
+/// перетирается: иначе он стал бы копией предыдущей правки, а не оригинала.
+///
+/// Если на момент первой правки расшифровки ещё не было, а позже она появилась,
+/// бэкапом станет ближайшая к оригиналу версия расшифровки — после возврата
+/// оригинала её стоит обновить («↻ Заново»).
+fn backup_originals(dir: &Path, tracks: &[String]) -> AppResult<()> {
+    for t in tracks {
+        let orig = dir.join(orig_name(t));
+        if !orig.exists() {
+            std::fs::copy(dir.join(t), &orig)?;
+        }
+    }
+    let transcript = dir.join("transcript.json");
+    let transcript_orig = dir.join("transcript.orig.json");
+    if transcript.exists() && !transcript_orig.exists() {
+        std::fs::copy(&transcript, &transcript_orig)?;
+    }
+    Ok(())
+}
+
+/// Тяжёлая файловая часть правки аудио БЕЗ обращения к БД (можно гнать в
+/// `spawn_blocking`): бэкап оригинала → вырезание `cuts` из ВСЕХ дорожек
+/// встречи → пересчёт времён `transcript.json` под вырезы.
+/// Возвращает новую длительность встречи в секундах (округление вниз).
+pub fn apply_audio_edit_files(data_root: &Path, id: &str, cuts: &[Range]) -> AppResult<u64> {
+    validate_id(id)?;
+    let merged = edit::merge_ranges(cuts);
+    if merged.is_empty() {
+        return Err(AppError::InvalidInput(
+            "не выбрано, что вырезать из записи".into(),
+        ));
+    }
+    let dir = meeting_dir(data_root, id);
+    let tracks = existing_tracks(&dir);
+    if tracks.is_empty() {
+        return Err(AppError::NotFound(format!("аудио встречи {id}")));
+    }
+    backup_originals(&dir, &tracks)?;
+
+    let mut longest = 0.0f64;
+    for t in &tracks {
+        let src = dir.join(t);
+        let tmp = dir.join(format!("{t}.edit.tmp"));
+        let kept = match edit::apply_cuts(&src, &tmp, &merged) {
+            Ok(k) => k,
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(e);
+            }
+        };
+        std::fs::rename(&tmp, &src)?;
+        if kept > longest {
+            longest = kept;
+        }
+    }
+
+    // Расшифровка живёт в той же системе координат, что дорожки, — сдвигаем её
+    // тем же набором вырезов, чтобы реплики не разъехались со звуком.
+    if let Some(transcript) = load_transcript(data_root, id)? {
+        let remapped = edit::remap_transcript(&transcript, &merged);
+        save_transcript(data_root, id, &remapped)?;
+    }
+    Ok(longest as u64)
+}
+
+/// Возвращает встречу к оригиналу из бэкапа (`*.orig.wav` +
+/// `transcript.orig.json`). Бэкап остаётся на месте — правку можно повторить.
+/// Возвращает длительность оригинала в секундах.
+pub fn revert_audio_edit_files(data_root: &Path, id: &str) -> AppResult<u64> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    let mut restored = 0usize;
+    let mut longest = 0u64;
+    for t in TRACK_FILES {
+        let orig = dir.join(orig_name(t));
+        if !orig.exists() {
+            continue;
+        }
+        let dst = dir.join(t);
+        std::fs::copy(&orig, &dst)?;
+        restored += 1;
+        longest = longest.max(wav_duration_secs(&dst).unwrap_or(0));
+    }
+    if restored == 0 {
+        return Err(AppError::InvalidState(
+            "оригинал не сохранён — правок аудио не было".into(),
+        ));
+    }
+    let transcript_orig = dir.join("transcript.orig.json");
+    if transcript_orig.exists() {
+        std::fs::copy(&transcript_orig, dir.join("transcript.json"))?;
+    }
+    Ok(longest)
 }
 
 /// Тяжёлая часть расшифровки БЕЗ обращения к БД: читает дорожки,
@@ -666,6 +805,197 @@ mod tests {
         assert_eq!(m.title, "voice memo");
         assert!(dir.path().join("meetings/imp1/audio.wav").exists());
         assert_eq!(repo.get("imp1").unwrap().source, "imported");
+    }
+
+    // ── Правка аудио ─────────────────────────────────────────────────────────
+
+    /// Кладёт на диск «записанную» встречу с двумя дорожками по `secs` секунд.
+    fn make_recorded(root: &Path, repo: &Repo, id: &str, secs: u64) {
+        let dir = root.join("meetings").join(id);
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::audio::write_silence_wav(&dir.join("mic.wav"), secs).unwrap();
+        crate::audio::write_silence_wav(&dir.join("system.wav"), secs).unwrap();
+        repo.insert(&Meeting {
+            id: id.into(),
+            created_at: "2026-08-18T10:00:00Z".into(),
+            title: "Встреча".into(),
+            participants: String::new(),
+            topic: String::new(),
+            duration_secs: secs,
+            folder: id.into(),
+            status: "recorded".into(),
+            source: "recorded".into(),
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn audio_edit_state_lists_tracks_without_backup() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 3);
+        let st = audio_edit_state(dir.path(), "m1").unwrap();
+        assert_eq!(st.tracks, vec!["mic.wav", "system.wav"]);
+        assert!(!st.has_original);
+    }
+
+    #[test]
+    fn apply_cuts_both_tracks_and_keeps_original() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 4);
+        let mdir = dir.path().join("meetings/m1");
+
+        let secs = apply_audio_edit_files(dir.path(), "m1", &[Range::new(1.0, 2.0)]).unwrap();
+
+        assert_eq!(secs, 3);
+        // Обе дорожки укоротились одинаково — синхронность сохранена.
+        assert_eq!(wav_duration_secs(&mdir.join("mic.wav")).unwrap(), 3);
+        assert_eq!(wav_duration_secs(&mdir.join("system.wav")).unwrap(), 3);
+        // Оригинал сохранён целиком, временных файлов не осталось.
+        assert_eq!(wav_duration_secs(&mdir.join("mic.orig.wav")).unwrap(), 4);
+        assert_eq!(wav_duration_secs(&mdir.join("system.orig.wav")).unwrap(), 4);
+        assert!(!mdir.join("mic.wav.edit.tmp").exists());
+        assert!(audio_edit_state(dir.path(), "m1").unwrap().has_original);
+    }
+
+    #[test]
+    fn second_apply_does_not_overwrite_first_backup() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 5);
+        let mdir = dir.path().join("meetings/m1");
+
+        apply_audio_edit_files(dir.path(), "m1", &[Range::new(0.0, 1.0)]).unwrap();
+        let secs = apply_audio_edit_files(dir.path(), "m1", &[Range::new(0.0, 1.0)]).unwrap();
+
+        assert_eq!(secs, 3); // 5 → 4 → 3
+        // Бэкап всё ещё указывает на исходные 5 секунд.
+        assert_eq!(wav_duration_secs(&mdir.join("mic.orig.wav")).unwrap(), 5);
+    }
+
+    #[test]
+    fn apply_remaps_transcript_times() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 6);
+        let transcript = Transcript {
+            segments: vec![
+                crate::transcript::TranscriptSegment {
+                    speaker: "me".into(),
+                    start_secs: 0.0,
+                    end_secs: 1.0,
+                    text: "до".into(),
+                },
+                crate::transcript::TranscriptSegment {
+                    speaker: "them".into(),
+                    start_secs: 2.2,
+                    end_secs: 2.8,
+                    text: "вырезанное".into(),
+                },
+                crate::transcript::TranscriptSegment {
+                    speaker: "me".into(),
+                    start_secs: 4.0,
+                    end_secs: 5.0,
+                    text: "после".into(),
+                },
+            ],
+        };
+        save_transcript(dir.path(), "m1", &transcript).unwrap();
+
+        apply_audio_edit_files(dir.path(), "m1", &[Range::new(2.0, 3.0)]).unwrap();
+
+        let out = load_transcript(dir.path(), "m1").unwrap().unwrap();
+        let texts: Vec<&str> = out.segments.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(texts, vec!["до", "после"]);
+        assert_eq!(out.segments[1].start_secs, 3.0);
+        // Бэкап расшифровки хранит все три реплики.
+        let orig: Transcript = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("meetings/m1/transcript.orig.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(orig.segments.len(), 3);
+    }
+
+    #[test]
+    fn revert_restores_tracks_and_transcript() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 4);
+        let transcript = Transcript {
+            segments: vec![crate::transcript::TranscriptSegment {
+                speaker: "me".into(),
+                start_secs: 1.2,
+                end_secs: 1.8,
+                text: "вырезанное".into(),
+            }],
+        };
+        save_transcript(dir.path(), "m1", &transcript).unwrap();
+        apply_audio_edit_files(dir.path(), "m1", &[Range::new(1.0, 2.0)]).unwrap();
+        assert!(load_transcript(dir.path(), "m1").unwrap().unwrap().segments.is_empty());
+
+        let secs = revert_audio_edit_files(dir.path(), "m1").unwrap();
+
+        assert_eq!(secs, 4);
+        let mdir = dir.path().join("meetings/m1");
+        assert_eq!(wav_duration_secs(&mdir.join("mic.wav")).unwrap(), 4);
+        assert_eq!(wav_duration_secs(&mdir.join("system.wav")).unwrap(), 4);
+        assert_eq!(load_transcript(dir.path(), "m1").unwrap().unwrap(), transcript);
+        // Бэкап остался — правку можно повторить.
+        assert!(audio_edit_state(dir.path(), "m1").unwrap().has_original);
+    }
+
+    #[test]
+    fn apply_to_imported_meeting_cuts_single_track() {
+        let (dir, repo, _rec) = setup();
+        let src = dir.path().join("voice.wav");
+        crate::audio::write_silence_wav(&src, 3).unwrap();
+        import_recording(&repo, dir.path(), "imp1".into(), &src, "2026-08-18T10:00:00Z".into())
+            .unwrap();
+
+        let secs = apply_audio_edit_files(dir.path(), "imp1", &[Range::new(0.0, 1.0)]).unwrap();
+
+        assert_eq!(secs, 2);
+        let mdir = dir.path().join("meetings/imp1");
+        assert_eq!(wav_duration_secs(&mdir.join("audio.wav")).unwrap(), 2);
+        assert!(mdir.join("audio.orig.wav").exists());
+    }
+
+    #[test]
+    fn apply_without_cuts_is_rejected() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 2);
+        assert!(matches!(
+            apply_audio_edit_files(dir.path(), "m1", &[]),
+            Err(AppError::InvalidInput(_))
+        ));
+        // Пустой интервал тоже не считается правкой.
+        assert!(matches!(
+            apply_audio_edit_files(dir.path(), "m1", &[Range::new(1.0, 1.0)]),
+            Err(AppError::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn revert_without_backup_is_error() {
+        let (dir, repo, _rec) = setup();
+        make_recorded(dir.path(), &repo, "m1", 2);
+        assert!(matches!(
+            revert_audio_edit_files(dir.path(), "m1"),
+            Err(AppError::InvalidState(_))
+        ));
+    }
+
+    #[test]
+    fn audio_edit_rejects_path_traversal_id() {
+        let (dir, _repo, _rec) = setup();
+        assert!(matches!(
+            apply_audio_edit_files(dir.path(), "../escape", &[Range::new(0.0, 1.0)]),
+            Err(AppError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            audio_edit_state(dir.path(), "../escape"),
+            Err(AppError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            revert_audio_edit_files(dir.path(), "../escape"),
+            Err(AppError::InvalidInput(_))
+        ));
     }
 
     #[test]

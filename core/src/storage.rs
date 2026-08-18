@@ -131,6 +131,19 @@ impl Repo {
         Ok(())
     }
 
+    /// Обновляет длительность встречи (после правки аудио — вырезания
+    /// фрагментов или возврата к оригиналу).
+    pub fn update_duration(&self, id: &str, duration_secs: u64) -> AppResult<()> {
+        let n = self.conn.execute(
+            "UPDATE meetings SET duration_secs = ?1 WHERE id = ?2",
+            params![duration_secs, id],
+        )?;
+        if n == 0 {
+            return Err(AppError::NotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
     /// Обновляет заголовок/участников/тему встречи.
     pub fn update_meta(
         &self,
@@ -225,6 +238,18 @@ mod tests {
     fn update_status_missing_is_not_found() {
         let repo = Repo::open_in_memory().unwrap();
         assert!(matches!(repo.update_status("x", "t"), Err(AppError::NotFound(_))));
+    }
+
+    #[test]
+    fn update_duration_changes_duration() {
+        let repo = Repo::open_in_memory().unwrap();
+        repo.insert(&sample("a", "2026-06-04T10:00:00Z")).unwrap();
+        repo.update_duration("a", 7).unwrap();
+        assert_eq!(repo.get("a").unwrap().duration_secs, 7);
+        assert!(matches!(
+            repo.update_duration("nope", 1),
+            Err(AppError::NotFound(_))
+        ));
     }
 
     #[test]
