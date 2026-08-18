@@ -180,9 +180,15 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
+  // Последние время/выделение для эффекта зума (без лишних перерисовок).
+  const timeRef = useRef(0);
+  const selRef = useRef<Cut | null>(null);
   const audioRefs = useRef<Partial<Record<TrackFile, HTMLAudioElement | null>>>(
     {},
   );
+
+  timeRef.current = time;
+  selRef.current = sel;
 
   const duration = useMemo(() => {
     const fromWaves = Object.values(waves).reduce(
@@ -206,6 +212,19 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(80, Math.round((laneWidth * zoom) / COL_PX));
+
+  // При смене зума удерживаем в поле зрения место работы (выделение или
+  // плейхед) — иначе после приближения таймлайн уезжает в начало записи.
+  useEffect(() => {
+    const el = lanesRef.current;
+    if (!el || duration <= 0) return;
+    const focus = selRef.current ? selRef.current.start : timeRef.current;
+    const center = (focus / duration) * el.scrollWidth - el.clientWidth / 2;
+    el.scrollLeft = Math.max(0, center);
+    // Специально только по zoom: следить за временем здесь — значит драться
+    // с пользовательской прокруткой на каждом кадре воспроизведения.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom]);
 
   // Загрузка состояния редактора: дорожки, карты громкости, ссылки на аудио.
   useEffect(() => {
@@ -236,7 +255,8 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
         }
         setWaves(nextWaves);
         setUrls(nextUrls);
-        setError("");
+        // Ошибку здесь НЕ гасим: перезагрузка запускается и после неудачной
+        // правки (вернуть дорожки в плеер) — баннер должен остаться.
       } catch (e) {
         if (alive) setError(String(e));
       } finally {
@@ -265,6 +285,22 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
     eachAudio((el) => el.pause());
     setPlaying(false);
   }, []);
+
+  /// Отпускает WAV-файлы перед их перезаписью: на Windows файл, открытый
+  /// webview для проигрывания, может не дать себя заменить. Ссылки вернёт
+  /// перезагрузка после правки (см. `version`).
+  const detachAudio = () => {
+    eachAudio((el) => {
+      try {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      } catch {
+        /* jsdom/старый webview — не критично */
+      }
+    });
+    setPlaying(false);
+  };
 
   const togglePlay = useCallback(() => {
     if (playing) {
@@ -347,6 +383,8 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
       if (pending) return;
       if (e.code === "Space") {
+        // Пробел — штатная активация кнопки под фокусом; не отбираем её.
+        if (el?.tagName === "BUTTON") return;
         e.preventDefault();
         togglePlay();
       } else if (e.key === "Delete" || e.key === "Backspace") {
@@ -374,6 +412,7 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
     setBusy(true);
     setError("");
     setNotice("");
+    detachAudio();
     try {
       const m = await api.applyAudioEdit(meeting.id, toRanges(cuts));
       resetHist();
@@ -388,6 +427,7 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
       onApplied(m);
     } catch (e) {
       setError(String(e));
+      setVersion(Date.now()); // правка не прошла — возвращаем дорожки в плеер
     } finally {
       setBusy(false);
     }
@@ -398,6 +438,7 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
     setBusy(true);
     setError("");
     setNotice("");
+    detachAudio();
     try {
       const m = await api.revertAudioEdit(meeting.id);
       resetHist();
@@ -411,6 +452,7 @@ export function AudioEditor({ meeting, onClose, onApplied }: Props) {
       onApplied(m);
     } catch (e) {
       setError(String(e));
+      setVersion(Date.now());
     } finally {
       setBusy(false);
     }
