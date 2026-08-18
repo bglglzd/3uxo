@@ -1507,10 +1507,14 @@ details.adv[open] summary::before {
 .modal::-webkit-scrollbar {
   width: 10px;
 }
+.ae-lanes::-webkit-scrollbar {
+  height: 10px;
+}
 .meetings::-webkit-scrollbar-thumb,
 .transcript::-webkit-scrollbar-thumb,
 .content::-webkit-scrollbar-thumb,
-.modal::-webkit-scrollbar-thumb {
+.modal::-webkit-scrollbar-thumb,
+.ae-lanes::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
   border-radius: 8px;
   border: 3px solid transparent;
@@ -2149,4 +2153,514 @@ details.adv[open] summary::before {
 .rec-warn {
   color: var(--rec);
   font-weight: 600;
+}
+
+/* ============================================================
+   Аудио-редактор — отдельный экран правки записи
+   Дорожки: «Я» — --teal, собеседник — --violet (как в мониторе записи).
+   Вырез — цветом записи (--rec): «это уйдёт». Выделение — акцентом.
+   ============================================================ */
+.ae {
+  display: flex;
+  flex-direction: column;
+  /* Редактор занимает всю высоту окна — таймлайн тем крупнее, чем больше окно. */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 30px 34px;
+  gap: 14px;
+}
+
+/* Шапка режима */
+.ae-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ae-bar .spacer {
+  flex: 1;
+  min-width: 4px;
+}
+.ae-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+}
+.ae-back svg {
+  width: 16px;
+  height: 16px;
+}
+.ae-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.ae-of {
+  border: 1px solid var(--glass-border);
+  min-width: 0;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+.ae-orig {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal-ink);
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent);
+  background: color-mix(in srgb, var(--teal) 10%, transparent);
+}
+.ae-orig svg {
+  width: 14px;
+  height: 14px;
+}
+.ae-notice {
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--teal) 32%, transparent);
+  background: color-mix(in srgb, var(--teal) 9%, transparent);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* Тулбар */
+.ae-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow-soft);
+}
+.ae-tools .spacer {
+  flex: 1;
+  min-width: 8px;
+}
+.ae-tools .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ae-tools .btn svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.ae-tools .btn-sm svg {
+  width: 14px;
+  height: 14px;
+}
+.ae-play {
+  width: 40px;
+  height: 40px;
+}
+.ae-play svg {
+  width: 16px;
+  height: 16px;
+}
+.ae-clock {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  min-width: 118px;
+}
+.ae-clock b {
+  color: var(--text);
+  font-weight: 600;
+}
+.ae-div {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--glass-border);
+}
+.ae-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.ae-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ae-zoom b {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 26px;
+  text-align: center;
+}
+
+/* Полоса выделения: точные границы */
+.ae-selbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.ae-selbar-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.ae-time {
+  width: 78px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ae-time:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.ae-dash {
+  color: var(--text-faint);
+}
+.ae-sellen {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Таймлайн */
+.ae-lanes {
+  /* Таймлайн забирает всю свободную высоту окна: чем выше дорожка, тем
+     точнее видно громкость и тем легче попасть в границу фрагмента. */
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 240px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  box-shadow: var(--glass-shadow-soft);
+  padding: 10px 0 4px;
+}
+.ae-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 100%;
+  min-height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+}
+.ae-ruler {
+  position: relative;
+  flex: none;
+  height: 20px;
+  margin: 0 0 6px;
+}
+.ae-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(1px);
+  padding-left: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  border-left: 1px solid var(--glass-border-strong);
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ae-lane {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 84px;
+  margin: 0 0 6px;
+  background: var(--surface-soft);
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+.ae-lane-name {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  z-index: 2;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ae-wave {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ae-wave-mid {
+  stroke: var(--glass-border-strong);
+  stroke-width: 1;
+}
+.ae-lane--me .ae-wave-peak {
+  fill: color-mix(in srgb, var(--teal) 26%, transparent);
+}
+.ae-lane--me .ae-wave-body {
+  fill: var(--teal);
+}
+.ae-lane--peer .ae-wave-peak {
+  fill: color-mix(in srgb, var(--violet) 26%, transparent);
+}
+.ae-lane--peer .ae-wave-body {
+  fill: var(--violet);
+}
+.ae-lane--single .ae-wave-peak {
+  fill: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.ae-lane--single .ae-wave-body {
+  fill: var(--accent);
+}
+.ae-lane-skeleton {
+  position: absolute;
+  inset: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    100deg,
+    var(--surface-2) 20%,
+    var(--hover) 45%,
+    var(--surface-2) 70%
+  );
+  background-size: 260% 100%;
+  animation: ae-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes ae-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+.ae-empty {
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* Слой вырезов, выделения и плейхеда — поверх всех дорожек */
+.ae-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ae-cut {
+  position: absolute;
+  top: 20px;
+  bottom: 0;
+  min-width: 2px;
+  border-left: 1px solid var(--rec);
+  border-right: 1px solid var(--rec);
+  background-color: color-mix(in srgb, var(--rec) 15%, transparent);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--rec) 22%, transparent) 0 2px,
+    transparent 2px 7px
+  );
+  animation: ae-cut-in 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes ae-cut-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+.ae-cut-x {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--rec) 55%, transparent);
+  background: var(--surface);
+  color: var(--rec);
+  cursor: pointer;
+  box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.45);
+}
+.ae-cut-x svg {
+  width: 12px;
+  height: 12px;
+}
+.ae-cut-x:hover {
+  background: var(--rec);
+  color: #2a0907;
+}
+.ae-sel {
+  position: absolute;
+  top: 20px;
+  bottom: 0;
+  min-width: 2px;
+  border-left: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.ae-sel--drag {
+  border-style: dashed;
+}
+.ae-playhead {
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-bg) 55%, transparent);
+}
+.ae-playhead::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--text);
+}
+
+/* Подсказка и итог */
+.ae-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.7;
+}
+.ae-hint kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--glass-border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.ae-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow-soft);
+}
+.ae-foot .spacer {
+  flex: 1;
+  min-width: 8px;
+}
+.ae-foot .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ae-foot .btn svg {
+  width: 15px;
+  height: 15px;
+}
+.ae-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ae-sum svg {
+  width: 15px;
+  height: 15px;
+  color: var(--text-faint);
+}
+.ae-was {
+  color: var(--text-faint);
+}
+.ae-will {
+  color: var(--text);
+  font-weight: 600;
+}
+.ae-cuts-count {
+  font-size: 12.5px;
+  color: var(--rec);
+  font-weight: 600;
+}
+/* Пока правок нет — это просто состояние, а не предупреждение. */
+.ae-cuts-none {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ae-cut,
+  .ae-lane-skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .ae {
+    padding: 18px 16px 28px;
+  }
+  .ae-lane {
+    min-height: 68px;
+  }
+  .ae-of {
+    max-width: 180px;
+  }
 }

@@ -46,8 +46,9 @@ exe — `Auris.exe`. Но **технический «3uxo» оставлен Н�
 `ai` (ИИ-бэкенд + промпты), `audio` (WAV-хелперы), `call_detector` (детект звонка
 по аудио-сессиям WASAPI, Windows), `cli_transcriber` (внешний whisper-CLI),
 `decode` (symphonia+rubato → 16кГц/моно/i16; +opus за фичей), `diarize`
-(native-pyannote-rs/Burn за фичей), `error`, `model`, `recorder` (трейт +
-MockRecorder), `service` (сервис-слой: запись/импорт/расшифровка/файлы), `storage`
+(native-pyannote-rs/Burn за фичей), `edit` (карта громкости + вырезание
+фрагментов + пересчёт расшифровки), `error`, `model`, `recorder` (трейт +
+MockRecorder), `service` (сервис-слой: запись/импорт/расшифровка/правка/файлы), `storage`
 (rusqlite, миграции), `transcript` (модель + merge/assign_speakers), `transcriber`
 (трейт), `whisper` (whisper-rs, за фичей), `wasapi_recorder` (реальный захват на
 Windows, `#[cfg(windows)]`).
@@ -94,6 +95,16 @@ Windows, `#[cfg(windows)]`).
 `diarize.rs` (фича `diarize`): native-pyannote-rs 0.1.4 (Burn, без ONNX). Модели
 (.bpk) качаются при 1-м запуске. `assign_speakers` склеивает whisper↔диаризацию.
 
+### Правка аудио (отдельный экран, v0.7.0)
+`edit.rs`: `waveform` (пик+RMS по корзинам, 0..1000 — как `recording_levels`),
+`apply_cuts` (PCM i16 → i16 без перекодирования), `remap_transcript` (сдвиг
+времён реплик). `service::apply_audio_edit_files` режет ВСЕ дорожки встречи
+одним набором вырезов (иначе «Я»/«Собеседник» разъедутся), перед первой правкой
+кладёт бэкап `mic.orig.wav`/`system.orig.wav`/`audio.orig.wav` +
+`transcript.orig.json`; `revert_audio_edit_files` возвращает оригинал. Команды:
+`waveform`, `audio_edit_state`, `apply_audio_edit`, `revert_audio_edit`.
+Фронт — `AudioEditor`/`WaveLane` + чистая логика `audioedit.ts`.
+
 ### ИИ (опционально, через ключ пользователя)
 `ai.rs`: OpenAI-совместимый HTTP-бэкенд (`base_url`/`api_key`/`model` из настроек).
 Функции: `suggest_metadata` (авто-заголовок, устойчив к ответу-массиву),
@@ -122,6 +133,10 @@ map-reduce (`*_long`, порог `SUMMARY_CHUNK_CHARS`). Результаты с
   эхо), `recpulse`, `blink`, `wv` (эквалайзер).
 - **`AurisMark.tsx`** — фирменный знак (ухо), градиент по теме. Лок-ап в сайдбаре:
   знак + `auris` │ `ваше третье ухо`.
+- **Аудио-редактор**: `AudioEditor` (отдельный полноэкранный режим из плеера
+  встречи — волна громкости по дорожкам, выделение протяжкой, вырезы, зум,
+  предпрослушивание без вырезов, «Применить»/«Вернуть оригинал»), `WaveLane`
+  (одна дорожка), `audioedit.ts` (вырезы/линейка/путь волны — чистые функции).
 - Компоненты: `Sidebar`, `RecordButton`, `MeetingList`, `MeetingView`,
   `TranscriptView` (лента с аватарами-инициалами), `AiPanel` (pill «ИИ · ваш
   ключ»), `SettingsModal` (раскрывающиеся секции: Запись/хоткей, Авто-запись,
