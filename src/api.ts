@@ -9,6 +9,9 @@ import type {
   RecState,
   ReportKind,
   TrackLevels,
+  AudioRange,
+  Waveform,
+  AudioEditState,
 } from "./types";
 import { logError, logInfo } from "./log";
 
@@ -102,6 +105,24 @@ export const api = {
   exportAudio: (id: string, trackFile: TrackFile, dest: string): Promise<void> =>
     inv("export_audio", { id, trackFile, dest }),
 
+  /// Карта громкости дорожки для таймлайна редактора (`buckets` корзин).
+  waveform: (
+    id: string,
+    trackFile: TrackFile,
+    buckets: number,
+  ): Promise<Waveform> => inv("waveform", { id, trackFile, buckets }),
+  /// Какие дорожки есть у встречи и сохранён ли оригинал до правок.
+  audioEditState: (id: string): Promise<AudioEditState> =>
+    inv("audio_edit_state", { id }),
+  /// Вырезать интервалы из всех дорожек встречи (оригинал сохраняется).
+  applyAudioEdit: (id: string, cuts: AudioRange[]): Promise<Meeting> => {
+    logInfo(`audio edit id=${id} cuts=${cuts.length}`);
+    return inv("apply_audio_edit", { id, cuts });
+  },
+  /// Вернуть аудио и расшифровку встречи к оригиналу из бэкапа.
+  revertAudioEdit: (id: string): Promise<Meeting> =>
+    inv("revert_audio_edit", { id }),
+
   getBackendLog: (): Promise<string> => inv("get_backend_log"),
 
   /// Зарегистрировать глобальную горячую клавишу старт/стоп записи.
@@ -125,8 +146,16 @@ export const api = {
       minKeepSecs,
     }),
 
-  async trackUrl(id: string, trackFile: TrackFile): Promise<string> {
+  /// asset-URL дорожки для <audio>. `bust` добавляет метку версии — после
+  /// правки аудио файл меняется по тому же пути, и без неё webview отдаёт
+  /// старую копию из кеша.
+  async trackUrl(
+    id: string,
+    trackFile: TrackFile,
+    bust?: number,
+  ): Promise<string> {
     const path: string = await inv("track_path", { id, trackFile });
-    return convertFileSrc(path);
+    const url = convertFileSrc(path);
+    return bust ? `${url}?v=${bust}` : url;
   },
 };

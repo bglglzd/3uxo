@@ -6,10 +6,11 @@ use tauri_plugin_notification::NotificationExt;
 
 use uxo_core::ai::{AiConfig, HttpChatBackend, MetadataSuggestion};
 use uxo_core::cli_transcriber::{CliTranscriber, TranscribeOptions};
+use uxo_core::edit::{Range, Waveform};
 use uxo_core::error::{AppError, AppResult};
 use uxo_core::model::Meeting;
 use uxo_core::recorder::Recorder;
-use uxo_core::service::{self, ActiveRecording};
+use uxo_core::service::{self, ActiveRecording, AudioEditState};
 use uxo_core::storage::Repo;
 use uxo_core::transcript::Transcript;
 
@@ -574,6 +575,91 @@ pub fn export_audio(
     let src = service::track_path(&state.data_root, &id, &track_file)?;
     std::fs::copy(&src, &dest)?;
     Ok(())
+}
+
+// ── Аудио-редактор (вырезание фрагментов) ───────────────────────────────────
+
+/// Карта громкости дорожки для таймлайна редактора: `buckets` корзин
+/// (пик + RMS, 0..1000). Чтение файла уходит в фон — двухчасовая запись это
+/// сотни мегабайт, окно не должно подвисать.
+#[tauri::command]
+pub async fn waveform(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    track_file: String,
+    buckets: u32,
+) -> AppResult<Waveform> {
+    let path = service::track_path(&state.data_root, &id, &track_file)?;
+    tauri::async_runtime::spawn_blocking(move || uxo_core::edit::waveform(&path, buckets as usize))
+        .await
+        .map_err(|e| AppError::Audio(format!("waveform join: {e}")))?
+}
+
+/// Какие дорожки есть у встречи и сохранён ли оригинал до правок.
+#[tauri::command]
+pub fn audio_edit_state(state: tauri::State<AppState>, id: String) -> AppResult<AudioEditState> {
+    service::audio_edit_state(&state.data_root, &id)
+}
+
+/// Применяет правку аудио: вырезает интервалы `cuts` из всех дорожек встречи
+/// (с однократным бэкапом оригинала), пересчитывает времена расшифровки и
+/// обновляет длительность встречи. Возвращает обновлённую встречу.
+#[tauri::command]
+pub async fn apply_audio_edit(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    id: String,
+    cuts: Vec<Range>,
+) -> AppResult<Meeting> {
+    let data_root = state.data_root.clone();
+    let cut_count = uxo_core::edit::merge_ranges(&cuts).len();
+    let mid = id.clone();
+    // Вырезание перезаписывает WAV-дорожки целиком — только вне async-потока.
+    let secs = tauri::async_runtime::spawn_blocking(move || {
+        service::apply_audio_edit_files(&data_root, &mid, &cuts)
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("audio edit join: {e}")))??;
+
+    let repo = state.repo.lock().unwrap();
+    repo.update_duration(&id, secs)?;
+    let meeting = repo.get(&id)?;
+    drop(repo);
+    flog(
+        &state.data_root,
+        &format!("audio edit applied: id={id} cuts={cut_count} duration={secs}s"),
+    );
+    notify(
+        &app,
+        "✂ Auris — аудио обновлено",
+        &format!("Вырезано фрагментов: {cut_count}"),
+    );
+    Ok(meeting)
+}
+
+/// Возвращает аудио встречи (и расшифровку) к оригиналу из бэкапа.
+#[tauri::command]
+pub async fn revert_audio_edit(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> AppResult<Meeting> {
+    let data_root = state.data_root.clone();
+    let mid = id.clone();
+    let secs = tauri::async_runtime::spawn_blocking(move || {
+        service::revert_audio_edit_files(&data_root, &mid)
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("audio revert join: {e}")))??;
+
+    let repo = state.repo.lock().unwrap();
+    repo.update_duration(&id, secs)?;
+    let meeting = repo.get(&id)?;
+    drop(repo);
+    flog(
+        &state.data_root,
+        &format!("audio edit reverted: id={id} duration={secs}s"),
+    );
+    Ok(meeting)
 }
 
 #[tauri::command]
