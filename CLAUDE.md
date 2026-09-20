@@ -218,7 +218,7 @@ npm run tauri dev -- --features gpu,diarize,opus   # полное приложе
 - **Превью перед пушем для UI** — показать live-превью, мержить после «ок».
 - `gh pr edit --base` ломается (GraphQL projectCards) → ретаргет базы через REST:
   `gh api -X PATCH repos/bglglzd/3uxo/pulls/N -f base=main`.
-- Коллаборатор: push есть, админа нет. Email коммитов: [redacted email].
+- Git identity: `bglglzd <248948303+bglglzd@users.noreply.github.com>`; never use a personal email in public commits.
 
 ---
 

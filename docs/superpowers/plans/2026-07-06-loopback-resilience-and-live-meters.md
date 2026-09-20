@@ -17,7 +17,7 @@
 - **Версия синхронно** в `package.json` и `src-tauri/tauri.conf.json` (текущая 0.6.2 → целевая **0.6.3**).
 - Прямой push в `main` запрещён → только PR + `gh pr merge`.
 - Формат аудио: 16000 Гц, моно, i16. `SAMPLE_RATE = 16_000`.
-- Email коммитов настроен в git (`3uxo` / [redacted email]). Каждый коммит завершать:
+- Git identity: `bglglzd <248948303+bglglzd@users.noreply.github.com>`; never use a personal email in public commits.
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 ---
