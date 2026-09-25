@@ -39,7 +39,7 @@ describe("settings", () => {
   });
 
   it("merges partial stored settings with defaults", () => {
-    localStorage.setItem("3uxo.settings", JSON.stringify({ ai: { base_url: "x" } }));
+    localStorage.setItem("auris.settings", JSON.stringify({ ai: { base_url: "x" } }));
     const s = getSettings();
     expect(s.ai.base_url).toBe("x");
     expect(s.ai.model).toBe("");
@@ -47,7 +47,7 @@ describe("settings", () => {
   });
 
   it("falls back to defaults on malformed storage", () => {
-    localStorage.setItem("3uxo.settings", "not json");
+    localStorage.setItem("auris.settings", "not json");
     expect(getSettings().ai.base_url).toBe("");
   });
 

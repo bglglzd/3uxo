@@ -33,7 +33,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   // Соло-режим «я один»: запоминаем выбор между сессиями.
   const [solo, setSolo] = useState(
-    () => localStorage.getItem("3uxo.solo.pref") === "1",
+    () => localStorage.getItem("auris.solo.pref") === "1",
   );
   // Состояние расшифровок по id — живёт на уровне приложения.
   const [trans, setTrans] = useState<Record<string, TranscribeState>>({});
@@ -47,7 +47,7 @@ export default function App() {
 
   const changeSolo = useCallback((v: boolean) => {
     setSolo(v);
-    localStorage.setItem("3uxo.solo.pref", v ? "1" : "0");
+    localStorage.setItem("auris.solo.pref", v ? "1" : "0");
   }, []);
 
   useEffect(() => {
@@ -144,8 +144,8 @@ export default function App() {
   const handleStart = async () => {
     const id = await api.startRecording();
     // Помечаем встречу как соло, если включён режим «я один» (фронт читает это
-    // при расшифровке — ключ в стиле 3uxo.speakers.*/3uxo.labels.*).
-    if (solo && id) localStorage.setItem(`3uxo.solo.${id}`, "1");
+    // при расшифровке — ключ в стиле auris.speakers.*/auris.labels.*).
+    if (solo && id) localStorage.setItem(`auris.solo.${id}`, "1");
     setRecording(true);
     setPaused(false);
   };

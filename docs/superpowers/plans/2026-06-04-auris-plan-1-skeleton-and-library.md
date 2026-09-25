@@ -1,4 +1,4 @@
-# 3uxo — План 1: Каркас, модель данных и библиотека встреч
+# auris — План 1: Каркас, модель данных и библиотека встреч
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -16,19 +16,19 @@
 > здесь по-настоящему (без фейковых костылей), проект превращён в **Cargo
 > workspace** из двух крейтов:
 >
-> - **`core/` (крейт `uxo-core`)** — вся логика без GUI: `error`, `model`,
+> - **`core/` (крейт `auris-core`)** — вся логика без GUI: `error`, `model`,
 >   `audio`, `storage`, `recorder`, `service`. Зависимости: rusqlite, serde,
 >   serde_json, uuid, chrono, hound, thiserror (+ tempfile в dev). НЕ зависит
 >   от tauri. Модули объявлены `pub mod ...;` в `core/src/lib.rs`. Тесты:
->   `cargo test -p uxo-core` (работает на Linux без GTK).
-> - **`src-tauri/` (крейт `app-3uxo`)** — тонкий слой: `commands.rs` + сборка
->   приложения в `lib.rs`. Зависит от `uxo-core`, tauri, serde, serde_json,
+>   `cargo test -p auris-core` (работает на Linux без GTK).
+> - **`src-tauri/` (крейт `auris`)** — тонкий слой: `commands.rs` + сборка
+>   приложения в `lib.rs`. Зависит от `auris-core`, tauri, serde, serde_json,
 >   uuid, chrono. Собирается на Windows/macOS или на Linux с GTK.
 >
 > Поэтому ниже: модули Задач 1–6 фактически лежат в `core/src/` (а не
 > `src-tauri/src/`), внутри них пути `crate::...` корректны как есть; команды
-> Задачи 7 обращаются к логике как `uxo_core::model::Meeting`,
-> `uxo_core::service`, `uxo_core::error::AppError` и т.д. Корневой `Cargo.toml`
+> Задачи 7 обращаются к логике как `auris_core::model::Meeting`,
+> `auris_core::service`, `auris_core::error::AppError` и т.д. Корневой `Cargo.toml`
 > — виртуальный workspace с `members = ["core", "src-tauri"]`.
 
 ---
@@ -36,7 +36,7 @@
 ## Структура файлов (создаётся этим планом)
 
 ```
-3uxo/
+auris/
 ├─ src-tauri/
 │  ├─ Cargo.toml                  # зависимости Rust
 │  ├─ tauri.conf.json             # конфиг Tauri (+ assetProtocol scope)
@@ -92,13 +92,13 @@ Expected: версии печатаются без ошибок. Если `cargo
 
 - [ ] **Step 2: Сгенерировать проект Tauri 2 + React + TS прямо в текущей папке**
 
-Папка `3uxo` уже существует и содержит `docs/`. Скаффолдим во временную папку и переносим, чтобы не затереть `docs/` и `.git`.
+Папка `auris` уже существует и содержит `docs/`. Скаффолдим во временную папку и переносим, чтобы не затереть `docs/` и `.git`.
 
 Run:
 ```bash
-cd <workspace> && npm create tauri-app@latest 3uxo-scaffold -- --template react-ts --manager npm --yes
+cd <workspace> && npm create tauri-app@latest auris-scaffold -- --template react-ts --manager npm --yes
 ```
-Expected: создана папка `3uxo-scaffold` с `src/`, `src-tauri/`, `package.json`.
+Expected: создана папка `auris-scaffold` с `src/`, `src-tauri/`, `package.json`.
 
 - [ ] **Step 3: Перенести содержимое скаффолда в проект, сохранив docs/ и git**
 
@@ -106,7 +106,7 @@ Run:
 ```bash
 cd <project-root>-scaffold && \
 cp -rn src src-tauri package.json package-lock.json index.html vite.config.ts tsconfig*.json public <project-root>/ 2>/dev/null; \
-cd <workspace> && rm -rf 3uxo-scaffold && echo moved
+cd <workspace> && rm -rf auris-scaffold && echo moved
 ```
 Expected: в `<project-root>` появились `src/`, `src-tauri/`, `package.json` и т.д.
 
@@ -974,7 +974,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("no app data dir");
             std::fs::create_dir_all(&data_root).expect("cannot create data dir");
-            let db_path = data_root.join("3uxo.db");
+            let db_path = data_root.join("auris.db");
             let repo = storage::Repo::open(&db_path).expect("cannot open db");
 
             app.manage(AppState {
@@ -1511,7 +1511,7 @@ export default function App() {
   return (
     <main className="app">
       <header className="app-header">
-        <h1>3uxo · третье ухо</h1>
+        <h1>auris · третье ухо</h1>
         <RecordButton
           recording={recording}
           onStart={handleStart}
@@ -1648,7 +1648,7 @@ cd <project-root> && git add -A && git commit -m "feat: assemble App shell with 
 - [ ] **Step 1: Написать `README.md`**
 
 ```markdown
-# 3uxo — третье ухо
+# auris — третье ухо
 
 Локальное десктоп-приложение для записи, расшифровки и организации твоих созвонов.
 Записывает звонок в любом приложении двумя дорожками (ты + собеседник), хранит всё

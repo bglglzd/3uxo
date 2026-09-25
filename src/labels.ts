@@ -14,7 +14,7 @@ export function defaultName(id: string): string {
 
 export function getLabels(meetingId: string): SpeakerLabels {
   try {
-    const raw = localStorage.getItem(`3uxo.labels.${meetingId}`);
+    const raw = localStorage.getItem(`auris.labels.${meetingId}`);
     if (raw) return JSON.parse(raw) as SpeakerLabels;
   } catch {
     /* ignore */
@@ -23,7 +23,7 @@ export function getLabels(meetingId: string): SpeakerLabels {
 }
 
 export function setLabels(meetingId: string, labels: SpeakerLabels): void {
-  localStorage.setItem(`3uxo.labels.${meetingId}`, JSON.stringify(labels));
+  localStorage.setItem(`auris.labels.${meetingId}`, JSON.stringify(labels));
 }
 
 /// Отображаемое имя говорящего: пользовательское (если задано непустым) или дефолт.

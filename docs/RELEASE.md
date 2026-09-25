@@ -57,7 +57,7 @@ RID=$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].
 gh run watch $RID --interval 45
 gh run view $RID --json conclusion --jq .conclusion     # "success"
 gh release view vX.Y.Z --json tagName,isDraft,assets    # assets: setup.exe/.msi/.sig + latest.json
-gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
+gh api repos/bglglzd/auris/releases/latest --jq .tag_name # == vX.Y.Z
 ```
 
 Коммиты заканчивать строкой:
@@ -69,7 +69,7 @@ gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
 
 ### `.github/workflows/ci.yml` (on push / pull_request)
 - **frontend** (ubuntu): `npm ci`, `npm test`, `npx tsc --noEmit`, `npm run build`.
-- **core** (ubuntu): `cargo test -p uxo-core` (доменная логика, кросс-платформенно).
+- **core** (ubuntu): `cargo test -p auris-core` (доменная логика, кросс-платформенно).
 - **check-app** (windows): `npm run build` + установка LLVM (libclang для whisper-rs)
   + `cargo check -p auris --features whisper,diarize,opus`. Именно здесь
   компилируется весь Tauri-слой и WASAPI/Windows-код (валидация «слепого» Rust).
@@ -85,7 +85,7 @@ gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
 ## 3. Авто-обновление
 
 - Endpoint (зашит в `tauri.conf.json`):
-  `https://github.com/bglglzd/3uxo/releases/latest/download/latest.json`.
+  `https://github.com/bglglzd/auris/releases/latest/download/latest.json`.
 - GitHub `releases/latest` = самый свежий не-draft/не-prerelease релиз. Апдейтер
   всегда ведёт на него — промежуточные версии пользователь «перепрыгивает».
 - `latest.json` содержит версию, подписи и URL'ы `Auris_X.Y.Z_x64-setup.exe` /
@@ -107,7 +107,7 @@ gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
 4. **Cargo.lock** при переименовании пакета можно править вручную или дать cargo
    перегенерировать (CI без `--locked`).
 5. **`gh pr edit --base` ломается** (GraphQL projectCards deprecation). Ретаргет
-   базы PR: `gh api -X PATCH repos/bglglzd/3uxo/pulls/N -f base=main`.
+   базы PR: `gh api -X PATCH repos/bglglzd/auris/pulls/N -f base=main`.
 6. **Иконки**: `npx tauri icon src-tauri/auris-icon.svg` (принимает SVG напрямую)
    регенерит десктоп-форматы в `src-tauri/icons/`. Mobile (android/ios) — удалять
    (приложение десктопное). Исходник иконки — `src-tauri/auris-icon.svg`.

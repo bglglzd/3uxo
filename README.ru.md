@@ -21,7 +21,7 @@
 
 ## Стек
 
-Tauri 2 · Rust (workspace: `uxo-core` без GUI + `src-tauri`) · React + TypeScript ·
+Tauri 2 · Rust (workspace: `auris-core` без GUI + `src-tauri`) · React + TypeScript ·
 SQLite · Whisper (`whisper-rs`, локально) · `wasapi` (захват звука на Windows).
 
 ## Статус
@@ -60,11 +60,11 @@ OpenAI-совместимый эндпоинт).
 
 ## Разработка и тесты
 
-Доменная логика вынесена в крейт `uxo-core` без зависимости от GUI, поэтому
+Доменная логика вынесена в крейт `auris-core` без зависимости от GUI, поэтому
 тестируется на любой ОС (в т.ч. на Linux без GTK):
 
 ```bash
-cargo test -p uxo-core            # тесты ядра (модель, хранилище, аудио,
+cargo test -p auris-core            # тесты ядра (модель, хранилище, аудио,
                                   # расшифровка, ИИ — без GUI)
 npm test                          # тесты фронтенда (vitest)
 npm run build                     # сборка фронтенда

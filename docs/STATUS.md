@@ -1,6 +1,6 @@
 # Auris — статус и незакрытое (перенесено из CLAUDE.md §7, 2026-07-07)
 
-> Архивный снапшот (состояние ~июнь 2026). Актуальный релиз: `gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name`.
+> Архивный снапшот (состояние ~июнь 2026). Актуальный релиз: `gh api repos/bglglzd/auris/releases/latest --jq .tag_name`.
 
 
 **v0.7.1:** доводка редактора — перед перезаписью дорожек webview отпускает
@@ -47,8 +47,8 @@ suggest_metadata) → 0.5.7 (версия в настройках) → 0.5.8 (л
    отбрасывает авто-записи короче `min_keep_secs` (12 с) — чтобы Telegram-«дзынь»
    не плодил мусорные 2-сек встречи. Настройки в `AutoRecordCfg`/`set_autorecord`
    + UI в секции авто-записи.
-3. **Соло-режим «я один».** Тумблер у кнопки записи (`3uxo.solo.pref` →
-   `3uxo.solo.<id>`); при расшифровке `transcribe(solo)` берёт только микрофон,
+3. **Соло-режим «я один».** Тумблер у кнопки записи (`auris.solo.pref` →
+   `auris.solo.<id>`); при расшифровке `transcribe(solo)` берёт только микрофон,
    один голос «Я», без диаризации (`service::transcribe_solo_to_file`).
 4. **Копирование без Markdown.** `export::stripMarkdown`/`transcriptToPlain` +
    общий `clipboard.ts`/`CopyButton`; кнопки «📋 Копировать» в ИИ-блоках, ответе и

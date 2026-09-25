@@ -1,6 +1,6 @@
 import type { AppSettings } from "./types";
 
-const KEY = "3uxo.settings";
+const KEY = "auris.settings";
 
 const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },

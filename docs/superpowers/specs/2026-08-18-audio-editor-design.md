@@ -167,7 +167,7 @@ whisper) — кнопка выключена с подсказкой.
 
 ## 5. Проверка
 
-- `cargo test -p uxo-core` — `edit.rs` (волна, вырезы, пересчёт расшифровки),
+- `cargo test -p auris-core` — `edit.rs` (волна, вырезы, пересчёт расшифровки),
   `service.rs` (бэкап/применение/возврат), `storage.rs` (`update_duration`).
 - `npm test` — `audioedit.test.ts` (вся чистая логика), `AudioEditor.test.tsx`
   (рендер, тулбар, счётчики, вырезы через мок `api`).

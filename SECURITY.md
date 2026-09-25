@@ -2,7 +2,7 @@
 
 Please do not disclose security vulnerabilities in a public issue.
 
-Use [GitHub private vulnerability reporting](https://github.com/bglglzd/3uxo/security/advisories/new)
+Use [GitHub private vulnerability reporting](https://github.com/bglglzd/auris/security/advisories/new)
 when possible. Include a clear description, reproduction steps, affected
 versions, and any suggested mitigation. Do not include real API keys, private
 audio, or unredacted transcripts.

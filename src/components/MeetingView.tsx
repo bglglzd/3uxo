@@ -43,7 +43,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   // Соло-режим «я один»: помечается при старте записи (см. App.handleStart).
   // Расшифровываем только микрофон, один голос «Я», без диаризации.
   const isSolo =
-    !isImported && localStorage.getItem(`3uxo.solo.${meeting.id}`) === "1";
+    !isImported && localStorage.getItem(`auris.solo.${meeting.id}`) === "1";
 
   const micRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
@@ -73,12 +73,12 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   // Сколько голосов в записи (для диаризации). Импорт: "auto"|2..8; запись: 1..8.
   const [speakerSel, setSpeakerSel] = useState<string>(
     () =>
-      localStorage.getItem(`3uxo.speakers.${meeting.id}`) ??
+      localStorage.getItem(`auris.speakers.${meeting.id}`) ??
       (isImported ? "auto" : "1"),
   );
   const updateSpeakerSel = (v: string) => {
     setSpeakerSel(v);
-    localStorage.setItem(`3uxo.speakers.${meeting.id}`, v);
+    localStorage.setItem(`auris.speakers.${meeting.id}`, v);
   };
   const speakerCountValue = (): number | null =>
     speakerSel === "auto" ? null : Number(speakerSel);

@@ -1,10 +1,10 @@
-# 3uxo — План 4: ИИ (выжимки, метаданные, вопросы)
+# auris — План 4: ИИ (выжимки, метаданные, вопросы)
 
 > REQUIRED SUB-SKILL: subagent-driven-development.
 
 **Goal:** По расшифровке встречи ИИ предлагает заголовок/участников/тему (пользователь правит), делает выжимку и отвечает на вопросы — через OpenAI-совместимый эндпоинт (свой base URL + ключ).
 
-**Architecture:** В `uxo-core` модуль `ai`: `AiConfig`, абстракция `ChatBackend` (trait) + реальная `HttpChatBackend` на `ureq`, плюс функции `suggest_metadata`/`summarize`/`answer_question` и `transcript_to_text`. Логика промптов/парсинга тестируется через `MockChatBackend`; реальный HTTP — через локальный мок-сервер в тесте. Хранение выжимки в файле встречи и обновление метаданных в БД. Тонкие команды Tauri + UI (настройки ИИ в localStorage, кнопки и чат в карточке встречи).
+**Architecture:** В `auris-core` модуль `ai`: `AiConfig`, абстракция `ChatBackend` (trait) + реальная `HttpChatBackend` на `ureq`, плюс функции `suggest_metadata`/`summarize`/`answer_question` и `transcript_to_text`. Логика промптов/парсинга тестируется через `MockChatBackend`; реальный HTTP — через локальный мок-сервер в тесте. Хранение выжимки в файле встречи и обновление метаданных в БД. Тонкие команды Tauri + UI (настройки ИИ в localStorage, кнопки и чат в карточке встречи).
 
 **Tech Stack:** Rust (ureq, rustls), React.
 
@@ -30,4 +30,4 @@
 - Панель настроек: base URL, ключ, модель → localStorage (`SettingsPanel`).
 - В карточке встречи: «ИИ: заполнить заголовок/участников/тему» (показывает предложение, поля редактируемые, сохранение), «Сделать выжимку» (показ + сохранение), чат-поле «Спросить по встрече».
 
-Точный код задаётся исполнителю. Тесты ядра: парсинг JSON метаданных (в т.ч. в ```-блоке/с лишним текстом), форматирование transcript_to_text, mock-бэкенд для summarize/answer, и HTTP-roundtrip против локального TcpListener. `cargo test -p uxo-core` обязан проходить.
+Точный код задаётся исполнителю. Тесты ядра: парсинг JSON метаданных (в т.ч. в ```-блоке/с лишним текстом), форматирование transcript_to_text, mock-бэкенд для summarize/answer, и HTTP-roundtrip против локального TcpListener. `cargo test -p auris-core` обязан проходить.
