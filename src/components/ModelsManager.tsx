@@ -6,15 +6,20 @@ import { api } from "../api";
 /// Описание моделей распознавания для выбора.
 export const WHISPER_CHOICES: { id: string; title: string; note: string }[] = [
   {
-    id: "large-v3-turbo-q8_0",
-    title: "Large v3 Turbo",
-    note: "Рекомендуется: точность уровня Large v3, быстро, ~0.9 ГБ",
+    id: "parakeet-tdt-0.6b-v3",
+    title: "Parakeet v3 · NVIDIA",
+    note: "Рекомендуется: точный русский с пунктуацией, в разы быстрее, без видеокарты. 25 европейских языков · ~0.5 ГБ",
   },
-  { id: "large-v3-turbo", title: "Large v3 Turbo (полная)", note: "То же без сжатия, ~1.6 ГБ" },
-  { id: "large-v3", title: "Large v3", note: "Максимум качества, медленно без видеокарты, ~3.1 ГБ" },
-  { id: "medium", title: "Medium", note: "Прежняя модель по умолчанию, ~1.5 ГБ" },
-  { id: "small", title: "Small", note: "Для слабых компьютеров, ~0.5 ГБ" },
-  { id: "base", title: "Base", note: "Черновая, очень быстро, ~0.15 ГБ" },
+  {
+    id: "large-v3-turbo-q8_0",
+    title: "Whisper Large v3 Turbo",
+    note: "Почти любой язык мира; быстро с видеокартой · ~0.9 ГБ",
+  },
+  { id: "large-v3-turbo", title: "Whisper Large v3 Turbo (полная)", note: "То же без сжатия, ~1.6 ГБ" },
+  { id: "large-v3", title: "Whisper Large v3", note: "Максимум качества, медленно без видеокарты, ~3.1 ГБ" },
+  { id: "medium", title: "Whisper Medium", note: "Прежняя модель по умолчанию, ~1.5 ГБ" },
+  { id: "small", title: "Whisper Small", note: "Для слабых компьютеров, ~0.5 ГБ" },
+  { id: "base", title: "Whisper Base", note: "Черновая, очень быстро, ~0.15 ГБ" },
 ];
 
 export function formatBytes(n: number): string {

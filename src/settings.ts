@@ -2,8 +2,11 @@ import type { AppSettings } from "./types";
 
 const KEY = "3uxo.settings";
 
-/// Модель распознавания по умолчанию: large-v3-turbo (8 бит) — точность
-/// уровня large-v3 для русского при размере и скорости лучше medium.
+/// Модель распознавания по умолчанию: NVIDIA Parakeet TDT 0.6B v3 — точный
+/// русский с пунктуацией, в разы быстрее Whisper на обычном CPU и без
+/// «галлюцинаций» на тишине. Для языков вне её 25 бэкенд сам берёт Whisper.
+export const DEFAULT_MODEL = "parakeet-tdt-0.6b-v3";
+/// Лучший Whisper (для языков, которых нет у Parakeet).
 export const DEFAULT_WHISPER_MODEL = "large-v3-turbo-q8_0";
 
 /// Версия схемы настроек. 2 — v0.8: новая модель по умолчанию + aiAuto.
@@ -11,7 +14,7 @@ const VERSION = 2;
 
 const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },
-  whisper: { whisperPath: "", model: DEFAULT_WHISPER_MODEL, language: "ru" },
+  whisper: { whisperPath: "", model: DEFAULT_MODEL, language: "ru" },
   hotkey: "Ctrl+Shift+R",
   autoRecord: {
     enabled: false,
@@ -32,7 +35,7 @@ export function getSettings(): AppSettings {
       // До v0.8 модель по умолчанию была medium и сохранялась в настройки —
       // переводим на новую (лучше и быстрее). Явный выбор после v0.8 не трогаем.
       if ((parsed.version ?? 1) < 2 && (!whisper.model || whisper.model === "medium")) {
-        whisper.model = DEFAULT_WHISPER_MODEL;
+        whisper.model = DEFAULT_MODEL;
       }
       return {
         ai: { ...DEFAULTS.ai, ...(parsed.ai ?? {}) },

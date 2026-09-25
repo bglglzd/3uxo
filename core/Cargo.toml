@@ -30,6 +30,9 @@ whisper-rs = { version = "0.16", optional = true }
 # ResNet34 через ONNX Runtime (статически линкуется, бинарники ORT качаются при
 # сборке). Тяжёлая — только за фичей `diarize`.
 ort = { version = "=2.0.0-rc.13", optional = true }
+# Parakeet (NVIDIA NeMo): модель приходит архивом .tar.bz2 (чистый Rust).
+tar = { version = "0.4", optional = true }
+bzip2 = { version = "0.6", optional = true }
 # Kaldi-совместимые fbank-признаки для модели эмбеддингов голоса.
 kaldi-native-fbank = { version = "0.1", optional = true }
 
@@ -39,6 +42,9 @@ whisper = ["dep:whisper-rs"]
 opus = ["dep:ogg", "dep:audiopus"]
 # Диаризация (разделение говорящих). Тяжёлые ML-зависимости (ONNX Runtime) — отдельно.
 diarize = ["dep:ort", "dep:kaldi-native-fbank"]
+# Распознавание NVIDIA Parakeet TDT 0.6B v3 (ONNX Runtime): 25 языков, в т.ч.
+# русский, пунктуация, в разы быстрее Whisper на CPU, без «галлюцинаций».
+parakeet = ["dep:ort", "dep:tar", "dep:bzip2"]
 # GPU-ускорение через Vulkan (быстро на NVIDIA/AMD/Intel; рантайм vulkan-1.dll
 # идёт с драйвером, ничего вкладывать в установщик не нужно).
 gpu = ["whisper", "whisper-rs/vulkan"]
@@ -63,3 +69,7 @@ tempfile = "3"
 [[example]]
 name = "diar_eval"
 required-features = ["diarize"]
+
+[[example]]
+name = "asr_eval"
+required-features = ["parakeet"]

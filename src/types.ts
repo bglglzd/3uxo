@@ -90,7 +90,7 @@ export interface MeetingContext {
 /// Статус локальной модели (экран «Модели» в настройках).
 export interface ModelInfo {
   id: string;
-  kind: "whisper" | "diarize";
+  kind: "whisper" | "parakeet" | "diarize";
   installed: boolean;
   bytes: number;
 }

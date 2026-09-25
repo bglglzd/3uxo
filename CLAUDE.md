@@ -61,8 +61,10 @@ Windows, `#[cfg(windows)]`).
 - `diarize` — диаризация (ONNX Runtime через `ort`, статически; бинарники ORT
   качаются при сборке с cdn.pyke.io).
 - `opus` — декод Ogg/Opus (libopus через audiopus/cmake).
-- **Релиз собирает `--features gpu,diarize,opus`**; **CI check-app —
-  `whisper,diarize,opus`** (без GPU).
+- `parakeet` — распознавание NVIDIA Parakeet TDT 0.6B v3 (ONNX Runtime).
+- **Релиз собирает `--features gpu,diarize,opus,parakeet`**; **CI check-app —
+  `cargo build` с `whisper,diarize,opus,parakeet`** (без GPU); job
+  `onnx-windows` — e2e диаризации и Parakeet на реальных моделях.
 
 ---
 
@@ -120,6 +122,21 @@ e2e-тест `core/tests/diarize_e2e.rs` (`-- --ignored`, в CI на Windows).
 `transcript.orig.json`; `revert_audio_edit_files` возвращает оригинал. Команды:
 `waveform`, `audio_edit_state`, `apply_audio_edit`, `revert_audio_edit`.
 Фронт — `AudioEditor`/`WaveLane` + чистая логика `audioedit.ts`.
+
+### Parakeet (v0.8.0, движок по умолчанию)
+`parakeet.rs` (фича `parakeet`): NVIDIA Parakeet TDT 0.6B v3 int8 (экспорт
+sherpa-onnx, GitHub-релиз `.tar.bz2` ~490 МБ, распаковка tar+bzip2 на чистом Rust в
+`<app_data>/models/parakeet-tdt-0.6b-v3`). Признаки — `nemo_mel.rs` (log-mel NeMo,
+сверено с librosa до 1e-4), encoder → жадное TDT (joiner: токен + пропуск
+кадров 0..4), кадр 80 мс, окна ~15 с с разрезом в паузе (на 30 с TDT терял
+хвосты). 25 европейских языков, пунктуация; `models::pick_model` берёт Whisper,
+если язык вне списка. Отладка: `--example asr_eval`, e2e `core/tests/parakeet_e2e.rs`.
+
+### Обновления (v0.8.0)
+`src/updater.ts` + `UpdateDialog`: проверка при запуске и каждые 6 ч (и кнопкой в
+настройках) → диалог «Доступно обновление» с заметками релиза → по согласию
+скачивание с прогрессом, установка, `relaunch()`. Во время записи кнопка
+неактивна. «Позже» откладывает версию до следующего запуска.
 
 ### Модели (v0.8.0)
 `models.rs`: каталог Whisper (по умолчанию **large-v3-turbo-q8_0**), статус,

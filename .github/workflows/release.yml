@@ -55,4 +55,4 @@ jobs:
           # Генерирует и прикладывает latest.json для авто-обновления.
           includeUpdaterJson: true
           # whisper.cpp с GPU (Vulkan) + диаризация (ONNX Runtime) + Ogg/Opus (libopus).
-          args: --features gpu,diarize,opus
+          args: --features gpu,diarize,opus,parakeet

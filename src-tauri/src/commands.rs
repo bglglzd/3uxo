@@ -359,10 +359,9 @@ pub async fn transcribe(
     // Иначе — встроенный whisper.cpp; модель скачивается ОДИН раз (фаза
     // download только при реальной загрузке). Прогресс шлём ПО ФАЗАМ из
     // безопасного потока (без FFI-колбэка внутри whisper.cpp — он ронял).
-    #[cfg(feature = "whisper")]
+    #[cfg(any(feature = "whisper", feature = "parakeet"))]
     {
         use uxo_core::transcript::merge_tracks;
-        use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
         // Сколько голосов задал пользователь: None/0 — авто.
         let wanted = speaker_count.filter(|&n| n > 0).map(|n| n as usize);
@@ -389,11 +388,13 @@ pub async fn transcribe(
         };
 
         emit("loading", 0.0, 0, 0);
-        let model = uxo_core::models::whisper_id(options.model.as_deref()).to_string();
+        let model =
+            uxo_core::models::pick_model(options.model.as_deref(), options.language.as_deref())
+                .to_string();
         flog(&state.data_root, &format!("transcribe: model {model}"));
-        let transcriber = WhisperTranscriber::managed(
+        let transcriber = load_asr(
             &state.data_root,
-            Some(&model),
+            &model,
             options.language.clone(),
             &|frac| emit("download", frac * 100.0, 0, 0),
         )?;
@@ -407,9 +408,8 @@ pub async fn transcribe(
             let text_scale = 100.0f32;
 
             emit("mic", 0.0, 0, 0);
-            let segs = transcriber.transcribe_windowed(
+            let segs = transcriber.run(
                 &audio_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| emit("mic", (done as f32 / total as f32) * text_scale, done, total),
             )?;
             flog(&state.data_root, &format!("transcribed: audio={} segs", segs.len()));
@@ -443,9 +443,8 @@ pub async fn transcribe(
             let mic_path = normalize_track(&state.data_root, &id, "mic.wav")?;
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: solo mic track");
-            let mic_segs = transcriber.transcribe_windowed(
+            let mic_segs = transcriber.run(
                 &mic_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| emit("mic", (done as f32 / total as f32) * 100.0, done, total),
             )?;
             flog(
@@ -470,17 +469,15 @@ pub async fn transcribe(
 
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: mic track");
-            let mic_segs = transcriber.transcribe_windowed(
+            let mic_segs = transcriber.run(
                 &mic_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| emit("mic", (done as f32 / total as f32) * 45.0, done, total),
             )?;
 
             emit("system", 45.0, 0, 0);
             flog(&state.data_root, "transcribe: system track");
-            let system_segs = transcriber.transcribe_windowed(
+            let system_segs = transcriber.run(
                 &system_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| {
                     emit("system", 45.0 + (done as f32 / total as f32) * (sys_end - 45.0), done, total)
                 },
@@ -533,7 +530,7 @@ pub async fn transcribe(
         notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }
-    #[cfg(not(feature = "whisper"))]
+    #[cfg(not(any(feature = "whisper", feature = "parakeet")))]
     {
         let _ = (options, &app, speaker_count);
         Err(AppError::Audio(
@@ -542,9 +539,82 @@ pub async fn transcribe(
     }
 }
 
+/// Движок распознавания: Whisper (whisper.cpp) или Parakeet (ONNX).
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
+trait Asr {
+    /// Расшифровка файла по окнам; прогресс — (готово окон, всего).
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>>;
+}
+
+#[cfg(feature = "whisper")]
+impl Asr for uxo_core::whisper::WhisperTranscriber {
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>> {
+        self.transcribe_windowed(wav, uxo_core::whisper::DEFAULT_WINDOW_SECS, progress)
+    }
+}
+
+#[cfg(feature = "parakeet")]
+impl Asr for uxo_core::parakeet::ParakeetTranscriber {
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>> {
+        self.transcribe_windowed(wav, 15, progress)
+    }
+}
+
+/// Загружает выбранный движок (модель качается только в первый раз).
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
+fn load_asr(
+    data_root: &Path,
+    model: &str,
+    language: Option<String>,
+    on_download: &dyn Fn(f32),
+) -> AppResult<Box<dyn Asr>> {
+    if uxo_core::models::is_parakeet(model) {
+        #[cfg(feature = "parakeet")]
+        {
+            let _ = language;
+            return Ok(Box::new(uxo_core::parakeet::ParakeetTranscriber::managed(
+                data_root,
+                on_download,
+            )?));
+        }
+        #[cfg(not(feature = "parakeet"))]
+        return Err(AppError::InvalidState(
+            "Parakeet недоступен в этой сборке — выберите Whisper в настройках".into(),
+        ));
+    }
+    #[cfg(feature = "whisper")]
+    {
+        Ok(Box::new(uxo_core::whisper::WhisperTranscriber::managed(
+            data_root,
+            Some(model),
+            language,
+            on_download,
+        )?))
+    }
+    #[cfg(not(feature = "whisper"))]
+    {
+        let _ = (data_root, language, on_download);
+        Err(AppError::InvalidState(
+            "Whisper недоступен в этой сборке — выберите Parakeet в настройках".into(),
+        ))
+    }
+}
+
 /// Прогоняет записанную дорожку через декодер импорта (16 кГц/моно/i16) в
 /// `<stem>_norm.wav`. Best-effort: при ошибке (пустая дорожка) — исходный файл.
-#[cfg(feature = "whisper")]
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
 fn normalize_track(data_root: &Path, id: &str, track: &str) -> AppResult<PathBuf> {
     let src = service::track_path(data_root, id, track)?;
     let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("track").to_string();
@@ -663,6 +733,15 @@ pub async fn download_model(
             {
                 let _ = &report;
                 Err(AppError::InvalidState("разделение голосов недоступно в этой сборке".into()))
+            }
+        } else if uxo_core::models::is_parakeet(&mid) {
+            #[cfg(feature = "parakeet")]
+            {
+                uxo_core::parakeet::ensure_model(&data_root, &report)
+            }
+            #[cfg(not(feature = "parakeet"))]
+            {
+                Err(AppError::InvalidState("Parakeet недоступен в этой сборке".into()))
             }
         } else {
             uxo_core::models::ensure_whisper(&data_root, &mid, &report).map(|_| ())

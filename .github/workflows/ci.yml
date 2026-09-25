@@ -63,18 +63,19 @@ jobs:
       # Полная сборка приложения с whisper + diarize + opus (без GPU/Vulkan):
       # именно build (а не check) — ловит ошибки линковки whisper.cpp и
       # статического ONNX Runtime до релиза. opus тянет libopus (cmake).
-      - name: cargo build (app + whisper + diarize + opus)
-        run: cargo build -p auris --features whisper,diarize,opus
+      - name: cargo build (app + whisper + diarize + opus + parakeet)
+        run: cargo build -p auris --features whisper,diarize,opus,parakeet
 
   # Диаризация на Windows по-настоящему: ONNX Runtime + модели + эталонная
   # запись pyannote (2 голоса). Проверяет рантайм там, где живут пользователи.
-  diarize-windows:
+  onnx-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Diarization tests (unit + e2e on real models)
+      - name: ONNX tests (unit + e2e on real models)
         run: |
-          cargo test -p uxo-core --features diarize
+          cargo test -p uxo-core --features diarize,parakeet
           cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored
+          cargo test --release -p uxo-core --features parakeet --test parakeet_e2e -- --ignored

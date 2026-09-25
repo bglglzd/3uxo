@@ -34,6 +34,60 @@ pub const WHISPER_MODELS: &[WhisperModel] = &[
     WhisperModel { id: "base", approx_bytes: 148_000_000 },
 ];
 
+/// Модель NVIDIA Parakeet TDT 0.6B v3 (ONNX, int8) — отдельный движок.
+pub const PARAKEET: &str = "parakeet-tdt-0.6b-v3";
+/// Файлы модели Parakeet в её каталоге.
+pub const PARAKEET_FILES: &[&str] =
+    &["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"];
+
+/// Каталог модели Parakeet.
+pub fn parakeet_dir(data_dir: &Path) -> PathBuf {
+    models_dir(data_dir).join(PARAKEET)
+}
+
+/// Скачана ли модель Parakeet целиком.
+pub fn parakeet_present(data_dir: &Path) -> bool {
+    let dir = parakeet_dir(data_dir);
+    PARAKEET_FILES
+        .iter()
+        .all(|f| std::fs::metadata(dir.join(f)).map(|m| m.len() > 0).unwrap_or(false))
+        && std::fs::metadata(dir.join("encoder.int8.onnx"))
+            .map(|m| m.len() > 100_000_000)
+            .unwrap_or(false)
+}
+
+/// Языки Parakeet v3 (25 европейских). Для остальных — Whisper.
+pub const PARAKEET_LANGS: &[&str] = &[
+    "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv", "lt",
+    "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
+];
+
+/// Модель распознавания по умолчанию — Parakeet v3: точный русский с
+/// пунктуацией, в разы быстрее Whisper на обычном CPU, без «галлюцинаций».
+pub const DEFAULT_MODEL: &str = PARAKEET;
+
+/// Какую модель реально использовать: выбор пользователя (пусто → по
+/// умолчанию), но если выбран Parakeet, а язык ему незнаком — Whisper.
+pub fn pick_model<'a>(model: Option<&'a str>, language: Option<&str>) -> &'a str {
+    let chosen = match model {
+        Some(m) if !m.trim().is_empty() => m.trim(),
+        _ => DEFAULT_MODEL,
+    };
+    if is_parakeet(chosen) {
+        let lang = language.map(|l| l.trim().to_lowercase()).unwrap_or_default();
+        let known = lang.is_empty() || lang == "auto" || PARAKEET_LANGS.contains(&lang.as_str());
+        if !known {
+            return DEFAULT_WHISPER;
+        }
+    }
+    chosen
+}
+
+/// Это Parakeet, а не Whisper?
+pub fn is_parakeet(id: &str) -> bool {
+    id == PARAKEET
+}
+
 /// Нормализует выбранную пользователем модель: пусто → модель по умолчанию.
 pub fn whisper_id(size: Option<&str>) -> &str {
     match size {
@@ -144,6 +198,13 @@ pub fn ensure_whisper(data_dir: &Path, id: &str, on_progress: &dyn Fn(f32)) -> A
 /// Удаляет файл модели Whisper (освободить место).
 pub fn delete_whisper(data_dir: &Path, id: &str) -> AppResult<()> {
     validate_model_id(id)?;
+    if is_parakeet(id) {
+        let dir = parakeet_dir(data_dir);
+        if dir.exists() {
+            std::fs::remove_dir_all(dir)?;
+        }
+        return Ok(());
+    }
     let path = whisper_path(data_dir, id);
     if path.exists() {
         std::fs::remove_file(path)?;
@@ -155,7 +216,7 @@ pub fn delete_whisper(data_dir: &Path, id: &str) -> AppResult<()> {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ModelInfo {
     pub id: String,
-    /// "whisper" | "diarize".
+    /// "whisper" | "parakeet" | "diarize".
     pub kind: String,
     pub installed: bool,
     /// Размер на диске (если скачана) или примерный размер загрузки, байт.
@@ -177,6 +238,24 @@ pub fn status(data_dir: &Path) -> Vec<ModelInfo> {
             ModelInfo { id: m.id.into(), kind: "whisper".into(), installed, bytes }
         })
         .collect();
+    let pk = parakeet_present(data_dir);
+    out.insert(
+        0,
+        ModelInfo {
+            id: PARAKEET.into(),
+            kind: "parakeet".into(),
+            installed: pk,
+            bytes: if pk {
+                PARAKEET_FILES
+                    .iter()
+                    .filter_map(|f| std::fs::metadata(parakeet_dir(data_dir).join(f)).ok())
+                    .map(|m| m.len())
+                    .sum()
+            } else {
+                490_000_000
+            },
+        },
+    );
     let diar_installed = crate::diarize::models_present(data_dir);
     out.push(ModelInfo {
         id: "voices".into(),
@@ -215,8 +294,27 @@ mod tests {
         assert!(base.installed);
         assert_eq!(base.bytes, 1_000_001);
         assert!(st.iter().any(|m| m.kind == "diarize" && !m.installed));
+        assert!(st.iter().any(|m| m.id == PARAKEET && !m.installed));
+        // Parakeet: каталог с файлами → скачана; удаление убирает каталог.
+        let pd = parakeet_dir(dir.path());
+        std::fs::create_dir_all(&pd).unwrap();
+        for f in PARAKEET_FILES {
+            std::fs::write(pd.join(f), b"x").unwrap();
+        }
+        assert!(!parakeet_present(dir.path()), "маленький encoder — оборванная закачка");
+        delete_whisper(dir.path(), PARAKEET).unwrap();
+        assert!(!pd.exists());
         delete_whisper(dir.path(), "base").unwrap();
         assert!(!whisper_present(dir.path(), "base"));
+    }
+
+    #[test]
+    fn picks_parakeet_by_default_and_whisper_for_other_languages() {
+        assert_eq!(pick_model(None, Some("ru")), PARAKEET);
+        assert_eq!(pick_model(Some(""), None), PARAKEET);
+        assert_eq!(pick_model(Some(PARAKEET), Some("auto")), PARAKEET);
+        assert_eq!(pick_model(Some(PARAKEET), Some("kk")), DEFAULT_WHISPER);
+        assert_eq!(pick_model(Some("medium"), Some("kk")), "medium");
     }
 
     #[test]

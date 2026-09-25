@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 import { getSettings } from "./settings";
@@ -10,7 +10,9 @@ import { MeetingView } from "./components/MeetingView";
 import { RecordingMonitor } from "./components/RecordingMonitor";
 import { SettingsModal } from "./components/SettingsModal";
 import { ImportModal } from "./components/ImportModal";
-import { checkForUpdates } from "./updater";
+import { findUpdate, UPDATE_INTERVAL_MS } from "./updater";
+import type { UpdateInfo } from "./updater";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { runAutoAi } from "./aiauto";
 
 type ProgressEvent = {
@@ -55,9 +57,27 @@ export default function App() {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    void checkForUpdates();
+  // Обновления: проверка при запуске и каждые 6 часов. Найдено — спрашиваем;
+  // «Позже» откладывает эту версию до следующего запуска.
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [skipped, setSkipped] = useState<string | null>(null);
+  const skippedRef = useRef<string | null>(null);
+  skippedRef.current = skipped;
+  const checkUpdates = useCallback(async (manual = false) => {
+    const u = await findUpdate();
+    if (u && (manual || u.version !== skippedRef.current)) setUpdate(u);
+    return u;
   }, []);
+  useEffect(() => {
+    void checkUpdates();
+    const id = setInterval(() => void checkUpdates(), UPDATE_INTERVAL_MS);
+    const onManual = () => void checkUpdates(true);
+    window.addEventListener("auris-check-updates", onManual);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("auris-check-updates", onManual);
+    };
+  }, [checkUpdates]);
 
   // При запуске применяем сохранённые настройки записи: горячую клавишу
   // (бэкенд по умолчанию ставит Ctrl+Shift+R) и конфиг авто-записи звонков.
@@ -287,6 +307,16 @@ export default function App() {
       </main>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {update && (
+        <UpdateDialog
+          info={update}
+          recording={recording}
+          onLater={() => {
+            setSkipped(update.version);
+            setUpdate(null);
+          }}
+        />
+      )}
       {showImport && (
         <ImportModal
           onClose={() => setShowImport(false)}

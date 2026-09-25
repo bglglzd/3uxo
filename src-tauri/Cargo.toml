@@ -41,6 +41,8 @@ whisper = ["uxo-core/whisper"]
 gpu = ["whisper", "uxo-core/gpu"]
 # Диаризация (разделение говорящих в импортированных записях).
 diarize = ["uxo-core/diarize"]
+# Распознавание NVIDIA Parakeet (ONNX Runtime).
+parakeet = ["uxo-core/parakeet"]
 # Декодирование Ogg/Opus (голосовые из мессенджеров).
 opus = ["uxo-core/opus"]
 

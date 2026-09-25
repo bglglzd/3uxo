@@ -7,7 +7,8 @@ import { AUTO_RECORD_APPS, customProcs, resolveProcesses } from "../autorecord";
 import { CopyLogButton } from "./CopyLogButton";
 import { HotkeyCapture } from "./HotkeyCapture";
 import { ModelsManager } from "./ModelsManager";
-import { DEFAULT_WHISPER_MODEL } from "../settings";
+import { DEFAULT_MODEL } from "../settings";
+import { findUpdate } from "../updater";
 
 /// Переключатель-тумблер в стиле Auris.
 function Switch({
@@ -37,6 +38,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<AppSettings>(getSettings());
   const [proc, setProc] = useState("");
   const [version, setVersion] = useState("");
+  const [updState, setUpdState] = useState("");
+
+  // Ручная проверка обновлений: нашлось — App покажет диалог обновления.
+  const checkNow = async () => {
+    setUpdState("Проверяю…");
+    const u = await findUpdate();
+    if (u) {
+      setUpdState(`Доступна версия ${u.version}`);
+      window.dispatchEvent(new Event("auris-check-updates"));
+    } else {
+      setUpdState("У вас последняя версия");
+    }
+  };
 
   // Версия приложения (из tauri.conf). В dev-превью без Tauri вернёт ошибку —
   // тогда просто не показываем номер.
@@ -322,7 +336,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <div className="field">
               <label>Модель распознавания</label>
               <ModelsManager
-                selected={s.whisper.model || DEFAULT_WHISPER_MODEL}
+                selected={s.whisper.model || DEFAULT_MODEL}
                 onSelect={(id) => wh("model", id)}
               />
             </div>
@@ -334,7 +348,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 placeholder="ru"
               />
               <span className="hint">
-                По умолчанию «ru». Впиши «auto» для автоопределения языка.
+                По умолчанию «ru». Впиши «auto» для автоопределения. Parakeet
+                определяет язык сам; если выбран язык вне его 25 — Auris
+                автоматически возьмёт Whisper.
               </span>
             </div>
             <details className="adv">
@@ -445,7 +461,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <div className="modal-actions">
           <span className="modal-version">
-            {version ? `Auris v${version}` : "Auris"}
+            {version ? `Auris v${version}` : "Auris"}{" "}
+            <button type="button" className="link-btn" onClick={checkNow}>
+              {updState || "Проверить обновления"}
+            </button>
           </span>
           <div className="modal-actions-btns">
             <button className="btn ghost" onClick={onClose}>

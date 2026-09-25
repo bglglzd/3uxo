@@ -3001,3 +3001,31 @@ details.adv[open] summary::before {
   line-height: 1.45;
   color: var(--text-faint);
 }
+
+/* ---------- Обновление ---------- */
+.update-notes {
+  max-height: 260px;
+  overflow: auto;
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--surface-soft);
+}
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

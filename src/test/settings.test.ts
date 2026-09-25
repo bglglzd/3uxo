@@ -9,7 +9,7 @@ describe("settings", () => {
     expect(s.ai).toEqual({ base_url: "", api_key: "", model: "" });
     expect(s.whisper).toEqual({
       whisperPath: "",
-      model: "large-v3-turbo-q8_0",
+      model: "parakeet-tdt-0.6b-v3",
       language: "ru",
     });
     expect(s.aiAuto).toEqual({ title: true, summary: true });
@@ -59,7 +59,7 @@ describe("settings", () => {
       "3uxo.settings",
       JSON.stringify({ whisper: { model: "medium", language: "ru" } }),
     );
-    expect(getSettings().whisper.model).toBe("large-v3-turbo-q8_0");
+    expect(getSettings().whisper.model).toBe("parakeet-tdt-0.6b-v3");
     // После сохранения в v0.8 явный выбор medium уважается.
     saveSettings({ ...getSettings(), whisper: { whisperPath: "", model: "medium", language: "ru" } });
     expect(getSettings().whisper.model).toBe("medium");
