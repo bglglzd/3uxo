@@ -1,99 +1,34 @@
-# Auris — статус и незакрытое (перенесено из CLAUDE.md §7, 2026-07-07)
+# Auris — current status
 
-> Архивный снапшот (состояние ~июнь 2026). Актуальный релиз: `gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name`.
+> Release history lives in [CHANGELOG.md](../CHANGELOG.md). This page tracks what is
+> verified, what still needs real-world testing and what is planned.
 
+**Latest release:** see [GitHub Releases](https://github.com/bglglzd/auris/releases/latest).
 
-**v0.8.1:** компактный интерфейс (всё помещается с запуска: окно 1120×720,
-мин. 720×520; плотнее сайдбар/карточки, иконки-кнопки с подсказками, плеер с
-инструментами в одну строку), новая иконка приложения из фирменного знака
-(тёмная плитка + сине-бирюзовый знак; favicon тоже), ИИ-пресет **«Инструкция
-для ИИ»** (`agent.md`) — готовый промпт для ИИ-агента из разговора (копируется
-с Markdown). Заметки релиза → окно обновления (вход `notes` в release.yml).
+## Verified automatically (CI)
 
-**v0.8.0:** точность голосов, модели один раз, понятные ИИ и экспорт.
-1. **Диаризация заново** на ONNX Runtime (pyannote segmentation-3.0 + wespeaker
-   ResNet34) + своя кластеризация (`cluster.rs`). Прежний Burn-движок на эталоне
-   pyannote не находил речь вовсе. На эталонах (2 и 4 голоса) число голосов
-   определяется верно, разметка ~99%; анализ в ~25 раз быстрее. Авто-режим по
-   умолчанию и для записей (групповые звонки). Панель «Голоса»: образец голоса,
-   имена, объединение, смена числа голосов без повторной расшифровки.
-2. **Модели**: «Скачивание модели» больше не появляется при каждой расшифровке
-   (баг прогресса диаризации). Новая модель по умолчанию — Whisper
-   large-v3-turbo (q8_0); beam search; разрез окон в паузах. Экран моделей в
-   настройках: статус, скачать заранее, удалить.
-3. **ИИ**: пресеты без дублей — Итоги / Задачи / Разбор / Чистовой текст /
-   Письмо; авто-заголовок и авто-итоги после расшифровки; имена голосов в
-   отчётах. **Экспорт**: одно окно — Word/MD/TXT/SRT, стенограмма + отчёты.
-4. **Parakeet v3 (NVIDIA)** — новый движок распознавания по умолчанию: точный
-   русский с пунктуацией, ~10× быстрее реального времени на CPU. Whisper —
-   для прочих языков/по выбору.
-5. **Обновления**: проверка + диалог с согласием → установка и перезапуск.
-Рантайм на Windows: e2e-тесты диаризации и Parakeet в CI (`onnx-windows`); полная
-расшифровка+диаризация на реальной записи — за пользователем.
+- Frontend unit tests, type check and build; core tests (`uxo-core`).
+- Full Windows build of the app with `whisper,diarize,opus,parakeet`.
+- On Windows, with real models: speaker separation of the pyannote reference recording
+  (2 voices, ~99% of speech time labelled correctly) and Parakeet transcription.
 
-**v0.7.1:** доводка редактора — перед перезаписью дорожек webview отпускает
-WAV-файлы (Windows), зум удерживает в поле зрения выделение/плейхед, Пробел не
-перехватывает активацию кнопки под фокусом, баннер ошибки правки не гасится
-перезагрузкой дорожек.
+## Needs testing on real calls
 
-**v0.7.0 (PR #40, тег v0.7.0):** аудио-редактор. Кнопка
-«✂ Редактор аудио» в карточке плеера открывает отдельный экран: волна громкости
-по дорожкам («Я» — teal, «Собеседник» — violet, пик + RMS), выделение протяжкой,
-«✂ Вырезать» / «⇥ Оставить только это», снятие отдельного выреза, undo/redo,
-зум ×1…×16, предпрослушивание с пропуском вырезов, точный ввод границ (мм:сс.д).
-«Применить» режет все дорожки одним набором вырезов, обновляет длительность и
-сдвигает `transcript.json`; перед первой правкой сохраняется оригинал
-(`*.orig.wav` + `transcript.orig.json`) → «↺ Вернуть оригинал». Рантайм-проверка
-на Windows — за пользователем.
+- End-to-end on Windows: record → Parakeet transcription → voices on a real meeting,
+  including group calls (3+ people on the system track).
+- Auto-recording of calls (the call detector and monitor are built but not field-tested).
+- The update dialog (first visible when a version newer than 0.8.x is published).
 
-**Последний релиз: v0.6.1.** Хронология 0.5.x: 0.5.0 (сборка упала, E0716, не
-опубликован) → 0.5.1 (хоткей+авто-запись) → 0.5.2 (старт-краш хоткея + лог
-размеров дорожек) → 0.5.3 (инструментация capture_loop) → 0.5.4 (рейнейм бинаря →
-`Auris.exe`) → 0.5.5 (новая иконка) → 0.5.6 (loopback polling + устойчивый
-suggest_metadata) → 0.5.7 (версия в настройках) → 0.5.8 (лог peak-амплитуды) →
-0.5.9 (нормализация записанных дорожек декодером импорта + лог числа сегментов).
+## Known limitations
 
-**v0.6.1 (релиз, PR #34):** правка результатов. И лента расшифровки, и ИИ-отчёты
-теперь редактируемы. Кнопка «✎ Редактировать» в карточке расшифровки → правка
-текста реплик, смена говорящего (select), удаление реплики; «✓ Сохранить» пишет
-`transcript.json` (команда `save_transcript`). В ИИ-блоках (Краткое резюме/
-Выжимка/ИИ-анализ/Литературный) — правка markdown в textarea → `save_report(kind)`
-пишет `brief|summary|analysis|literary.md`. Правки расшифровки автоматически
-подхватываются ИИ-функциями (читают тот же `transcript.json`) и экспортом/копией.
+- Windows only; macOS would need a new audio-capture layer.
+- Parakeet covers 25 European languages; other languages fall back to Whisper.
+- Speaker count tuning is based on reference recordings; the Voices panel lets users
+  correct it (number of voices, merge) without re-transcribing.
 
-**v0.6.0 (релиз, PR #33, тег v0.6.0):** четыре UX-фичи.
-1. **Склейка фрагментов + пауза/возобновление.** Запись теперь идёт СЕГМЕНТАМИ
-   (`mic.part{N}.wav`/`system.part{N}.wav`); пауза финализирует сегмент,
-   возобновление открывает следующий, стоп склеивает всё в единый
-   `mic.wav`/`system.wav` (`service::{pause,resume,stop}_recording`,
-   `audio::concat_wavs`, один сегмент = мгновенный `rename`). При старте
-   `recover_orphan_recordings` склеивает осиротевшие части после краша. Команды
-   `pause_recording`/`resume_recording`/`recording_state`; фронт — кнопка «Пауза»
-   в `RecordButton`, таймер замирает на паузе.
-2. **Антидребезг авто-записи.** Монитор требует устойчивый сигнал
-   `start_delay_secs` (по умолчанию 5 с = неск. опросов подряд) до старта и
-   отбрасывает авто-записи короче `min_keep_secs` (12 с) — чтобы Telegram-«дзынь»
-   не плодил мусорные 2-сек встречи. Настройки в `AutoRecordCfg`/`set_autorecord`
-   + UI в секции авто-записи.
-3. **Соло-режим «я один».** Тумблер у кнопки записи (`3uxo.solo.pref` →
-   `3uxo.solo.<id>`); при расшифровке `transcribe(solo)` берёт только микрофон,
-   один голос «Я», без диаризации (`service::transcribe_solo_to_file`).
-4. **Копирование без Markdown.** `export::stripMarkdown`/`transcriptToPlain` +
-   общий `clipboard.ts`/`CopyButton`; кнопки «📋 Копировать» в ИИ-блоках, ответе и
-   расшифровке. **Опубликовано (CI зелёный); рантайм-тест A/B на Windows — за
-   пользователем (пауза→склейка, отсев Telegram-«дзынь»).**
+## Ideas / roadmap
 
-**Баг записи (в работе):** микрофон пишется (подтверждено: 16с, peak>0,
-воспроизводится), но whisper по записи долго не давал текст, хотя импорт работает.
-Фикс v0.5.9 — прогон записи через `decode_to_wav_16k_mono` перед whisper. **Ждём
-подтверждения пользователя**, что на 0.5.9 запись с речью даёт текст; иначе по
-логу (`peak`, `transcribed: mic=N segs`) добивать в whisper. Loopback (звук
-собеседника) проверять с играющим системным звуком (был пуст в соло-тестах — нет
-системного звука).
-
-**ИИ-модуль по ТЗ (открыт PR #22, НЕ смержён):** промпты выровнены под точные
-структуры ТЗ (Выжимка/ИИ-анализ/Краткое резюме/Литературный/Авто-заголовок).
-Осталось: композиция документа во фронте (`# Режим` + `**Тема:**`), экспорт
-**DOCX/PDF** (во фронте — выбор пользователя: docx.js + jsPDF/pdf-lib), режимы
-цензуры мата, подстили литературного текста. Главное правило ТЗ: каждый отчёт —
-самостоятельный документ.
+- Word-level timestamps to split a transcript line at a speaker change.
+- Profanity filtering options and style variants for the clean-text preset.
+- PDF export.
+- macOS capture layer.

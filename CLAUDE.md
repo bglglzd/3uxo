@@ -13,21 +13,22 @@
 
 ---
 
-## 1. Бренд и идентичность (ВАЖНО: что НЕ переименовывать)
+## 1. Бренд и технические идентификаторы (НЕ переименовывать)
 
-Продукт называется **Auris** (бывш. «3uxo / третье ухо», ребренд v0.4.0). Имя
-exe — `Auris.exe`. Но **технический «3uxo» оставлен НАМЕРЕННО** — его смена ломает
-авто-апдейт и стирает данные у существующих пользователей:
+Продукт — **Auris** («ваше третье ухо»), exe — `Auris.exe`, репозиторий —
+`github.com/bglglzd/auris`. Несколько внутренних идентификаторов сохранили историческое
+значение и **менять их нельзя** — это сотрёт данные и настройки у пользователей:
 
-| Артефакт | Значение | Почему НЕ менять |
+| Артефакт | Значение | Почему не менять |
 |---|---|---|
-| `identifier` | `com.3uxo.app` (tauri.conf.json) | определяет папку данных (`%APPDATA%\com.3uxo.app`) и идентичность для апдейтера |
-| репозиторий / updater endpoint | `github.com/bglglzd/3uxo` | endpoint авто-апдейта зашит на этот репо |
-| `3uxo.db` | SQLite с встречами пользователя | переименование = потеря всех записей |
-| `3uxo.log` | бэкенд-лог (диагностика) | — |
-| ключи localStorage | `3uxo.settings/theme/labels.*/speakers.*` | переименование = слёт настроек/темы/подписей |
+| `identifier` (tauri.conf.json) | `com.3uxo.app` | папка данных `%APPDATA%\com.3uxo.app` и идентичность апдейтера |
+| база встреч | `3uxo.db` | переименование = потеря всех записей |
+| бэкенд-лог | `3uxo.log` | диагностика, «Копировать лог» |
+| ключи localStorage | `3uxo.settings/theme/labels.*/speakers.*/solo.*/titleEdited.*/autotitle.*` | слёт настроек/темы/подписей |
 
-Видимое имя (productName, заголовок окна, тексты, README, иконка, exe) = **Auris**.
+Эти значения — только в коде; в пользовательской документации их не упоминать.
+Updater endpoint — `github.com/bglglzd/auris/releases/latest/download/latest.json`
+(старые установки ходят на прежний адрес репозитория, GitHub перенаправляет).
 
 ---
 
@@ -39,8 +40,8 @@ exe — `Auris.exe`. Но **технический «3uxo» оставлен Н�
     на любой ОС.
   - **`src-tauri/`** (`auris`, бинарь → `Auris.exe`; lib `auris_lib`) — тонкий
     Tauri-слой: команды (`commands.rs`), запуск/трей/хоткей/монитор (`lib.rs`).
-- **`src/`** — React-фронтенд. **`docs/`** — документация + исторические планы
-  (`docs/superpowers/`).
+- **`src/`** — React-фронтенд. **`docs/`** — релиз (`RELEASE.md`), статус
+  (`STATUS.md`), скриншоты для README. История версий — `CHANGELOG.md` в корне.
 
 ### Модули `core/src/`
 `ai` (ИИ-бэкенд + промпты-пресеты), `audio` (WAV-хелперы, `quiet_chunks`),
@@ -81,9 +82,10 @@ Windows, `#[cfg(windows)]`).
   (peak≈0 → захвачена тишина).
 - Старт/стоп — кнопка, глобальный хоткей или трей; событие `recording-changed`.
 
-### Расшифровка (whisper)
-- Команда `transcribe` (commands.rs). Модель скачивается при 1-м запуске (фаза
-  `download`), путь `<app_data>`. Прогресс — событие `transcribe-progress`.
+### Расшифровка
+- Команда `transcribe` (commands.rs), движок — `load_asr` по `models::pick_model`:
+  **Parakeet** (по умолчанию) или Whisper. Модель скачивается один раз (фаза
+  `download`), путь `<app_data>/models`. Прогресс — событие `transcribe-progress`.
 - **Записанные дорожки нормализуются** через `decode::decode_to_wav_16k_mono`
   (тот же декодер, что и импорт) ПЕРЕД whisper — выравнивает «сырой» WASAPI-WAV с
   рабочим путём импорта. Лог: `transcribed: mic=N segs, system=N segs`.
@@ -206,11 +208,13 @@ npm run dev                       # vite dev (порт 1420) — UI без бэ�
 npm run build                     # tsc + vite build (проверка фронта)
 npm test                          # vitest (юнит-тесты фронта)
 npx tsc --noEmit                  # проверка типов
-npm run tauri dev -- --features gpu,diarize,opus   # полное приложение (нужен Rust+Win)
+npm run tauri dev -- --features whisper,diarize,opus,parakeet   # полное приложение (Windows)
 ```
 
-- **ВАЖНО: локального Rust-тулчейна на этой машине НЕТ** → Rust собирается и
-  проверяется ТОЛЬКО через CI (push в ветку). Фронт проверяется локально.
+- Ядро (`cargo test -p uxo-core`) и фронт проверяются локально на любой ОС;
+  Windows-сборку приложения и e2e-тесты моделей гоняет CI. ONNX-фичи локально на
+  Linux без доступа к cdn.pyke.io: `ORT_LIB_PATH=<onnxruntime>/lib
+  ORT_PREFER_DYNAMIC_LINK=1` (onnxruntime с GitHub-релизов Microsoft).
 - **Версию держать синхронно** в `package.json` и `src-tauri/tauri.conf.json`.
 - Превью UI: MCP `preview_*` (vite на localhost:1420). `MeetingView`/`AiPanel`
   без данных бэкенда не отрисовать; `SettingsModal` и старт-экран — можно.
@@ -221,33 +225,24 @@ npm run tauri dev -- --features gpu,diarize,opus   # полное приложе
 
 ## 6. Деплой (релиз) — кратко
 
-Деплой = подписанный GitHub-релиз по тегу + `latest.json` для авто-апдейта.
-Полный пошаговый runbook — [`docs/RELEASE.md`](docs/RELEASE.md). Кратко:
+Релиз = подписанный GitHub-релиз `vX.Y.Z` + `latest.json`. Полный порядок —
+[`docs/RELEASE.md`](docs/RELEASE.md). Кратко: ветка от `main` → бамп версии в
+`package.json` + `tauri.conf.json` → запись в `CHANGELOG.md` → PR → **все jobs CI
+`conclusion: success`** → squash-merge → тег `vX.Y.Z` на main **или** ручной запуск
+`release.yml` с входами `tag` и `notes` (notes = «что нового», их видит окно
+обновления) → проверить `gh release view` и `latest.json`.
 
-1. Ветка от `main` (прямой push в `main` блокируется авто-режимом → только через PR).
-2. Бамп версии в `package.json` + `src-tauri/tauri.conf.json`.
-3. Локально зелёные: `npx tsc --noEmit`, `npm test`, `npm run build`.
-4. Push ветки → PR → **дождаться `conclusion: success`** (см. правило ниже).
-5. `gh pr merge <N> --squash --delete-branch`.
-6. На `main`: `git tag vX.Y.Z && git push origin vX.Y.Z` → `release.yml` соберёт
-   (gpu,diarize,opus), подпишет, опубликует setup.exe/.msi/.sig + latest.json.
-7. Проверить публикацию: `gh release view vX.Y.Z`, latest endpoint = vX.Y.Z.
-
-- **CI** (`.github/workflows/ci.yml`, on push/PR): jobs `frontend` (ubuntu:
-  npm ci/test/tsc/build), `core` (ubuntu: `cargo test -p uxo-core`), `check-app`
-  (windows: npm build + `cargo check -p auris --features whisper,diarize,opus`).
-- **Release** (`.github/workflows/release.yml`, on tag `v*`): Windows-сборка
-  (Vulkan SDK + LLVM), подпись (секрет `TAURI_SIGNING_PRIVATE_KEY`), публикация
-  (не draft, `releaseName: "Auris vX"`), `latest.json`.
-- **Авто-апдейт**: `tauri-plugin-updater`, endpoint
-  `https://github.com/bglglzd/3uxo/releases/latest/download/latest.json`. Юзеры
-  обновляются на latest.
+- **CI** (`ci.yml`): `frontend`, `core`, `check-app` (Windows, полный `cargo build`
+  со всеми фичами кроме gpu), `onnx-windows` (e2e диаризации и Parakeet).
+- **Release** (`release.yml`): Windows, LLVM + Vulkan SDK,
+  `--features gpu,diarize,opus,parakeet`, подпись `TAURI_SIGNING_PRIVATE_KEY`.
 
 ---
 
 ## 7. Текущее состояние
 
-Последний релиз и незакрытые пункты — см. [`docs/STATUS.md`](docs/STATUS.md) (обновлять там, не здесь).
+История версий — [`CHANGELOG.md`](CHANGELOG.md); проверено/не проверено/планы —
+[`docs/STATUS.md`](docs/STATUS.md). Обновлять там, не здесь.
 
 ---
 
@@ -257,16 +252,17 @@ npm run tauri dev -- --features gpu,diarize,opus   # полное приложе
   завершиться 0, пока сборка падала → так v0.5.0 уехал сломанным. Перед тегом:
   `gh run view <id> --json conclusion --jq .conclusion` == `success`.
 - **Прямой push в `main` запрещён** (авто-режим) → только PR + `gh pr merge`.
-  Push тега `git push origin <tag>` — РАЗРЕШ�ён.
-- **Rust локально не собрать** → полагаться на CI (компиляция) + рантайм-тест
-  пользователя для платформенного (WASAPI, диаризация).
+  Push тега `git push origin <tag>` — разрешён.
+- **Платформенное (WASAPI, реальные звонки) проверяет CI-сборка + рантайм-тест
+  пользователя** на Windows; модели — e2e-тестами в CI.
 - **Единый стиль Auris** для всего нового (токены, шрифты, знак, семантика цвета,
   3 обещания: приватность/спокойствие/живость). Не ломать дизайн-язык.
 - **«Ничего не убираем — только добавляем»** — не удалять существующие функции
   (TXT/MD-экспорт, кнопки и т.п.) при доработках.
-- **Превью перед пушем для UI** — показать live-превью, мержить после «ок».
+- **Превью UI** — скриншоты в 800×600 и 1120×720, обе темы (Playwright + мок
+  `__TAURI_INTERNALS__`), до мержа.
 - `gh pr edit --base` ломается (GraphQL projectCards) → ретаргет базы через REST:
-  `gh api -X PATCH repos/bglglzd/3uxo/pulls/N -f base=main`.
+  `gh api -X PATCH repos/bglglzd/auris/pulls/N -f base=main`.
 - Git identity: `bglglzd <248948303+bglglzd@users.noreply.github.com>`; never use a personal email in public commits.
 
 ---
@@ -280,5 +276,5 @@ gh run list --workflow=ci.yml --branch <branch> --limit 1 --json databaseId --jq
 gh run view <id> --json conclusion --jq .conclusion         # проверка результата
 gh run list --workflow=release.yml --limit 3
 gh release view vX.Y.Z --json tagName,isDraft,assets
-gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name
+gh api repos/bglglzd/auris/releases/latest --jq .tag_name
 ```
