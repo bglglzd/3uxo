@@ -43,11 +43,13 @@ exe — `Auris.exe`. Но **технический «3uxo» оставлен Н�
   (`docs/superpowers/`).
 
 ### Модули `core/src/`
-`ai` (ИИ-бэкенд + промпты), `audio` (WAV-хелперы), `call_detector` (детект звонка
-по аудио-сессиям WASAPI, Windows), `cli_transcriber` (внешний whisper-CLI),
+`ai` (ИИ-бэкенд + промпты-пресеты), `audio` (WAV-хелперы, `quiet_chunks`),
+`call_detector` (детект звонка по аудио-сессиям WASAPI, Windows), `cluster`
+(кластеризация голосов: AHC + отсев мелких кластеров, чистый Rust, тесты на любой
+ОС), `cli_transcriber` (внешний whisper-CLI),
 `decode` (symphonia+rubato → 16кГц/моно/i16; +opus за фичей), `diarize`
-(native-pyannote-rs/Burn за фичей), `edit` (карта громкости + вырезание
-фрагментов + пересчёт расшифровки), `error`, `model`, `recorder` (трейт +
+(pyannote segmentation-3.0 + wespeaker на ONNX Runtime за фичей), `edit` (карта громкости + вырезание
+фрагментов + пересчёт расшифровки), `error`, `model`, `models` (каталог/статус/загрузка моделей), `recorder` (трейт +
 MockRecorder), `service` (сервис-слой: запись/импорт/расшифровка/правка/файлы), `storage`
 (rusqlite, миграции), `transcript` (модель + merge/assign_speakers), `transcriber`
 (трейт), `whisper` (whisper-rs, за фичей), `wasapi_recorder` (реальный захват на
@@ -56,10 +58,13 @@ Windows, `#[cfg(windows)]`).
 ### Cargo-фичи (`core` зеркалит в `src-tauri`)
 - `whisper` — встроенный whisper.cpp (whisper-rs).
 - `gpu` — whisper с Vulkan (включает `whisper`).
-- `diarize` — диаризация (тяжёлый Burn).
+- `diarize` — диаризация (ONNX Runtime через `ort`, статически; бинарники ORT
+  качаются при сборке с cdn.pyke.io).
 - `opus` — декод Ogg/Opus (libopus через audiopus/cmake).
-- **Релиз собирает `--features gpu,diarize,opus`**; **CI check-app —
-  `whisper,diarize,opus`** (без GPU).
+- `parakeet` — распознавание NVIDIA Parakeet TDT 0.6B v3 (ONNX Runtime).
+- **Релиз собирает `--features gpu,diarize,opus,parakeet`**; **CI check-app —
+  `cargo build` с `whisper,diarize,opus,parakeet`** (без GPU); job
+  `onnx-windows` — e2e диаризации и Parakeet на реальных моделях.
 
 ---
 
@@ -91,9 +96,22 @@ Windows, `#[cfg(windows)]`).
 `service::import_to_meeting` → `decode_to_wav_16k_mono(src, audio.wav)` (symphonia
 + rubato; opus отдельной фичей). Поддерживает m4a/mp3/wav/flac/ogg/opus и т.п.
 
-### Диаризация
-`diarize.rs` (фича `diarize`): native-pyannote-rs 0.1.4 (Burn, без ONNX). Модели
-(.bpk) качаются при 1-м запуске. `assign_speakers` склеивает whisper↔диаризацию.
+### Диаризация (v0.8.0)
+`diarize.rs` (фича `diarize`): `OnnxDiarizer` — pyannote **segmentation-3.0**
+(ONNX, окна 10 с с шагом 5 с, powerset → до 3 локальных голосов на окно) +
+**wespeaker ResNet34-LM** (эмбеддинг голоса по чистой речи локального говорящего,
+Kaldi fbank 80). Модели (~33 МБ) — GitHub-релизы (не HF), качаются ОДИН раз в
+`<app_data>/models/diarize`. Число голосов и разметку считает `cluster.rs`:
+AHC (центроид, косинус, порог `AUTO_THRESHOLD`=0.45, подобран на эталонах) →
+мелкие кластеры (<2% речи, 3…25 с) — не люди → k-means-уточнение. Явное число
+голосов соблюдается. Эмбеддинги кешируются в `<id>/diarization.json` →
+`recluster_speakers` меняет число голосов мгновенно, текст (и правки) не
+трогает. Записанная встреча: «Я» = микрофон, системная дорожка делится
+автоматически (1 голос → «Собеседник»). Отладка точности:
+`cargo run --release -p uxo-core --features diarize --example diar_eval`;
+e2e-тест `core/tests/diarize_e2e.rs` (`-- --ignored`, в CI на Windows).
+Прежний движок native-pyannote-rs (Burn) на эталоне pyannote вообще не находил
+речь — отсюда «неверное число спикеров» до v0.8.
 
 ### Правка аудио (отдельный экран, v0.7.0)
 `edit.rs`: `waveform` (пик+RMS по корзинам, 0..1000 — как `recording_levels`),
@@ -105,13 +123,40 @@ Windows, `#[cfg(windows)]`).
 `waveform`, `audio_edit_state`, `apply_audio_edit`, `revert_audio_edit`.
 Фронт — `AudioEditor`/`WaveLane` + чистая логика `audioedit.ts`.
 
+### Parakeet (v0.8.0, движок по умолчанию)
+`parakeet.rs` (фича `parakeet`): NVIDIA Parakeet TDT 0.6B v3 int8 (экспорт
+sherpa-onnx, GitHub-релиз `.tar.bz2` ~490 МБ, распаковка tar+bzip2 на чистом Rust в
+`<app_data>/models/parakeet-tdt-0.6b-v3`). Признаки — `nemo_mel.rs` (log-mel NeMo,
+сверено с librosa до 1e-4), encoder → жадное TDT (joiner: токен + пропуск
+кадров 0..4), кадр 80 мс, окна ~15 с с разрезом в паузе (на 30 с TDT терял
+хвосты). 25 европейских языков, пунктуация; `models::pick_model` берёт Whisper,
+если язык вне списка. Отладка: `--example asr_eval`, e2e `core/tests/parakeet_e2e.rs`.
+
+### Обновления (v0.8.0)
+`src/updater.ts` + `UpdateDialog`: проверка при запуске и каждые 6 ч (и кнопкой в
+настройках) → диалог «Доступно обновление» с заметками релиза → по согласию
+скачивание с прогрессом, установка, `relaunch()`. Во время записи кнопка
+неактивна. «Позже» откладывает версию до следующего запуска.
+
+### Модели (v0.8.0)
+`models.rs`: каталог Whisper (по умолчанию **large-v3-turbo-q8_0**), статус,
+загрузка (атомарно через `.part`), удаление. Прогресс «Скачивание модели»
+шлётся ТОЛЬКО при реальной загрузке (баг ≤0.7: диаризация всегда слала
+download → «качает модель» при каждой расшифровке). Команды `models_status`,
+`download_model`, `delete_model`; UI — `ModelsManager` в настройках. Whisper:
+beam search 5, suppress_nst, окна режутся в паузах (`audio::quiet_chunks`).
+
 ### ИИ (опционально, через ключ пользователя)
 `ai.rs`: OpenAI-совместимый HTTP-бэкенд (`base_url`/`api_key`/`model` из настроек).
-Функции: `suggest_metadata` (авто-заголовок, устойчив к ответу-массиву),
-`brief_summary` (Краткое резюме), `summarize` (Выжимка), `analyze` (ИИ-анализ),
-`to_literary_text` (Литературный текст), `answer_question`. Длинные разговоры —
-map-reduce (`*_long`, порог `SUMMARY_CHUNK_CHARS`). Результаты сохраняются в
-`<id>/brief.md|summary?|analysis.md|literary.md`.
+С v0.8 — пресеты без пересечений (`ai::report_prompt`, команда `generate_report`):
+**Итоги встречи** (`summary.md`), **Задачи** (`tasks.md`), **Разбор разговора**
+(`analysis.md`), **Чистовой текст** (`literary.md`), **Письмо по итогам**
+(`followup.md`); старое «Краткое резюме» (`brief.md`) только показывается.
+В промпт идут заголовок/участники и имена голосов из интерфейса
+(`MeetingContext`). Длинные — заметки по частям → итог (literary — склейка).
+После расшифровки `src/aiauto.ts` сам ставит заголовок (если не правился
+вручную: `3uxo.titleEdited.<id>`) и строит «Итоги» (настройки `aiAuto`).
+Старые команды (`summarize`, `brief_summary`…) оставлены для совместимости.
 
 ### Глобальный хоткей + авто-запись
 - `update_hotkey(accelerator)` (lib.rs) — настраиваемый глобальный хоткей старт/
@@ -144,8 +189,11 @@ map-reduce (`*_long`, порог `SUMMARY_CHUNK_CHARS`). Результаты с
   `CopyLogButton`, `Markdown`.
 - Состояние: `settings.ts` (localStorage `3uxo.settings`), `theme.ts`, `labels.ts`,
   `api.ts` (обёртки `invoke`). Тема применяется до рендера (`initTheme`).
-- Экспорт: `export.ts` — TXT/MD (по реплике) + Стенограмма (сгруппировано). ИИ-
-  блоки экспортятся в .md/.txt. (DOCX/PDF — в планах, см. §7.)
+- Экспорт (v0.8): одна кнопка «⬇ Экспорт» → `ExportModal`: Word (.docx — свой
+  генератор `docx.ts`, без зависимостей), Markdown, TXT, субтитры SRT; в документ
+  складываются стенограмма (опц. таймкоды) + выбранные ИИ-отчёты.
+- Голоса (v0.8): `SpeakersPanel` — доля речи, «▶ Образец», имена, «Объединить»,
+  число голосов Авто/1…6 (мгновенный пересчёт); чистая логика — `speakers.ts`.
 
 ---
 

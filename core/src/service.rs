@@ -380,6 +380,11 @@ fn backup_originals(dir: &Path, tracks: &[String]) -> AppResult<()> {
     if transcript.exists() && !transcript_orig.exists() {
         std::fs::copy(&transcript, &transcript_orig)?;
     }
+    let diar = dir.join(DIAR_CACHE);
+    let diar_orig = dir.join("diarization.orig.json");
+    if diar.exists() && !diar_orig.exists() {
+        std::fs::copy(&diar, &diar_orig)?;
+    }
     Ok(())
 }
 
@@ -425,6 +430,7 @@ pub fn apply_audio_edit_files(data_root: &Path, id: &str, cuts: &[Range]) -> App
         let remapped = edit::remap_transcript(&transcript, &merged);
         save_transcript(data_root, id, &remapped)?;
     }
+    remap_diar_cache(&dir, &merged)?;
     Ok(longest as u64)
 }
 
@@ -454,6 +460,10 @@ pub fn revert_audio_edit_files(data_root: &Path, id: &str) -> AppResult<u64> {
     let transcript_orig = dir.join("transcript.orig.json");
     if transcript_orig.exists() {
         std::fs::copy(&transcript_orig, dir.join("transcript.json"))?;
+    }
+    let diar_orig = dir.join("diarization.orig.json");
+    if diar_orig.exists() {
+        std::fs::copy(&diar_orig, dir.join(DIAR_CACHE))?;
     }
     Ok(longest)
 }
@@ -620,6 +630,150 @@ pub fn load_analysis(data_root: &Path, id: &str) -> AppResult<Option<String>> {
     Ok(Some(std::fs::read_to_string(path)?))
 }
 
+// ── ИИ-отчёты (общий механизм) ─────────────────────────────────────────────
+
+/// Виды ИИ-отчётов и их файлы в папке встречи. `brief` — устаревшее «Краткое
+/// резюме» (новые не создаются, старые показываются и экспортируются).
+pub const REPORT_KINDS: &[(&str, &str)] = &[
+    ("summary", "summary.md"),
+    ("tasks", "tasks.md"),
+    ("analysis", "analysis.md"),
+    ("literary", "literary.md"),
+    ("followup", "followup.md"),
+    ("brief", "brief.md"),
+];
+
+fn report_file(kind: &str) -> AppResult<&'static str> {
+    REPORT_KINDS
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, f)| *f)
+        .ok_or_else(|| AppError::InvalidInput(format!("unknown report kind: {kind}")))
+}
+
+/// Сохраняет ИИ-отчёт вида `kind` (см. [`REPORT_KINDS`]).
+pub fn save_report(data_root: &Path, id: &str, kind: &str, text: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let file = report_file(kind)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(file), text)?;
+    Ok(())
+}
+
+/// Читает ИИ-отчёт вида `kind`, если он есть.
+pub fn load_report(data_root: &Path, id: &str, kind: &str) -> AppResult<Option<String>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join(report_file(kind)?);
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(std::fs::read_to_string(path)?))
+}
+
+/// Все сохранённые ИИ-отчёты встречи: `(вид, текст)`.
+pub fn load_reports(data_root: &Path, id: &str) -> AppResult<Vec<(String, String)>> {
+    let mut out = Vec::new();
+    for (kind, _) in REPORT_KINDS {
+        if let Some(text) = load_report(data_root, id, kind)? {
+            out.push((kind.to_string(), text));
+        }
+    }
+    Ok(out)
+}
+
+// ── Кеш диаризации ──────────────────────────────────────────────────────────
+
+/// Результат анализа голосов дорожки: фрагменты речи с эмбеддингами. По нему
+/// разметка говорящих пересчитывается мгновенно под другое число голосов.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct DiarCache {
+    /// Какая дорожка анализировалась: "audio.wav" (импорт) или "system.wav".
+    pub track: String,
+    pub windows: Vec<crate::cluster::EmbWindow>,
+}
+
+const DIAR_CACHE: &str = "diarization.json";
+
+pub fn save_diar_cache(data_root: &Path, id: &str, cache: &DiarCache) -> AppResult<()> {
+    validate_id(id)?;
+    let dir = meeting_dir(data_root, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(DIAR_CACHE), serde_json::to_string(cache)?)?;
+    Ok(())
+}
+
+pub fn load_diar_cache(data_root: &Path, id: &str) -> AppResult<Option<DiarCache>> {
+    validate_id(id)?;
+    let path = meeting_dir(data_root, id).join(DIAR_CACHE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(serde_json::from_str(&std::fs::read_to_string(path)?).ok())
+}
+
+/// Сдвигает времена кеша диаризации под вырезы аудио-редактора.
+fn remap_diar_cache(dir: &Path, cuts: &[Range]) -> AppResult<()> {
+    let path = dir.join(DIAR_CACHE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    let Ok(mut cache) = serde_json::from_str::<DiarCache>(&text) else {
+        let _ = std::fs::remove_file(&path);
+        return Ok(());
+    };
+    cache.windows = cache
+        .windows
+        .into_iter()
+        .filter_map(|mut w| {
+            let spans: Vec<(f64, f64)> = w
+                .spans()
+                .into_iter()
+                .map(|(a, b)| (edit::map_time(a, cuts), edit::map_time(b, cuts)))
+                .filter(|(a, b)| b - a >= 0.05)
+                .collect();
+            if spans.is_empty() {
+                return None;
+            }
+            w.start_secs = spans[0].0;
+            w.end_secs = spans[spans.len() - 1].1;
+            w.spans = spans;
+            Some(w)
+        })
+        .collect();
+    std::fs::write(&path, serde_json::to_string(&cache)?)?;
+    Ok(())
+}
+
+/// Переразмечает говорящих в сохранённой расшифровке по кешу диаризации под
+/// новое число голосов (`None` — авто). Текст реплик (в т.ч. правки
+/// пользователя) не меняется. Для записанной встречи трогаются только реплики
+/// собеседников — «Я» остаётся «Я».
+pub fn recluster_transcript(
+    data_root: &Path,
+    id: &str,
+    num_speakers: Option<usize>,
+) -> AppResult<Transcript> {
+    let cache = load_diar_cache(data_root, id)?.ok_or_else(|| {
+        AppError::InvalidState(
+            "для этой встречи нет данных о голосах — расшифруйте её заново".into(),
+        )
+    })?;
+    let transcript = load_transcript(data_root, id)?.ok_or_else(|| {
+        AppError::InvalidState("нет расшифровки — сначала расшифруйте встречу".into())
+    })?;
+    let diar = crate::cluster::diarize_windows(&cache.windows, num_speakers);
+    let recorded = cache.track == "system.wav";
+    let relabeled = crate::transcript::relabel_speakers(
+        &transcript,
+        &diar,
+        |s| !recorded || s.speaker != crate::transcript::ME,
+        recorded.then_some(crate::transcript::THEM),
+    );
+    save_transcript(data_root, id, &relabeled)?;
+    Ok(relabeled)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -757,6 +911,62 @@ mod tests {
         let active = start_recording(&rec, dir.path(), "m1".into()).unwrap();
         stop_recording(&rec, &repo, &active, "2026-06-04T10:00:00Z".into()).unwrap();
         assert!(load_transcript(dir.path(), "m1").unwrap().is_none());
+    }
+
+    #[test]
+    fn reports_by_kind_roundtrip_and_reject_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load_report(dir.path(), "m1", "tasks").unwrap().is_none());
+        save_report(dir.path(), "m1", "tasks", "| задача |").unwrap();
+        save_report(dir.path(), "m1", "followup", "письмо").unwrap();
+        assert_eq!(load_report(dir.path(), "m1", "tasks").unwrap().unwrap(), "| задача |");
+        let all = load_reports(dir.path(), "m1").unwrap();
+        let kinds: Vec<&str> = all.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(kinds, vec!["tasks", "followup"]);
+        assert!(save_report(dir.path(), "m1", "../evil", "x").is_err());
+        // Старые функции и общий механизм пишут одни и те же файлы.
+        save_summary(dir.path(), "m1", "итоги").unwrap();
+        assert_eq!(load_report(dir.path(), "m1", "summary").unwrap().unwrap(), "итоги");
+    }
+
+    fn win(a: f64, b: f64, e: &[f32]) -> crate::cluster::EmbWindow {
+        crate::cluster::EmbWindow { start_secs: a, end_secs: b, embedding: e.to_vec(), spans: vec![] }
+    }
+
+    #[test]
+    fn recluster_relabels_without_touching_text_or_me() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let t = crate::transcript::merge_tracks(
+            vec![seg(0.0, "я говорю")],
+            vec![seg(10.0, "первый"), seg(30.0, "второй")],
+        );
+        save_transcript(root, "m1", &t).unwrap();
+        // Два явно разных голоса на системной дорожке.
+        let mut windows = Vec::new();
+        for k in 0..8 {
+            windows.push(win(8.0 + k as f64 * 0.5, 8.5 + k as f64 * 0.5, &[1.0, 0.0, 0.0]));
+            windows.push(win(28.0 + k as f64 * 0.5, 28.5 + k as f64 * 0.5, &[0.0, 1.0, 0.0]));
+        }
+        save_diar_cache(root, "m1", &DiarCache { track: "system.wav".into(), windows }).unwrap();
+
+        let r = recluster_transcript(root, "m1", None).unwrap();
+        let sp: Vec<&str> = r.segments.iter().map(|s| s.speaker.as_str()).collect();
+        assert_eq!(sp, vec!["me", "spk0", "spk1"]);
+        assert_eq!(r.segments[0].text, "я говорю");
+        // Один голос → «Собеседник».
+        let r = recluster_transcript(root, "m1", Some(1)).unwrap();
+        let sp: Vec<&str> = r.segments.iter().map(|s| s.speaker.as_str()).collect();
+        assert_eq!(sp, vec!["me", "them", "them"]);
+        // Сохранено на диск.
+        assert_eq!(load_transcript(root, "m1").unwrap().unwrap(), r);
+    }
+
+    #[test]
+    fn recluster_without_cache_is_error() {
+        let dir = tempfile::tempdir().unwrap();
+        save_transcript(dir.path(), "m1", &Transcript::default()).unwrap();
+        assert!(recluster_transcript(dir.path(), "m1", None).is_err());
     }
 
     #[test]

@@ -1,84 +1,77 @@
 import { useEffect, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import type { Meeting, ReportKind } from "../types";
+import type { SpeakerLabels } from "../labels";
 import { api } from "../api";
 import { getSettings, isAiConfigured } from "../settings";
 import { stripMarkdown } from "../export";
+import { meetingContext } from "../speakers";
+import { AI_AUTO_EVENT, PRESETS, REPORT_META, REPORT_ORDER } from "../reports";
+import type { AiAutoDetail } from "../reports";
 import { Markdown } from "./Markdown";
 import { CopyButton } from "./CopyButton";
 
 interface Props {
   meeting: Meeting;
+  labels: SpeakerLabels;
+  /// Есть ли расшифровка (без неё ИИ работать не с чем).
+  hasTranscript: boolean;
+  reports: Partial<Record<ReportKind, string>>;
+  onReport: (kind: ReportKind, text: string) => void;
   onMetaSaved: () => void;
 }
 
-export function AiPanel({ meeting, onMetaSaved }: Props) {
-  const [brief, setBrief] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<string | null>(null);
-  const [literary, setLiterary] = useState<string | null>(null);
+export function AiPanel({ meeting, labels, hasTranscript, reports, onReport, onMetaSaved }: Props) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  // Правка ИИ-отчёта: какой блок редактируется и его черновик.
   const [editKind, setEditKind] = useState<ReportKind | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  // Фоновая работа ИИ после расшифровки (авто-заголовок/итоги).
+  const [auto, setAuto] = useState<AiAutoDetail | null>(null);
+  const configured = isAiConfigured(getSettings());
 
   useEffect(() => {
-    setBrief(null);
-    setSummary(null);
-    setAnalysis(null);
-    setLiterary(null);
     setAnswer("");
     setEditKind(null);
-    api.getBrief(meeting.id).then(setBrief).catch(() => {});
-    api.getSummary(meeting.id).then(setSummary).catch(() => {});
-    api.getAnalysis(meeting.id).then(setAnalysis).catch(() => {});
-    api.getLiterary(meeting.id).then(setLiterary).catch(() => {});
+    setError("");
+    setAuto(null);
   }, [meeting.id]);
 
-  const startEdit = (kind: ReportKind, content: string) => {
-    setError("");
-    setEditKind(kind);
-    setDraft(content);
-  };
-  const saveEdit = async (kind: ReportKind, set: (v: string) => void) => {
-    setSaving(true);
-    try {
-      await api.saveReport(meeting.id, kind, draft);
-      set(draft);
-      setEditKind(null);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<AiAutoDetail>).detail;
+      if (d.id !== meeting.id) return;
+      setAuto(d.busy ? d : null);
+      if (d.error) setError(d.error);
+    };
+    window.addEventListener(AI_AUTO_EVENT, on);
+    return () => window.removeEventListener(AI_AUTO_EVENT, on);
+  }, [meeting.id]);
 
   const aiCfg = () => {
     const s = getSettings();
     if (!isAiConfigured(s)) {
-      setError("Заполни настройки ИИ (base URL, ключ, модель) в «Настройки».");
+      setError("Подключите ИИ в «Настройки → Искусственный интеллект» (адрес, ключ, модель).");
+      return null;
+    }
+    if (!hasTranscript) {
+      setError("Сначала расшифруйте встречу — ИИ работает с текстом разговора.");
       return null;
     }
     setError("");
     return s.ai;
   };
 
-  // Запускает ИИ-действие под ключом `key`, складывая результат через `set`.
-  const run = async (
-    key: string,
-    fn: (id: string, cfg: ReturnType<typeof getSettings>["ai"]) => Promise<string>,
-    set?: (v: string) => void,
-  ) => {
+  const ctx = () => meetingContext(meeting, labels);
+
+  const generate = async (kind: ReportKind) => {
     const c = aiCfg();
     if (!c || busy) return;
-    setBusy(key);
+    setBusy(kind);
     try {
-      const res = await fn(meeting.id, c);
-      if (set) set(res);
+      onReport(kind, await api.generateReport(meeting.id, kind, c, ctx()));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -91,8 +84,13 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     if (!c || busy) return;
     setBusy("suggest");
     try {
-      const m = await api.suggestMetadata(meeting.id, c);
-      await api.updateMeetingMeta(meeting.id, m.title, m.participants, m.topic);
+      const m = await api.suggestMeta(meeting.id, c, ctx());
+      await api.updateMeetingMeta(
+        meeting.id,
+        m.title || meeting.title,
+        m.participants || meeting.participants,
+        m.topic || meeting.topic,
+      );
       onMetaSaved();
     } catch (e) {
       setError(String(e));
@@ -103,10 +101,10 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
 
   const doAsk = async () => {
     const c = aiCfg();
-    if (!c || busy) return;
+    if (!c || busy || !question.trim()) return;
     setBusy("ask");
     try {
-      setAnswer(await api.ask(meeting.id, c, question));
+      setAnswer(await api.askNamed(meeting.id, c, question, ctx()));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -114,50 +112,38 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     }
   };
 
-  // Экспорт текста в файл (.md/.txt) через системный диалог.
-  const exportText = async (content: string, suffix: string) => {
-    const base =
-      (meeting.title || "meeting").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 80) ||
-      "meeting";
+  const saveEdit = async (kind: ReportKind) => {
+    setSaving(true);
     try {
-      const path = await save({
-        defaultPath: `${base} — ${suffix}.md`,
-        filters: [
-          { name: "Markdown", extensions: ["md"] },
-          { name: "Текст", extensions: ["txt"] },
-        ],
-      });
-      if (path) await api.saveTextFile(path, content);
+      await api.saveReport(meeting.id, kind, draft);
+      onReport(kind, draft);
+      setEditKind(null);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const block = (
-    title: string,
-    content: string | null,
-    suffix: string,
-    kind: ReportKind,
-    set: (v: string) => void,
-  ) => {
+  const block = (kind: ReportKind) => {
+    const content = reports[kind];
     if (!content) return null;
+    const meta = REPORT_META[kind];
     const isEditing = editKind === kind;
     return (
-      <div className="ai-block">
+      <div className="ai-block" key={kind}>
         <div className="ai-block-head">
-          <span className="ai-block-title">{title}</span>
+          <span className="ai-block-title">
+            <span className="ai-block-icon">{meta.icon}</span> {meta.title}
+          </span>
           {isEditing ? (
             <div className="btn-row">
-              <button
-                className="btn ghost"
-                onClick={() => setEditKind(null)}
-                disabled={saving}
-              >
+              <button className="btn ghost" onClick={() => setEditKind(null)} disabled={saving}>
                 Отмена
               </button>
               <button
                 className="btn primary"
-                onClick={() => saveEdit(kind, set)}
+                onClick={() => saveEdit(kind)}
                 disabled={saving}
                 title="Сохранить правки отчёта"
               >
@@ -173,13 +159,14 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
               />
               <button
                 className="btn ghost"
-                onClick={() => startEdit(kind, content)}
+                onClick={() => {
+                  setError("");
+                  setEditKind(kind);
+                  setDraft(content);
+                }}
                 title="Исправить текст отчёта"
               >
                 ✎ Редактировать
-              </button>
-              <button className="btn ghost" onClick={() => exportText(content, suffix)}>
-                ⬇ Экспорт
               </button>
             </div>
           )}
@@ -200,7 +187,7 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
     );
   };
 
-  const nothing = !brief && !summary && !analysis && !literary;
+  const anyBusy = busy !== "" || !!auto;
 
   return (
     <div className="card">
@@ -210,69 +197,65 @@ export function AiPanel({ meeting, onMetaSaved }: Props) {
           ИИ · ваш ключ
         </span>
         <div className="spacer" />
-        <div className="btn-row">
-          <button className="btn" onClick={doSuggest} disabled={busy !== ""}>
-            {busy === "suggest" ? "…" : "Авто-заголовок"}
-          </button>
-          <button
-            className="btn"
-            onClick={() => run("brief", api.briefSummary, setBrief)}
-            disabled={busy !== ""}
-          >
-            {busy === "brief" ? "…" : "Краткое резюме"}
-          </button>
-          <button
-            className="btn"
-            onClick={() => run("sum", api.summarize, setSummary)}
-            disabled={busy !== ""}
-          >
-            {busy === "sum" ? "Думаю…" : "Выжимка"}
-          </button>
-          <button
-            className="btn"
-            onClick={() => run("analyze", api.analyze, setAnalysis)}
-            disabled={busy !== ""}
-          >
-            {busy === "analyze" ? "Анализ…" : "ИИ-анализ"}
-          </button>
-          <button
-            className="btn"
-            onClick={() => run("lit", api.literaryText, setLiterary)}
-            disabled={busy !== ""}
-          >
-            {busy === "lit" ? "Пишу…" : "Литературный текст"}
-          </button>
-        </div>
+        <button
+          className="btn ghost"
+          onClick={doSuggest}
+          disabled={anyBusy}
+          title="Придумать заголовок, участников и тему по разговору"
+        >
+          {busy === "suggest" ? "…" : "✨ Заголовок"}
+        </button>
       </div>
       <div className="card-body">
-        {error && <div className="ai-error">{error}</div>}
-
-        {nothing && (
-          <p className="muted">
-            Выбери, что построить по встрече: краткое резюме, выжимку, ИИ-анализ
-            или литературный текст.
+        {!configured && (
+          <p className="hint ai-setup">
+            Подключите свою модель в «Настройки → Искусственный интеллект» — и после
+            каждой расшифровки Auris сам придумает заголовок и подведёт итоги.
           </p>
         )}
+        {auto && (
+          <div className="ai-auto">
+            <span className="spin">◜</span> {auto.label ?? "ИИ работает…"}
+          </div>
+        )}
+        {error && <div className="ai-error">{error}</div>}
 
-        {block("Краткое резюме", brief, "резюме", "brief", setBrief)}
-        {block("Выжимка", summary, "выжимка", "summary", setSummary)}
-        {block("ИИ-анализ", analysis, "анализ", "analysis", setAnalysis)}
-        {block("Литературный текст", literary, "текст", "literary", setLiterary)}
+        <div className="preset-grid">
+          {PRESETS.map((k) => {
+            const m = REPORT_META[k];
+            const done = !!reports[k];
+            return (
+              <button
+                key={k}
+                type="button"
+                className={done ? "preset done" : "preset"}
+                onClick={() => generate(k)}
+                disabled={anyBusy}
+                title={done ? "Создать заново" : m.what}
+              >
+                <span className="preset-top">
+                  <span className="preset-icon">{m.icon}</span>
+                  <span className="preset-title">{m.title}</span>
+                  {done && <span className="preset-state">↻</span>}
+                </span>
+                <span className="preset-what">{busy === k ? m.busy : m.what}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {REPORT_ORDER.map(block)}
 
         <div className="ask-row">
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Спросить по встрече…"
+            placeholder="Спросить по встрече: «Что решили по срокам?»"
             onKeyDown={(e) => {
               if (e.key === "Enter") doAsk();
             }}
           />
-          <button
-            className="btn primary"
-            onClick={doAsk}
-            disabled={busy !== "" || !question}
-          >
+          <button className="btn primary" onClick={doAsk} disabled={anyBusy || !question.trim()}>
             {busy === "ask" ? "…" : "Спросить"}
           </button>
         </div>

@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { Meeting, Transcript, TranscribeState, TrackFile } from "../types";
+import type { Meeting, ReportKind, Transcript, TranscribeState, TrackFile } from "../types";
 import { api } from "../api";
-import { getLabels, setLabels as saveLabels, nameForSpeaker, defaultName } from "../labels";
+import { getLabels, setLabels as saveLabels, nameForSpeaker } from "../labels";
 import type { SpeakerLabels } from "../labels";
 import { activeSegmentIndex } from "../playback";
-import {
-  clock,
-  transcriptToTxt,
-  transcriptToMd,
-  transcriptToPlain,
-  stenogramToTxt,
-  stenogramToMd,
-  exportFileName,
-} from "../export";
+import { clock, transcriptToPlain } from "../export";
+import { mergeSpeakers, renumberSpeakers } from "../speakers";
+import { REPORTS_EVENT } from "../reports";
 import { TranscriptView } from "./TranscriptView";
+import { SpeakersPanel } from "./SpeakersPanel";
+import { ExportModal } from "./ExportModal";
 import { AudioEditor } from "./AudioEditor";
 import { AiPanel } from "./AiPanel";
 import { CopyLogButton } from "./CopyLogButton";
@@ -70,12 +66,20 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [topic, setTopic] = useState(meeting.topic);
   const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
 
-  // Сколько голосов в записи (для диаризации). Импорт: "auto"|2..8; запись: 1..8.
+  // Сколько голосов (для разделения): "auto" (по умолчанию) | "1".."8".
+  // Импорт — всего говорящих, запись — собеседников (кроме «Я»).
   const [speakerSel, setSpeakerSel] = useState<string>(
-    () =>
-      localStorage.getItem(`3uxo.speakers.${meeting.id}`) ??
-      (isImported ? "auto" : "1"),
+    () => localStorage.getItem(`3uxo.speakers.${meeting.id}`) ?? "auto",
   );
+  // ИИ-отчёты встречи (общие для ИИ-панели и экспорта).
+  const [reports, setReports] = useState<Partial<Record<ReportKind, string>>>({});
+  const [showExport, setShowExport] = useState(false);
+  // Есть сохранённый анализ голосов → число голосов меняется мгновенно.
+  const [hasVoices, setHasVoices] = useState(false);
+  const [reclustering, setReclustering] = useState(false);
+  const [notice, setNotice] = useState("");
+  // Прослушивание образца голоса: где остановиться.
+  const stopAtRef = useRef<number | null>(null);
   const updateSpeakerSel = (v: string) => {
     setSpeakerSel(v);
     localStorage.setItem(`3uxo.speakers.${meeting.id}`, v);
@@ -100,8 +104,22 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setDraft(null);
     setLbls(getLabels(meeting.id));
     setEditorOpen(false);
+    setNotice("");
+    setReports({});
     api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
+    api.getReports(meeting.id).then(setReports).catch(() => {});
+    api.hasVoiceAnalysis(meeting.id).then(setHasVoices).catch(() => setHasVoices(false));
   }, [meeting.id, isImported]);
+
+  // Отчёты обновились в фоне (авто-итоги после расшифровки).
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ id: string }>).detail?.id !== meeting.id) return;
+      api.getReports(meeting.id).then(setReports).catch(() => {});
+    };
+    window.addEventListener(REPORTS_EVENT, on);
+    return () => window.removeEventListener(REPORTS_EVENT, on);
+  }, [meeting.id]);
 
   // Ссылки на дорожки. `audioVersion` подмешивает метку версии в asset-URL:
   // после правки аудио путь тот же, и без неё webview отдаёт старый файл.
@@ -125,7 +143,9 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       // Новая расшифровка перетирает черновик правок — выходим из режима правки.
       setEditing(false);
       setDraft(null);
+      setNotice("");
       api.getTranscript(meeting.id).then(setTranscript).catch(() => {});
+      api.hasVoiceAnalysis(meeting.id).then(setHasVoices).catch(() => {});
     }
   }, [transState?.doneToken, meeting.id]);
 
@@ -136,16 +156,21 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const total = transState?.total ?? 0;
   const stageLabel =
     stage === "download"
-      ? "Скачивание модели"
-      : stage === "loading"
-        ? "Загрузка модели в память"
-        : stage === "diarize"
-          ? "Разделение голосов"
-          : stage === "system"
-            ? "Дорожка собеседника"
-            : isImported
-              ? "Расшифровка"
-              : "Дорожка «Я»";
+      ? "Скачивание модели распознавания (один раз)"
+      : stage === "download-voices"
+        ? "Скачивание модели голосов (один раз)"
+        : stage === "loading"
+          ? "Подготовка модели"
+          : stage === "diarize"
+            ? "Разделение голосов"
+            : stage === "system"
+              ? "Расшифровка собеседника"
+              : isImported
+                ? "Расшифровка"
+                : isSolo
+                  ? "Расшифровка"
+                  : "Расшифровка «Я»";
+  const downloading = stage === "download" || stage === "download-voices";
   const shownError = error || transState?.error || "";
 
   const activeIndex = useMemo(
@@ -163,6 +188,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   );
 
   const togglePlay = () => {
+    stopAtRef.current = null;
     const mic = micRef.current;
     if (!mic) return;
     if (playing) {
@@ -176,6 +202,17 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     }
   };
 
+  // Образец голоса: перемотать к реплике и проиграть только её.
+  const playSample = (start: number, end: number) => {
+    stopAtRef.current = end;
+    seek(start);
+    const mic = micRef.current;
+    if (!mic) return;
+    void mic.play().catch(() => {});
+    void sysRef.current?.play().catch(() => {});
+    setPlaying(true);
+  };
+
   const seek = (t: number) => {
     if (micRef.current) micRef.current.currentTime = t;
     if (sysRef.current) sysRef.current.currentTime = t;
@@ -183,6 +220,8 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   };
 
   const saveMeta = async () => {
+    // Пользователь поменял заголовок сам — авто-заголовок его больше не трогает.
+    if (title !== meeting.title) localStorage.setItem(`3uxo.titleEdited.${meeting.id}`, "1");
     try {
       await api.updateMeetingMeta(meeting.id, title, participants, topic);
       onMetaSaved();
@@ -259,40 +298,43 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     }
   };
 
-  // Обычный экспорт расшифровки (по реплике в строке) — TXT или MD.
-  const exportAs = async (fmt: "txt" | "md") => {
-    if (!transcript) return;
-    const content =
-      fmt === "txt"
-        ? transcriptToTxt(meeting, transcript, nameOf)
-        : transcriptToMd(meeting, transcript, nameOf);
+  // ---- Голоса ----
+  const changeCount = async (v: string) => {
+    updateSpeakerSel(v);
+    if (!hasVoices || !transcript) {
+      setNotice(
+        transcript
+          ? "Для этой встречи нет анализа голосов — число применится при «↻ Заново»."
+          : "",
+      );
+      return;
+    }
+    setReclustering(true);
+    setNotice("");
     try {
-      const path = await save({
-        defaultPath: exportFileName(meeting, fmt),
-        filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
-      });
-      if (path) await api.saveTextFile(path, content);
+      const t = await api.reclusterSpeakers(meeting.id, v === "auto" ? null : Number(v));
+      // Номера голосов поменялись — старые подписи «Спикер N» к ним не относятся.
+      const kept: SpeakerLabels = {};
+      for (const [k, val] of Object.entries(labels)) if (!/^spk\d+$/.test(k)) kept[k] = val;
+      setLbls(kept);
+      saveLabels(meeting.id, kept);
+      setTranscript(t);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setReclustering(false);
     }
   };
 
-  // Стенограмма (сгруппировано по говорящему, абзацы); формат — в диалоге.
-  const exportStenogram = async () => {
+  const mergeVoice = async (from: string, into: string) => {
     if (!transcript) return;
+    const merged = mergeSpeakers(transcript, from, into);
+    const { transcript: t, labels: l } = renumberSpeakers(merged, labels);
     try {
-      const path = await save({
-        defaultPath: exportFileName(meeting, "txt"),
-        filters: [
-          { name: "Текст", extensions: ["txt"] },
-          { name: "Markdown", extensions: ["md"] },
-        ],
-      });
-      if (!path) return;
-      const content = path.toLowerCase().endsWith(".md")
-        ? stenogramToMd(meeting, transcript, nameOf)
-        : stenogramToTxt(meeting, transcript, nameOf);
-      await api.saveTextFile(path, content);
+      await api.saveTranscript(meeting.id, t);
+      setTranscript(t);
+      setLbls(l);
+      saveLabels(meeting.id, l);
     } catch (e) {
       setError(String(e));
     }
@@ -305,7 +347,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   // собеседников не нужен. Вызов передаёт флаг соло в бэкенд.
   const doTranscribe = () => onTranscribe(isSolo ? 1 : speakerCountValue(), isSolo);
 
-  const speakerOptions = isImported ? [2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
+  const speakerOptions = [1, 2, 3, 4, 5, 6, 7, 8];
   const speakerSelect = isSolo ? (
     <span className="solo-badge" title="Заметка для себя — один голос «Я»">
       🎙 Заметка · один голос
@@ -317,7 +359,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
       onChange={(e) => updateSpeakerSel(e.target.value)}
       title="Сколько голосов в записи — для разделения говорящих"
     >
-      {isImported && <option value="auto">Голосов: авто</option>}
+      <option value="auto">{isImported ? "Голосов: авто" : "Собеседников: авто"}</option>
       {speakerOptions.map((n) => (
         <option key={n} value={String(n)}>
           {isImported
@@ -384,42 +426,6 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             placeholder="тема"
           />
         </div>
-        {!isImported && (
-          <div className="mv-meta-row speakers-row">
-            <label className="speaker-edit">
-              <span>Имя дорожки «Я»</span>
-              <input
-                className="chip-input"
-                value={nameForSpeaker(labels, "me")}
-                onChange={(e) => updateLabel("me", e.target.value)}
-              />
-            </label>
-            {!isSolo && (
-              <label className="speaker-edit">
-                <span>Имя собеседника</span>
-                <input
-                  className="chip-input"
-                  value={nameForSpeaker(labels, "them")}
-                  onChange={(e) => updateLabel("them", e.target.value)}
-                />
-              </label>
-            )}
-          </div>
-        )}
-        {isImported && speakers.length > 0 && (
-          <div className="mv-meta-row speakers-row">
-            {speakers.map((sp) => (
-              <label className="speaker-edit" key={sp}>
-                <span>{defaultName(sp)}</span>
-                <input
-                  className="chip-input"
-                  value={nameForSpeaker(labels, sp)}
-                  onChange={(e) => updateLabel(sp, e.target.value)}
-                />
-              </label>
-            ))}
-          </div>
-        )}
       </div>
 
       {shownError && (
@@ -500,7 +506,18 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
         <audio
           ref={micRef}
           src={micUrl || undefined}
-          onTimeUpdate={() => micRef.current && setTime(micRef.current.currentTime)}
+          onTimeUpdate={() => {
+            const mic = micRef.current;
+            if (!mic) return;
+            setTime(mic.currentTime);
+            // Конец образца голоса — пауза.
+            if (stopAtRef.current !== null && mic.currentTime >= stopAtRef.current) {
+              stopAtRef.current = null;
+              mic.pause();
+              sysRef.current?.pause();
+              setPlaying(false);
+            }
+          }}
           onLoadedMetadata={() => {
             const d = micRef.current?.duration;
             if (d && Number.isFinite(d)) setDuration(d);
@@ -534,18 +551,12 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             </div>
           ) : hasTranscript ? (
             <div className="btn-row">
-              <button className="btn ghost" onClick={() => exportAs("txt")}>
-                ⬇ TXT
-              </button>
-              <button className="btn ghost" onClick={() => exportAs("md")}>
-                ⬇ MD
-              </button>
               <button
                 className="btn ghost"
-                onClick={exportStenogram}
-                title="Сгруппированная стенограмма (.txt / .md)"
+                onClick={() => setShowExport(true)}
+                title="Word, Markdown, текст или субтитры — со стенограммой и ИИ-отчётами"
               >
-                ⬇ Стенограмма
+                ⬇ Экспорт
               </button>
               <CopyButton
                 text={() => transcriptToPlain(transcript!, nameOf)}
@@ -559,11 +570,10 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               >
                 ✎ Редактировать
               </button>
-              {speakerSelect}
               <button
                 className="btn ghost"
                 onClick={doTranscribe}
-                title="Перерасшифровать заново"
+                title="Расшифровать заново (текущие правки текста пропадут)"
               >
                 ↻ Заново
               </button>
@@ -585,12 +595,29 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             <p className="muted" style={{ marginTop: 10 }}>
               {stageLabel}
               {total > 0 ? ` · фрагмент ${done}/${total}` : ""} ·{" "}
-              {Math.round(percent)}%. Первый раз модель скачивается (выбранная в
-              настройках) — это занимает несколько минут. Можно открыть другие
-              встречи, расшифровка не прервётся.
+              {Math.round(percent)}%.{" "}
+              {downloading
+                ? "Модель скачивается только один раз — дальше всё работает офлайн."
+                : "Можно открыть другие встречи — расшифровка не прервётся."}
             </p>
           </div>
         ) : (
+          <>
+          {hasTranscript && !editing && !isSolo && (
+            <SpeakersPanel
+              transcript={transcript!}
+              labels={labels}
+              recorded={!isImported}
+              count={speakerSel}
+              canRecluster={hasVoices}
+              busy={reclustering}
+              onRename={updateLabel}
+              onCount={changeCount}
+              onMerge={mergeVoice}
+              onPlaySample={playSample}
+            />
+          )}
+          {notice && <p className="hint voices-notice">{notice}</p>}
           <TranscriptView
             transcript={editing ? draft : transcript}
             activeIndex={activeIndex}
@@ -602,10 +629,27 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             onEditSpeaker={editSpeaker}
             onDeleteSegment={deleteSegment}
           />
+          </>
         )}
       </div>
 
-      <AiPanel meeting={meeting} onMetaSaved={onMetaSaved} />
+      <AiPanel
+        meeting={meeting}
+        labels={labels}
+        hasTranscript={hasTranscript}
+        reports={reports}
+        onReport={(kind, text) => setReports((r) => ({ ...r, [kind]: text }))}
+        onMetaSaved={onMetaSaved}
+      />
+      {showExport && (
+        <ExportModal
+          meeting={meeting}
+          transcript={transcript}
+          reports={reports}
+          nameOf={nameOf}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </div>
   );
 }

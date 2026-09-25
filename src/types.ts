@@ -70,8 +70,38 @@ export interface RecState {
   paused: boolean;
 }
 
-/// Вид ИИ-отчёта (для сохранения отредактированной версии).
-export type ReportKind = "brief" | "summary" | "analysis" | "literary";
+/// Вид ИИ-отчёта. `brief` — устаревшее «Краткое резюме» (новые не создаются,
+/// сохранённые показываются и экспортируются).
+export type ReportKind =
+  | "summary"
+  | "tasks"
+  | "analysis"
+  | "literary"
+  | "followup"
+  | "brief";
+
+/// Контекст встречи для ИИ: заголовок, участники и имена говорящих.
+export interface MeetingContext {
+  title: string;
+  participants: string;
+  names: Record<string, string>;
+}
+
+/// Статус локальной модели (экран «Модели» в настройках).
+export interface ModelInfo {
+  id: string;
+  kind: "whisper" | "parakeet" | "diarize";
+  installed: boolean;
+  bytes: number;
+}
+
+/// Что ИИ делает сам после расшифровки (если ключ настроен).
+export interface AiAutoConfig {
+  /// Придумать заголовок/участников/тему.
+  title: boolean;
+  /// Сразу построить «Итоги встречи».
+  summary: boolean;
+}
 
 export interface AppSettings {
   ai: AiConfig;
@@ -80,6 +110,7 @@ export interface AppSettings {
   /// напр. "Ctrl+Shift+R"). Пусто — хоткей выключен.
   hotkey: string;
   autoRecord: AutoRecordConfig;
+  aiAuto: AiAutoConfig;
 }
 
 /// Состояние расшифровки одной встречи (живёт на уровне приложения, чтобы

@@ -6,6 +6,9 @@ import { api } from "../api";
 import { AUTO_RECORD_APPS, customProcs, resolveProcesses } from "../autorecord";
 import { CopyLogButton } from "./CopyLogButton";
 import { HotkeyCapture } from "./HotkeyCapture";
+import { ModelsManager } from "./ModelsManager";
+import { DEFAULT_MODEL } from "../settings";
+import { findUpdate } from "../updater";
 
 /// Переключатель-тумблер в стиле Auris.
 function Switch({
@@ -35,6 +38,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<AppSettings>(getSettings());
   const [proc, setProc] = useState("");
   const [version, setVersion] = useState("");
+  const [updState, setUpdState] = useState("");
+
+  // Ручная проверка обновлений: нашлось — App покажет диалог обновления.
+  const checkNow = async () => {
+    setUpdState("Проверяю…");
+    const u = await findUpdate();
+    if (u) {
+      setUpdState(`Доступна версия ${u.version}`);
+      window.dispatchEvent(new Event("auris-check-updates"));
+    } else {
+      setUpdState("У вас последняя версия");
+    }
+  };
 
   // Версия приложения (из tauri.conf). В dev-превью без Tauri вернёт ошибку —
   // тогда просто не показываем номер.
@@ -307,33 +323,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <details className="settings-section">
           <summary>
             <span className="sec-title">Распознавание</span>
-            <span className="sec-sub">Whisper · локально, офлайн</span>
+            <span className="sec-sub">Модели · локально, офлайн</span>
             <span className="sec-chev" aria-hidden="true">
               ⌄
             </span>
           </summary>
           <div className="sec-body">
             <p className="hint">
-              Расшифровка идёт локально, внутри приложения. Нужную модель Auris
-              скачает сам один раз при первой расшифровке — ставить ничего не
-              нужно.
+              Расшифровка и разделение голосов идут локально. Модели скачиваются
+              один раз (можно заранее — здесь) и дальше работают без интернета.
             </p>
             <div className="field">
-              <label>Модель</label>
-              <select
-                value={s.whisper.model || "medium"}
-                onChange={(e) => wh("model", e.target.value)}
-              >
-                <option value="base">base — быстрее всего, ~142 МБ</option>
-                <option value="small">small — быстрее, ~466 МБ</option>
-                <option value="medium">
-                  medium — точнее для русского, ~1.5 ГБ (рекомендуется)
-                </option>
-                <option value="large-v3">large-v3 — максимум качества, ~3 ГБ</option>
-              </select>
-              <span className="hint">
-                Больше модель — точнее, но медленнее на CPU.
-              </span>
+              <label>Модель распознавания</label>
+              <ModelsManager
+                selected={s.whisper.model || DEFAULT_MODEL}
+                onSelect={(id) => wh("model", id)}
+              />
             </div>
             <div className="field">
               <label>Язык</label>
@@ -343,7 +348,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 placeholder="ru"
               />
               <span className="hint">
-                По умолчанию «ru». Впиши «auto» для автоопределения языка.
+                По умолчанию «ru». Впиши «auto» для автоопределения. Parakeet
+                определяет язык сам; если выбран язык вне его 25 — Auris
+                автоматически возьмёт Whisper.
               </span>
             </div>
             <details className="adv">
@@ -367,7 +374,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <details className="settings-section">
           <summary>
             <span className="sec-title">Искусственный интеллект</span>
-            <span className="sec-sub">Резюме и анализ · через ваш ключ</span>
+            <span className="sec-sub">Итоги, задачи, разбор · через ваш ключ</span>
             <span className="sec-chev" aria-hidden="true">
               ⌄
             </span>
@@ -401,6 +408,34 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 placeholder="qwen3.6-27b-q4"
               />
             </div>
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">Заголовок сам</div>
+                <div className="hint">
+                  После расшифровки ИИ придумает заголовок, участников и тему (если
+                  вы не меняли заголовок вручную).
+                </div>
+              </div>
+              <Switch
+                on={s.aiAuto.title}
+                onChange={(v) => setS({ ...s, aiAuto: { ...s.aiAuto, title: v } })}
+                label="Авто-заголовок"
+              />
+            </div>
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">Итоги встречи сразу</div>
+                <div className="hint">
+                  После расшифровки ИИ сразу подведёт итоги: главное, решения,
+                  задачи.
+                </div>
+              </div>
+              <Switch
+                on={s.aiAuto.summary}
+                onChange={(v) => setS({ ...s, aiAuto: { ...s.aiAuto, summary: v } })}
+                label="Авто-итоги"
+              />
+            </div>
           </div>
         </details>
 
@@ -426,7 +461,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <div className="modal-actions">
           <span className="modal-version">
-            {version ? `Auris v${version}` : "Auris"}
+            {version ? `Auris v${version}` : "Auris"}{" "}
+            <button type="button" className="link-btn" onClick={checkNow}>
+              {updState || "Проверить обновления"}
+            </button>
           </span>
           <div className="modal-actions-btns">
             <button className="btn ghost" onClick={onClose}>

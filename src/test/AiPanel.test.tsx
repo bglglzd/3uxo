@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useState } from "react";
 import { AiPanel } from "../components/AiPanel";
-import type { Meeting } from "../types";
+import type { Meeting, ReportKind } from "../types";
 import { api } from "../api";
 
 vi.mock("../settings", () => ({
@@ -13,24 +14,13 @@ vi.mock("../settings", () => ({
   isAiConfigured: () => true,
 }));
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({
-  save: vi.fn(async () => null),
-}));
-
 vi.mock("../api", () => ({
   api: {
-    getBrief: vi.fn(async () => null),
-    briefSummary: vi.fn(async () => "краткое резюме"),
-    getSummary: vi.fn(async () => null),
-    summarize: vi.fn(async () => "выжимка"),
-    getAnalysis: vi.fn(async () => null),
-    analyze: vi.fn(async () => "ии-анализ"),
-    getLiterary: vi.fn(async () => null),
-    literaryText: vi.fn(async () => "литературный текст"),
-    suggestMetadata: vi.fn(async () => ({ title: "T", participants: "P", topic: "Y" })),
+    generateReport: vi.fn(async (_id: string, kind: string) => `отчёт ${kind}`),
+    suggestMeta: vi.fn(async () => ({ title: "T", participants: "P", topic: "Y" })),
     updateMeetingMeta: vi.fn(async () => {}),
-    saveTextFile: vi.fn(async () => {}),
-    ask: vi.fn(async () => "ответ"),
+    saveReport: vi.fn(async () => {}),
+    askNamed: vi.fn(async () => "ответ"),
   },
 }));
 
@@ -45,51 +35,67 @@ const meeting: Meeting = {
   status: "transcribed",
 };
 
+/// Обёртка с состоянием отчётов, как в MeetingView.
+function Host({ onMetaSaved = vi.fn(), hasTranscript = true }) {
+  const [reports, setReports] = useState<Partial<Record<ReportKind, string>>>({});
+  return (
+    <AiPanel
+      meeting={meeting}
+      labels={{ spk0: "Олег" }}
+      hasTranscript={hasTranscript}
+      reports={reports}
+      onReport={(k, t) => setReports((r) => ({ ...r, [k]: t }))}
+      onMetaSaved={onMetaSaved}
+    />
+  );
+}
+
 describe("AiPanel", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(api.getSummary).mockResolvedValue(null);
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ["Итоги встречи", "summary"],
+    ["Задачи", "tasks"],
+    ["Разбор разговора", "analysis"],
+    ["Чистовой текст", "literary"],
+    ["Письмо по итогам", "followup"],
+  ])("creates «%s»", async (title, kind) => {
+    render(<Host />);
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(title) }));
+    expect(await screen.findByText(`отчёт ${kind}`)).toBeInTheDocument();
+    expect(api.generateReport).toHaveBeenCalledWith(
+      "a",
+      kind,
+      expect.anything(),
+      expect.objectContaining({ names: { spk0: "Олег" } }),
+    );
   });
 
-  it("creates a summary", async () => {
-    vi.mocked(api.summarize).mockResolvedValue("выжимка");
-    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "Выжимка" }));
-    expect(await screen.findByText("выжимка")).toBeInTheDocument();
-  });
-
-  it("creates a literary text", async () => {
-    vi.mocked(api.literaryText).mockResolvedValue("литературный текст");
-    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: /Литературный текст/i }));
-    expect(await screen.findByText("литературный текст")).toBeInTheDocument();
-  });
-
-  it("creates a brief summary", async () => {
-    vi.mocked(api.briefSummary).mockResolvedValue("краткое резюме");
-    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "Краткое резюме" }));
-    expect(await screen.findByText("краткое резюме")).toBeInTheDocument();
-  });
-
-  it("creates an AI analysis", async () => {
-    vi.mocked(api.analyze).mockResolvedValue("ии-анализ");
-    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "ИИ-анализ" }));
-    expect(await screen.findByText("ии-анализ")).toBeInTheDocument();
+  it("explains every preset (no duplicates)", () => {
+    render(<Host />);
+    expect(screen.getByText(/кто отвечает/)).toBeInTheDocument();
+    expect(screen.getByText(/Готовое письмо/)).toBeInTheDocument();
+    expect(screen.queryByText("Выжимка")).toBeNull();
   });
 
   it("suggests metadata and saves it", async () => {
     const onMetaSaved = vi.fn();
-    render(<AiPanel meeting={meeting} onMetaSaved={onMetaSaved} />);
-    await userEvent.click(screen.getByRole("button", { name: /Авто-заголовок/i }));
-    expect(api.suggestMetadata).toHaveBeenCalledWith("a", expect.anything());
+    render(<Host onMetaSaved={onMetaSaved} />);
+    await userEvent.click(screen.getByRole("button", { name: /Заголовок/i }));
+    expect(api.suggestMeta).toHaveBeenCalled();
     expect(api.updateMeetingMeta).toHaveBeenCalledWith("a", "T", "P", "Y");
+    expect(onMetaSaved).toHaveBeenCalled();
+  });
+
+  it("asks to transcribe first when there is no transcript", async () => {
+    render(<Host hasTranscript={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Итоги встречи/ }));
+    expect(await screen.findByText(/Сначала расшифруйте/)).toBeInTheDocument();
+    expect(api.generateReport).not.toHaveBeenCalled();
   });
 
   it("answers a question", async () => {
-    vi.mocked(api.ask).mockResolvedValue("ответ");
-    render(<AiPanel meeting={meeting} onMetaSaved={vi.fn()} />);
+    render(<Host />);
     await userEvent.type(screen.getByPlaceholderText(/Спросить/i), "вопрос?");
     await userEvent.click(screen.getByRole("button", { name: /^Спросить$/i }));
     expect(await screen.findByText("ответ")).toBeInTheDocument();

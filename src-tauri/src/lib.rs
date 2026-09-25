@@ -314,6 +314,16 @@ pub fn run() {
             commands::export_audio,
             commands::get_backend_log,
             commands::set_autorecord,
+            commands::recluster_speakers,
+            commands::has_voice_analysis,
+            commands::models_status,
+            commands::download_model,
+            commands::delete_model,
+            commands::generate_report,
+            commands::get_reports,
+            commands::suggest_meta,
+            commands::ask_named,
+            commands::save_binary_file,
             update_hotkey,
         ])
         .run(tauri::generate_context!())

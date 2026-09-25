@@ -18,7 +18,8 @@ use uxo_core::transcript::Transcript;
 #[derive(Clone, serde::Serialize)]
 pub struct TranscribeProgress {
     pub id: String,
-    /// "loading" | "download" | "mic" | "system".
+    /// "loading" | "download" (модель распознавания, один раз) |
+    /// "download-voices" (модели голосов, один раз) | "mic" | "system" | "diarize".
     pub stage: String,
     pub percent: f32,
     /// Сколько фрагментов готово / всего (0 — неизвестно/не применимо).
@@ -323,8 +324,8 @@ pub async fn transcribe(
     state: tauri::State<'_, AppState>,
     id: String,
     options: TranscribeOptions,
-    // Сколько голосов в записи: для импорта — всего говорящих (None = авто);
-    // для записи — число собеседников (>=2 включает диаризацию системной дорожки).
+    // Сколько голосов: для импорта — всего говорящих, для записи — число
+    // собеседников на системной дорожке. None/0 — определить автоматически.
     speaker_count: Option<u32>,
     // Соло-режим «я один» (заметка на один голос): расшифровываем только
     // микрофон, всем сегментам говорящий «Я», без дорожки собеседника и
@@ -334,9 +335,6 @@ pub async fn transcribe(
     // Импортированная встреча — одна дорожка audio.wav; записанная — mic+system.
     let imported = state.repo.lock().unwrap().get(&id)?.source == "imported";
     let solo = !imported && solo.unwrap_or(false);
-    // Помечаем использованным во всех конфигурациях фич (используется ниже только
-    // в путях с диаризацией).
-    let _ = speaker_count;
 
     // Явно указанный внешний whisper-CLI — используем его (без прогресса).
     if options
@@ -358,17 +356,21 @@ pub async fn transcribe(
         return Ok(transcript);
     }
 
-    // Иначе — встроенный whisper.cpp; модель скачивается при первом запуске.
-    // Прогресс шлём ПО ФАЗАМ из безопасного потока (без FFI-колбэка внутри
-    // whisper.cpp — он вызывал нативный краш).
-    #[cfg(feature = "whisper")]
+    // Иначе — встроенный whisper.cpp; модель скачивается ОДИН раз (фаза
+    // download только при реальной загрузке). Прогресс шлём ПО ФАЗАМ из
+    // безопасного потока (без FFI-колбэка внутри whisper.cpp — он ронял).
+    #[cfg(any(feature = "whisper", feature = "parakeet"))]
     {
         use uxo_core::transcript::merge_tracks;
-        use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
+        // Сколько голосов задал пользователь: None/0 — авто.
+        let wanted = speaker_count.filter(|&n| n > 0).map(|n| n as usize);
         flog(
             &state.data_root,
-            &format!("transcribe start id={id} imported={imported}"),
+            &format!(
+                "transcribe start id={id} imported={imported} solo={solo} speakers={}",
+                wanted.map(|n| n.to_string()).unwrap_or_else(|| "auto".into())
+            ),
         );
 
         // Прогресс из НАШЕГО цикла: фаза + процент + счётчик окон (done/total).
@@ -385,73 +387,64 @@ pub async fn transcribe(
             );
         };
 
-        // Модель грузится ОДИН раз; скачивание — с прогрессом.
         emit("loading", 0.0, 0, 0);
-        flog(&state.data_root, "transcribe: ensure model + load");
-        let transcriber = WhisperTranscriber::managed(
+        let model =
+            uxo_core::models::pick_model(options.model.as_deref(), options.language.as_deref())
+                .to_string();
+        flog(&state.data_root, &format!("transcribe: model {model}"));
+        let transcriber = load_asr(
             &state.data_root,
-            options.model.as_deref(),
+            &model,
             options.language.clone(),
             &|frac| emit("download", frac * 100.0, 0, 0),
         )?;
 
         let transcript = if imported {
-            // Импорт — одна дорожка audio.wav. С диаризацией текст идёт 0..50%,
-            // разделение голосов 50..100%; без фичи — текст 0..100%, один говорящий.
+            // Импорт — одна дорожка audio.wav: текст 0..75%, голоса 75..100%.
             let audio_path = service::track_path(&state.data_root, &id, "audio.wav")?;
-            emit("mic", 0.0, 0, 0);
-            flog(&state.data_root, "transcribe: imported audio");
-
             #[cfg(feature = "diarize")]
-            let text_scale = 50.0f32;
+            let text_scale = 75.0f32;
             #[cfg(not(feature = "diarize"))]
             let text_scale = 100.0f32;
 
-            let segs = transcriber.transcribe_windowed(
+            emit("mic", 0.0, 0, 0);
+            let segs = transcriber.run(
                 &audio_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| emit("mic", (done as f32 / total as f32) * text_scale, done, total),
             )?;
+            flog(&state.data_root, &format!("transcribed: audio={} segs", segs.len()));
 
             #[cfg(feature = "diarize")]
             {
-                use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
                 use uxo_core::transcript::assign_speakers;
-                // Потолок числа голосов: выбранный пользователем или авто (0).
-                let max_speakers = speaker_count.unwrap_or(0) as usize;
-                // Модели диаризации скачиваются при первом запуске (фаза download).
-                emit("diarize", 50.0, 0, 0);
-                flog(&state.data_root, "transcribe: diarize (ensure models + run)");
-                let diarizer = PyannoteDiarizer::managed(&state.data_root, max_speakers, &|frac| {
-                    emit("download", 50.0 + frac * 40.0, 0, 0)
-                })?;
-                emit("diarize", 90.0, 0, 0);
-                let diar = diarizer.diarize(&audio_path)?;
-                assign_speakers(segs, diar)
+                if wanted == Some(1) {
+                    uxo_core::transcript::single_speaker(segs, "spk0")
+                } else {
+                    let diar = diarize_track(
+                        &state.data_root,
+                        &id,
+                        "audio.wav",
+                        &audio_path,
+                        wanted,
+                        &|frac| emit("download-voices", frac * 100.0, 0, 0),
+                        &|done, total| {
+                            emit("diarize", 75.0 + done as f32 / total.max(1) as f32 * 25.0, done, total)
+                        },
+                    )?;
+                    assign_speakers(segs, diar)
+                }
             }
             #[cfg(not(feature = "diarize"))]
             {
                 uxo_core::transcript::single_speaker(segs, "spk0")
             }
         } else if solo {
-            // Соло-режим «я один»: расшифровываем только микрофон, всем сегментам
-            // говорящий «Я». Дорожка собеседника и диаризация пропускаются.
-            let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
-            let mic_path = {
-                let dst = mic_path.with_file_name("mic_norm.wav");
-                match uxo_core::decode::decode_to_wav_16k_mono(&mic_path, &dst) {
-                    Ok(()) => dst,
-                    Err(e) => {
-                        flog(&state.data_root, &format!("normalize mic (solo) failed: {e}"));
-                        mic_path
-                    }
-                }
-            };
+            // Соло-режим «я один»: только микрофон, всем сегментам «Я».
+            let mic_path = normalize_track(&state.data_root, &id, "mic.wav")?;
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: solo mic track");
-            let mic_segs = transcriber.transcribe_windowed(
+            let mic_segs = transcriber.run(
                 &mic_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| emit("mic", (done as f32 / total as f32) * 100.0, done, total),
             )?;
             flog(
@@ -460,51 +453,33 @@ pub async fn transcribe(
             );
             uxo_core::transcript::single_speaker(mic_segs, uxo_core::transcript::ME)
         } else {
-            let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
-            let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
+            // Записанные дорожки нормализуем тем же декодером, что и импорт
+            // (сырой WASAPI-WAV whisper не всегда расшифровывал).
+            let mic_path = normalize_track(&state.data_root, &id, "mic.wav")?;
+            let system_path = normalize_track(&state.data_root, &id, "system.wav")?;
 
-            // Нормализуем записанные дорожки тем же декодером, что и импорт
-            // (decode_to_wav_16k_mono: symphonia + ресемпл в 16кГц/моно/i16).
-            // Импортированные файлы whisper расшифровывает, а «сырой» WASAPI-WAV —
-            // нет; прогон через декодер выравнивает форматы. Best-effort: при
-            // ошибке (напр. пустая дорожка) берём исходный файл.
-            let norm = |src: &Path| -> PathBuf {
-                let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("track");
-                let dst = src.with_file_name(format!("{stem}_norm.wav"));
-                match uxo_core::decode::decode_to_wav_16k_mono(src, &dst) {
-                    Ok(()) => dst,
-                    Err(e) => {
-                        flog(&state.data_root, &format!("normalize {stem} failed: {e}"));
-                        src.to_path_buf()
-                    }
-                }
-            };
-            let mic_path = norm(&mic_path);
-            let system_path = norm(&system_path);
-
-            // При >=2 собеседниках системную дорожку («Собеседник») делим по
-            // голосам диаризацией; микрофон — всегда один «Я».
+            // Собеседников может быть несколько (групповой звонок): системную
+            // дорожку делим по голосам — автоматически, если число не задано.
+            // «1 собеседник» — без разделения.
             #[cfg(feature = "diarize")]
-            let will_diarize = speaker_count.unwrap_or(1) >= 2;
+            let will_diarize = wanted != Some(1);
             #[cfg(not(feature = "diarize"))]
             let will_diarize = false;
-            let sys_end = if will_diarize { 85.0 } else { 100.0 };
+            let sys_end = if will_diarize { 80.0 } else { 100.0 };
 
             emit("mic", 0.0, 0, 0);
             flog(&state.data_root, "transcribe: mic track");
-            let mic_segs = transcriber.transcribe_windowed(
+            let mic_segs = transcriber.run(
                 &mic_path,
-                DEFAULT_WINDOW_SECS,
-                &|done, total| emit("mic", (done as f32 / total as f32) * 50.0, done, total),
+                &|done, total| emit("mic", (done as f32 / total as f32) * 45.0, done, total),
             )?;
 
-            emit("system", 50.0, 0, 0);
+            emit("system", 45.0, 0, 0);
             flog(&state.data_root, "transcribe: system track");
-            let system_segs = transcriber.transcribe_windowed(
+            let system_segs = transcriber.run(
                 &system_path,
-                DEFAULT_WINDOW_SECS,
                 &|done, total| {
-                    emit("system", 50.0 + (done as f32 / total as f32) * (sys_end - 50.0), done, total)
+                    emit("system", 45.0 + (done as f32 / total as f32) * (sys_end - 45.0), done, total)
                 },
             )?;
 
@@ -519,19 +494,25 @@ pub async fn transcribe(
 
             #[cfg(feature = "diarize")]
             {
-                if will_diarize {
-                    use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
-                    use uxo_core::transcript::{assign_speakers, merge_transcripts, single_speaker};
-                    let interlocutors = speaker_count.unwrap_or(0) as usize;
-                    emit("diarize", sys_end, 0, 0);
-                    flog(&state.data_root, "transcribe: diarize system track");
-                    let diarizer =
-                        PyannoteDiarizer::managed(&state.data_root, interlocutors, &|frac| {
-                            emit("download", sys_end + frac * (100.0 - sys_end), 0, 0)
-                        })?;
-                    let sys_diar = diarizer.diarize(&system_path)?;
-                    let them = assign_speakers(system_segs, sys_diar);
-                    let me = single_speaker(mic_segs, "me");
+                if will_diarize && !system_segs.is_empty() {
+                    use uxo_core::transcript::{
+                        assign_speakers, collapse_single_speaker, merge_transcripts, single_speaker,
+                        THEM,
+                    };
+                    let diar = diarize_track(
+                        &state.data_root,
+                        &id,
+                        "system.wav",
+                        &system_path,
+                        wanted,
+                        &|frac| emit("download-voices", frac * 100.0, 0, 0),
+                        &|done, total| {
+                            emit("diarize", sys_end + done as f32 / total.max(1) as f32 * (100.0 - sys_end), done, total)
+                        },
+                    )?;
+                    // Один голос у собеседников → привычный «Собеседник».
+                    let them = collapse_single_speaker(assign_speakers(system_segs, diar), THEM);
+                    let me = single_speaker(mic_segs, uxo_core::transcript::ME);
                     merge_transcripts(me, them)
                 } else {
                     merge_tracks(mic_segs, system_segs)
@@ -549,13 +530,233 @@ pub async fn transcribe(
         notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }
-    #[cfg(not(feature = "whisper"))]
+    #[cfg(not(any(feature = "whisper", feature = "parakeet")))]
     {
-        let _ = (options, &app);
+        let _ = (options, &app, speaker_count);
         Err(AppError::Audio(
             "встроенный Whisper недоступен в этой сборке; укажите путь к whisper в настройках".into(),
         ))
     }
+}
+
+/// Движок распознавания: Whisper (whisper.cpp) или Parakeet (ONNX).
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
+trait Asr {
+    /// Расшифровка файла по окнам; прогресс — (готово окон, всего).
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>>;
+}
+
+#[cfg(feature = "whisper")]
+impl Asr for uxo_core::whisper::WhisperTranscriber {
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>> {
+        self.transcribe_windowed(wav, uxo_core::whisper::DEFAULT_WINDOW_SECS, progress)
+    }
+}
+
+#[cfg(feature = "parakeet")]
+impl Asr for uxo_core::parakeet::ParakeetTranscriber {
+    fn run(
+        &self,
+        wav: &Path,
+        progress: &dyn Fn(usize, usize),
+    ) -> AppResult<Vec<uxo_core::transcript::Segment>> {
+        self.transcribe_windowed(wav, 15, progress)
+    }
+}
+
+/// Загружает выбранный движок (модель качается только в первый раз).
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
+fn load_asr(
+    data_root: &Path,
+    model: &str,
+    language: Option<String>,
+    on_download: &dyn Fn(f32),
+) -> AppResult<Box<dyn Asr>> {
+    if uxo_core::models::is_parakeet(model) {
+        #[cfg(feature = "parakeet")]
+        {
+            let _ = language;
+            return Ok(Box::new(uxo_core::parakeet::ParakeetTranscriber::managed(
+                data_root,
+                on_download,
+            )?));
+        }
+        #[cfg(not(feature = "parakeet"))]
+        return Err(AppError::InvalidState(
+            "Parakeet недоступен в этой сборке — выберите Whisper в настройках".into(),
+        ));
+    }
+    #[cfg(feature = "whisper")]
+    {
+        Ok(Box::new(uxo_core::whisper::WhisperTranscriber::managed(
+            data_root,
+            Some(model),
+            language,
+            on_download,
+        )?))
+    }
+    #[cfg(not(feature = "whisper"))]
+    {
+        let _ = (data_root, language, on_download);
+        Err(AppError::InvalidState(
+            "Whisper недоступен в этой сборке — выберите Parakeet в настройках".into(),
+        ))
+    }
+}
+
+/// Прогоняет записанную дорожку через декодер импорта (16 кГц/моно/i16) в
+/// `<stem>_norm.wav`. Best-effort: при ошибке (пустая дорожка) — исходный файл.
+#[cfg(any(feature = "whisper", feature = "parakeet"))]
+fn normalize_track(data_root: &Path, id: &str, track: &str) -> AppResult<PathBuf> {
+    let src = service::track_path(data_root, id, track)?;
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("track").to_string();
+    let dst = src.with_file_name(format!("{stem}_norm.wav"));
+    match uxo_core::decode::decode_to_wav_16k_mono(&src, &dst) {
+        Ok(()) => Ok(dst),
+        Err(e) => {
+            flog(data_root, &format!("normalize {stem} failed: {e}"));
+            Ok(src)
+        }
+    }
+}
+
+/// Анализ голосов дорожки (модели качаются один раз) → разметка говорящих.
+/// Эмбеддинги кешируются в `diarization.json`: потом число голосов можно
+/// поменять мгновенно (`recluster_speakers`), без повторного анализа.
+#[cfg(feature = "diarize")]
+#[allow(clippy::too_many_arguments)]
+fn diarize_track(
+    data_root: &Path,
+    id: &str,
+    track: &str,
+    wav: &Path,
+    wanted: Option<usize>,
+    on_download: &dyn Fn(f32),
+    on_progress: &dyn Fn(usize, usize),
+) -> AppResult<Vec<uxo_core::transcript::DiarSegment>> {
+    use uxo_core::diarize::OnnxDiarizer;
+    flog(data_root, &format!("diarize {track}: start"));
+    let started = std::time::Instant::now();
+    let diarizer = OnnxDiarizer::managed(data_root, wanted, on_download)?;
+    on_progress(0, 1);
+    let windows = diarizer.embed(wav, on_progress)?;
+    let labels = uxo_core::cluster::cluster_windows(&windows, wanted);
+    flog(
+        data_root,
+        &format!(
+            "diarize {track}: {} fragments, {} voices, {:.1}s",
+            windows.len(),
+            uxo_core::cluster::count_speakers(&labels),
+            started.elapsed().as_secs_f32()
+        ),
+    );
+    let diar = uxo_core::cluster::windows_to_diar(&windows, &labels);
+    let cache = service::DiarCache { track: track.to_string(), windows };
+    if let Err(e) = service::save_diar_cache(data_root, id, &cache) {
+        flog(data_root, &format!("diarize: cache save failed: {e}"));
+    }
+    Ok(diar)
+}
+
+/// Меняет число голосов в готовой расшифровке — мгновенно, по сохранённому
+/// анализу голосов (без повторной расшифровки). `speaker_count`: None/0 — авто.
+#[tauri::command]
+pub async fn recluster_speakers(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    speaker_count: Option<u32>,
+) -> AppResult<Transcript> {
+    let data_root = state.data_root.clone();
+    let wanted = speaker_count.filter(|&n| n > 0).map(|n| n as usize);
+    let t = tauri::async_runtime::spawn_blocking(move || {
+        service::recluster_transcript(&data_root, &id, wanted)
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("recluster join: {e}")))??;
+    Ok(t)
+}
+
+/// Есть ли у встречи сохранённый анализ голосов (можно менять число голосов).
+#[tauri::command]
+pub fn has_voice_analysis(state: tauri::State<AppState>, id: String) -> AppResult<bool> {
+    Ok(service::load_diar_cache(&state.data_root, &id)?.is_some())
+}
+
+// ── Модели ──────────────────────────────────────────────────────────────────
+
+/// Событие прогресса загрузки модели из настроек.
+#[derive(Clone, serde::Serialize)]
+pub struct ModelProgress {
+    pub id: String,
+    pub percent: f32,
+}
+
+/// Статус локальных моделей (скачаны ли, сколько весят).
+#[tauri::command]
+pub fn models_status(state: tauri::State<AppState>) -> Vec<uxo_core::models::ModelInfo> {
+    uxo_core::models::status(&state.data_root)
+}
+
+/// Скачивает модель заранее (из настроек): `id` — модель Whisper или "voices"
+/// (разделение голосов). Прогресс — событием `model-download-progress`.
+#[tauri::command]
+pub async fn download_model(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> AppResult<()> {
+    let data_root = state.data_root.clone();
+    let app2 = app.clone();
+    let mid = id.clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
+        let report = |f: f32| {
+            let _ = app2.emit(
+                "model-download-progress",
+                ModelProgress { id: mid.clone(), percent: (f * 100.0).clamp(0.0, 100.0) },
+            );
+        };
+        if mid == "voices" {
+            #[cfg(feature = "diarize")]
+            {
+                uxo_core::diarize::ensure_models(&data_root, &report)?;
+                Ok(())
+            }
+            #[cfg(not(feature = "diarize"))]
+            {
+                let _ = &report;
+                Err(AppError::InvalidState("разделение голосов недоступно в этой сборке".into()))
+            }
+        } else if uxo_core::models::is_parakeet(&mid) {
+            #[cfg(feature = "parakeet")]
+            {
+                uxo_core::parakeet::ensure_model(&data_root, &report)
+            }
+            #[cfg(not(feature = "parakeet"))]
+            {
+                Err(AppError::InvalidState("Parakeet недоступен в этой сборке".into()))
+            }
+        } else {
+            uxo_core::models::ensure_whisper(&data_root, &mid, &report).map(|_| ())
+        }
+    })
+    .await
+    .map_err(|e| AppError::Audio(format!("download join: {e}")))??;
+    flog(&state.data_root, &format!("model downloaded: {id}"));
+    Ok(())
+}
+
+/// Удаляет скачанную модель Whisper (освободить место на диске).
+#[tauri::command]
+pub fn delete_model(state: tauri::State<AppState>, id: String) -> AppResult<()> {
+    uxo_core::models::delete_whisper(&state.data_root, &id)
 }
 
 #[tauri::command]
@@ -688,14 +889,152 @@ pub fn save_report(
     kind: String,
     content: String,
 ) -> AppResult<()> {
-    match kind.as_str() {
-        "brief" => service::save_brief(&state.data_root, &id, &content),
-        "summary" => service::save_summary(&state.data_root, &id, &content),
-        "analysis" => service::save_analysis(&state.data_root, &id, &content),
-        "literary" => service::save_literary(&state.data_root, &id, &content),
-        other => Err(AppError::InvalidInput(format!(
-            "unknown report kind: {other}"
-        ))),
+    service::save_report(&state.data_root, &id, &kind, &content)
+}
+
+/// Текст расшифровки для ИИ с именами говорящих, заданными пользователем.
+fn named_transcript_text(
+    data_root: &Path,
+    id: &str,
+    ctx: &uxo_core::ai::MeetingContext,
+) -> AppResult<String> {
+    let transcript = service::load_transcript(data_root, id)?.ok_or_else(|| {
+        AppError::InvalidState("нет расшифровки — сначала расшифруйте встречу".into())
+    })?;
+    if transcript.segments.is_empty() {
+        return Err(AppError::InvalidState("в расшифровке нет текста".into()));
+    }
+    Ok(uxo_core::ai::transcript_to_named_text(&transcript, &ctx.names))
+}
+
+/// Строит ИИ-отчёт вида `kind` ("summary" | "tasks" | "analysis" | "literary" |
+/// "followup") и сохраняет его. `context` — заголовок, участники и имена
+/// говорящих (из интерфейса), чтобы отчёт говорил о людях по именам.
+#[tauri::command]
+pub async fn generate_report(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    kind: String,
+    config: AiConfig,
+    context: Option<uxo_core::ai::MeetingContext>,
+) -> AppResult<String> {
+    let ctx = context.unwrap_or_default();
+    let text = named_transcript_text(&state.data_root, &id, &ctx)?;
+    let data_root = state.data_root.clone();
+    let (rid, rkind) = (id.clone(), kind.clone());
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let backend = HttpChatBackend::new(config);
+        uxo_core::ai::generate_report(&backend, &rkind, &text, &ctx)
+    })
+    .await
+    .map_err(|e| AppError::Http(format!("report join: {e}")))??;
+    service::save_report(&data_root, &rid, &kind, &report)?;
+    if kind == "summary" {
+        state.repo.lock().unwrap().update_status(&id, "summarized")?;
+    }
+    Ok(report)
+}
+
+/// Все сохранённые ИИ-отчёты встречи: вид → текст.
+#[tauri::command]
+pub fn get_reports(
+    state: tauri::State<AppState>,
+    id: String,
+) -> AppResult<std::collections::HashMap<String, String>> {
+    Ok(service::load_reports(&state.data_root, &id)?.into_iter().collect())
+}
+
+/// Авто-заголовок/участники/тема с учётом имён говорящих.
+#[tauri::command]
+pub async fn suggest_meta(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+    context: Option<uxo_core::ai::MeetingContext>,
+) -> AppResult<MetadataSuggestion> {
+    let ctx = context.unwrap_or_default();
+    let text = named_transcript_text(&state.data_root, &id, &ctx)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let backend = HttpChatBackend::new(config);
+        uxo_core::ai::suggest_metadata_ctx(&backend, &text)
+    })
+    .await
+    .map_err(|e| AppError::Http(format!("meta join: {e}")))?
+}
+
+/// Вопрос по встрече с учётом имён говорящих.
+#[tauri::command]
+pub async fn ask_named(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    config: AiConfig,
+    question: String,
+    context: Option<uxo_core::ai::MeetingContext>,
+) -> AppResult<String> {
+    let ctx = context.unwrap_or_default();
+    let text = named_transcript_text(&state.data_root, &id, &ctx)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let backend = HttpChatBackend::new(config);
+        uxo_core::ai::answer_question(&backend, &text, &question)
+    })
+    .await
+    .map_err(|e| AppError::Http(format!("ask join: {e}")))?
+}
+
+/// Сохраняет двоичный файл (экспорт DOCX). Данные — base64.
+#[tauri::command]
+pub fn save_binary_file(path: String, base64: String) -> AppResult<()> {
+    let bytes = decode_base64(&base64)
+        .ok_or_else(|| AppError::InvalidInput("bad base64".into()))?;
+    std::fs::write(&path, bytes)?;
+    Ok(())
+}
+
+/// Минимальный декодер base64 (стандартный алфавит, с `=`-дополнением).
+fn decode_base64(s: &str) -> Option<Vec<u8>> {
+    fn val(c: u8) -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => (c - b'A') as u32,
+            b'a'..=b'z' => (c - b'a' + 26) as u32,
+            b'0'..=b'9' => (c - b'0' + 52) as u32,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        })
+    }
+    let clean: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace()).collect();
+    let trimmed: Vec<u8> = clean.iter().copied().take_while(|&c| c != b'=').collect();
+    let mut out = Vec::with_capacity(trimmed.len() * 3 / 4);
+    for chunk in trimmed.chunks(4) {
+        let mut acc = 0u32;
+        for (i, &c) in chunk.iter().enumerate() {
+            acc |= val(c)? << (18 - 6 * i);
+        }
+        let n = match chunk.len() {
+            4 => 3,
+            3 => 2,
+            2 => 1,
+            _ => return None,
+        };
+        for i in 0..n {
+            out.push((acc >> (16 - 8 * i)) as u8);
+        }
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_base64;
+
+    #[test]
+    fn base64_roundtrip_known_values() {
+        assert_eq!(decode_base64("TWFu").unwrap(), b"Man");
+        assert_eq!(decode_base64("TWE=").unwrap(), b"Ma");
+        assert_eq!(decode_base64("TQ==").unwrap(), b"M");
+        assert_eq!(decode_base64("").unwrap(), b"");
+        assert!(decode_base64("T").is_none());
+        assert!(decode_base64("@@@@").is_none());
     }
 }
 

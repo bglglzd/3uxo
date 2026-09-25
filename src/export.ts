@@ -174,3 +174,121 @@ export function exportFileName(meeting: Meeting, ext: "txt" | "md"): string {
     .slice(0, 80);
   return `${base || "meeting"}.${ext}`;
 }
+
+/// Время для субтитров SRT: 00:01:02,345.
+export function srtTime(secs: number): string {
+  const ms = Math.max(0, Math.round(secs * 1000));
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  const s = Math.floor((ms % 60_000) / 1000);
+  const r = ms % 1000;
+  const p = (n: number, w = 2) => n.toString().padStart(w, "0");
+  return `${p(h)}:${p(m)}:${p(s)},${p(r, 3)}`;
+}
+
+/// Субтитры SRT: реплика = титр «Имя: текст» с точными таймкодами.
+export function transcriptToSrt(transcript: Transcript, nameOf: NameOf = defaultName): string {
+  const rows = transcript.segments.filter((s) => s.text.trim());
+  return (
+    rows
+      .map((s, i) => {
+        const end = Math.max(s.end_secs, s.start_secs + 0.5);
+        return `${i + 1}\n${srtTime(s.start_secs)} --> ${srtTime(end)}\n${nameOf(s.speaker)}: ${s.text.trim()}\n`;
+      })
+      .join("\n")
+  );
+}
+
+/// Отчёт для включения в документ.
+export interface DocReport {
+  title: string;
+  markdown: string;
+}
+
+/// Что положить в документ экспорта.
+export interface DocumentParts {
+  transcript: Transcript | null;
+  /// Включать ли стенограмму.
+  includeTranscript: boolean;
+  /// Таймкоды у абзацев стенограммы.
+  timecodes: boolean;
+  reports: DocReport[];
+}
+
+/// Понижает заголовки Markdown на уровень (отчёт вкладывается в раздел).
+function demote(md: string): string {
+  return md.replace(/^(\s{0,3})(#{1,5})(\s)/gm, "$1#$2$3");
+}
+
+function metaLines(meeting: Meeting): string[] {
+  const meta: string[] = [];
+  if (meeting.created_at) {
+    const d = new Date(meeting.created_at);
+    meta.push(
+      `**Дата:** ${Number.isNaN(d.getTime()) ? meeting.created_at : d.toLocaleString("ru-RU")}`,
+    );
+  }
+  if (meeting.duration_secs) meta.push(`**Длительность:** ${clock(meeting.duration_secs)}`);
+  if (meeting.participants) meta.push(`**Участники:** ${meeting.participants}`);
+  if (meeting.topic) meta.push(`**Тема:** ${meeting.topic}`);
+  return meta;
+}
+
+/// Единый документ встречи в Markdown: шапка, выбранные ИИ-отчёты, стенограмма
+/// (реплики одного говорящего склеены в абзацы). Основа для .md и .docx.
+/// `withTitle=false` — без «# Заголовка» (в .docx он ставится стилем Title).
+export function buildDocumentMd(
+  meeting: Meeting,
+  parts: DocumentParts,
+  nameOf: NameOf = defaultName,
+  withTitle = true,
+): string {
+  const lines: string[] = [];
+  if (withTitle) lines.push(`# ${meeting.title || "Встреча"}`, "");
+  const meta = metaLines(meeting);
+  if (meta.length) lines.push(meta.join("  \n"), "");
+  for (const r of parts.reports) {
+    lines.push(`## ${r.title}`, "", demote(r.markdown.trim()), "");
+  }
+  if (parts.includeTranscript && parts.transcript) {
+    lines.push("## Стенограмма", "");
+    for (const b of mergeBySpeaker(parts.transcript.segments)) {
+      const head = parts.timecodes
+        ? `**[${clock(b.start_secs)}] ${nameOf(b.speaker)}**`
+        : `**${nameOf(b.speaker)}**`;
+      lines.push(head, "", b.text, "");
+    }
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+/// Тот же документ простым текстом (.txt): без Markdown-разметки.
+export function buildDocumentTxt(
+  meeting: Meeting,
+  parts: DocumentParts,
+  nameOf: NameOf = defaultName,
+): string {
+  const lines: string[] = [meeting.title || "Встреча"];
+  for (const m of metaLines(meeting)) lines.push(stripMarkdown(m));
+  lines.push("");
+  for (const r of parts.reports) {
+    lines.push(r.title.toUpperCase(), "", stripMarkdown(r.markdown), "");
+  }
+  if (parts.includeTranscript && parts.transcript) {
+    lines.push("СТЕНОГРАММА", "");
+    for (const b of mergeBySpeaker(parts.transcript.segments)) {
+      lines.push(parts.timecodes ? `[${clock(b.start_secs)}] ${nameOf(b.speaker)}` : nameOf(b.speaker));
+      lines.push(b.text, "");
+    }
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+/// Безопасное имя файла с любым расширением.
+export function safeFileName(meeting: Meeting, ext: string): string {
+  const base = (meeting.title || "meeting")
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .trim()
+    .slice(0, 80);
+  return `${base || "meeting"}.${ext}`;
+}
