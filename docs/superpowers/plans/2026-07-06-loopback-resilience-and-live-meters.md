@@ -6,12 +6,12 @@
 
 **Architecture:** Бэкенд-рекордер (`core`, без Tauri) отдаёт peak-уровень на дорожку через атомики → Tauri-команда `recording_levels`; фронт опрашивает её каждые ~60мс и рисует осциллограф. Параллельно `capture_loop` в WASAPI-рекордере получает заполнение тишиной по стенным часам (дорожки всегда равной длины) и watchdog переоткрытия loopback при заглохании/смене устройства.
 
-**Tech Stack:** Rust (core `uxo-core`, Tauri-крейт `auris`, wasapi 0.15, hound), React 19 + TypeScript + Vite, vitest + @testing-library/react.
+**Tech Stack:** Rust (core `auris-core`, Tauri-крейт `auris`, wasapi 0.15, hound), React 19 + TypeScript + Vite, vitest + @testing-library/react.
 
 ## Global Constraints
 
 - **Rust локально НЕ собирается** — компиляция/тесты Rust только через CI (push ветки). Фронт (`npx tsc --noEmit`, `npm test`, `npm run build`) проверяется локально.
-- **Не переименовывать** технический `3uxo` (identifier `com.3uxo.app`, ключи localStorage `3uxo.*`, `3uxo.db`, `3uxo.log`). Видимое имя — Auris.
+В текущей версии все идентификаторы используют Auris; совместимость обеспечивается миграцией данных.
 - **«Ничего не убираем — только добавляем»** — существующие команды/кнопки/экспорт не ломать.
 - **Дизайн-система Auris**: только существующие CSS-токены/шрифты/keyframes (`--brand-grad`, `--teal`, `--violet`, `recpulse`). Скриншот-инструмент таймаутит на бесконечных анимациях — новых бесконечных ripple не добавлять.
 - **Версия синхронно** в `package.json` и `src-tauri/tauri.conf.json` (текущая 0.6.2 → целевая **0.6.3**).
@@ -137,7 +137,7 @@ impl MockRecorder {
 
 - [ ] **Step 4: Проверить — тест проходит (через CI в конце; локально пропустить)**
 
-Отметить пункт как «проверяется job `core` в CI (`cargo test -p uxo-core`)».
+Отметить пункт как «проверяется job `core` в CI (`cargo test -p auris-core`)».
 
 - [ ] **Step 5: Commit**
 
@@ -168,7 +168,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 /// Текущий уровень дорожек (0..1000) для живых индикаторов записи.
 /// Не идёт запись → нули. Читается-и-сбрасывается (peak с прошлого опроса).
 #[tauri::command]
-pub fn recording_levels(state: tauri::State<AppState>) -> uxo_core::recorder::TrackLevels {
+pub fn recording_levels(state: tauri::State<AppState>) -> auris_core::recorder::TrackLevels {
     state.recorder.levels()
 }
 ```

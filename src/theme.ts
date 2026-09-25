@@ -1,6 +1,6 @@
 export type Theme = "dark" | "light";
 
-const KEY = "3uxo.theme";
+const KEY = "auris.theme";
 
 /// Текущая тема: сохранённая пользователем или системная по умолчанию.
 export function getTheme(): Theme {

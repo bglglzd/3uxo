@@ -157,7 +157,7 @@
 - Бэкенд-путь (`levels`, `recording_levels`, silence-fill, watchdog) — покрыт
   компиляцией CI (`check-app`) + рантайм-тест пользователя на Windows.
 - Юнит на `MockRecorder::levels` в `core` (возвращает ненулевые осциллирующие
-  значения при записи, нули при простое) — гоняется в `cargo test -p uxo-core`.
+  значения при записи, нули при простое) — гоняется в `cargo test -p auris-core`.
 
 ---
 

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bglglzd/3uxo/releases/latest">Download the latest release</a>
+  <a href="https://github.com/bglglzd/auris/releases/latest">Download the latest release</a>
   ·
   <a href="README.ru.md">Русский</a>
   ·
@@ -45,7 +45,7 @@ Your AI credentials are stored locally. Only the prompt content you choose to se
 
 ## Download and use
 
-1. Download the Windows installer from the [latest release](https://github.com/bglglzd/3uxo/releases/latest).
+1. Download the Windows installer from the [latest release](https://github.com/bglglzd/auris/releases/latest).
 2. Record a call or import an existing audio file.
 3. Let Auris create a local transcript.
 4. Optionally open **AI settings** and provide an OpenAI-compatible base URL, API key, and model.
@@ -56,7 +56,7 @@ Please follow the recording-consent laws that apply to you and everyone in a cal
 
 Tauri 2 · Rust · React · TypeScript · SQLite · Whisper (`whisper-rs`) · WASAPI
 
-Auris is Windows-first. The technical repository name remains `3uxo` to preserve existing updater and local-data compatibility; the visible product name is Auris.
+Auris is Windows-first. The repository, application identifier, storage keys, and Rust crates use the Auris name. Existing installations are migrated on first launch; see [Development](docs/DEVELOPMENT.md).
 
 ## Development
 
@@ -69,10 +69,10 @@ npm run build
 npm run tauri dev -- --features gpu,diarize,opus
 ```
 
-The domain logic lives in the cross-platform `uxo-core` crate; the Windows desktop layer lives in `src-tauri`.
+The domain logic lives in the cross-platform `auris-core` crate; the Windows desktop layer lives in `src-tauri`.
 
 ```bash
-cargo test -p uxo-core
+cargo test -p auris-core
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and [docs/RELEASE.md](docs/RELEASE.md) for release steps.

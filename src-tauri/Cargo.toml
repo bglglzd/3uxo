@@ -32,15 +32,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-uxo-core = { path = "../core" }
+auris-core = { path = "../core" }
 
 [features]
 # Реальная транскрибация на Whisper (CPU).
-whisper = ["uxo-core/whisper"]
+whisper = ["auris-core/whisper"]
 # Whisper с GPU-ускорением (Vulkan). Включает и whisper-гейт в командах.
-gpu = ["whisper", "uxo-core/gpu"]
+gpu = ["whisper", "auris-core/gpu"]
 # Диаризация (разделение говорящих в импортированных записях).
-diarize = ["uxo-core/diarize"]
+diarize = ["auris-core/diarize"]
 # Декодирование Ogg/Opus (голосовые из мессенджеров).
-opus = ["uxo-core/opus"]
+opus = ["auris-core/opus"]
 

@@ -37,10 +37,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Ядро без GUI и тяжёлых фич: модель, хранилище, аудио, расшифровка, ИИ.
       - name: Core tests
-        run: cargo test -p uxo-core
+        run: cargo test -p auris-core
 
   # Компиляция GUI-крейта (src-tauri) с whisper И diarize на Windows. Покрывает
-  # uxo-core/whisper + uxo-core/diarize (Burn) и команды/lib приложения. Нужен
+  # auris-core/whisper + auris-core/diarize (Burn) и команды/lib приложения. Нужен
   # собранный фронтенд: generate_context! встраивает ассеты из ../dist.
   check-app:
     runs-on: windows-latest

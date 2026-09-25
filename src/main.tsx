@@ -10,6 +10,13 @@ import App from "./App";
 import "./App.css";
 import { logError, logInfo, setAppInfo } from "./log";
 import { initTheme } from "./theme";
+import { migrateStorage } from "./migrateStorage";
+
+try {
+  migrateStorage(localStorage);
+} catch (error) {
+  logError("storage migration", error);
+}
 
 // Применяем тему до рендера, чтобы не было вспышки светлого/тёмного.
 initTheme();

@@ -11,6 +11,7 @@ pub mod diarize;
 pub mod edit;
 pub mod error;
 pub mod model;
+pub mod migration;
 pub mod recorder;
 pub mod service;
 pub mod storage;

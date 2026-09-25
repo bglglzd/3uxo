@@ -1,4 +1,4 @@
-# 3uxo — План 5: Полировка и релиз
+# auris — План 5: Полировка и релиз
 
 **Goal:** Довести до удобного состояния и подготовить к публикации: удаление встречи из UI, таймер записи, глобальная горячая клавиша и системный трей, сборка релизов на GitHub, README.
 
@@ -19,5 +19,5 @@
 - README: что это, возможности, сборка (включая `--features whisper` и куда класть модель), приватность, статус планов.
 
 ## Проверка
-- Здесь: `npx vitest run`, `npx tsc --noEmit`, `npm run build`, `cargo test -p uxo-core`.
+- Здесь: `npx vitest run`, `npx tsc --noEmit`, `npm run build`, `cargo test -p auris-core`.
 - На Windows: `npm run tauri build` (+ `--features whisper`), затем горячая клавиша/трей/полный цикл.

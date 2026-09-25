@@ -1,8 +1,7 @@
 # Contributing to Auris
 
-Thanks for helping improve Auris. The product name is **Auris**; the repository
-and updater identifiers intentionally remain `3uxo` for compatibility with
-existing installations.
+Thanks for helping improve **Auris**. See [Development](docs/DEVELOPMENT.md)
+for local setup and compatibility migration details.
 
 ## Before opening an issue
 
@@ -22,7 +21,7 @@ npm ci
 npm test
 npx tsc --noEmit
 npm run build
-cargo test -p uxo-core
+cargo test -p auris-core
 ```
 
 The Tauri app and audio capture paths may additionally require Windows tooling;

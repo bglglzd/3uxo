@@ -3,18 +3,18 @@ mod commands;
 use std::sync::Mutex;
 
 use commands::AppState;
-use uxo_core::recorder::Recorder;
-use uxo_core::storage::Repo;
+use auris_core::recorder::Recorder;
+use auris_core::storage::Repo;
 
 /// Выбирает рекордер: настоящий WASAPI на Windows, иначе — мок (тишина).
 fn build_recorder() -> Box<dyn Recorder> {
     #[cfg(target_os = "windows")]
     {
-        Box::new(uxo_core::wasapi_recorder::WasapiRecorder::new())
+        Box::new(auris_core::wasapi_recorder::WasapiRecorder::new())
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Box::new(uxo_core::recorder::MockRecorder::new(5))
+        Box::new(auris_core::recorder::MockRecorder::new(5))
     }
 }
 
@@ -152,7 +152,7 @@ fn spawn_autorecord_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             if !recording {
                 auto_active = false;
             }
-            let call = uxo_core::call_detector::any_active_call(&processes);
+            let call = auris_core::call_detector::any_active_call(&processes);
             active_streak = if call { active_streak.saturating_add(1) } else { 0 };
 
             // Сколько опросов подряд требуется до старта (округление вверх; >=1).
@@ -209,6 +209,15 @@ fn auto_stop_and_maybe_discard<R: tauri::Runtime>(app: &tauri::AppHandle<R>, min
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Preserve both roaming application data and the local WebView profile.
+    // This must happen before Builder creates a WebView with the new identifier.
+    #[cfg(target_os = "windows")]
+    for variable in ["APPDATA", "LOCALAPPDATA"] {
+        if let Some(parent) = std::env::var_os(variable) {
+            auris_core::migration::migrate_directory(std::path::Path::new(&parent))
+                .expect("cannot migrate legacy application data; close the previous app and retry");
+        }
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -229,7 +238,7 @@ pub fn run() {
             let data_root = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_root).expect("cannot create data dir");
             // Panic-hook пишет в файл лога — переживает нативный краш.
-            let log_path = data_root.join("3uxo.log");
+            let log_path = data_root.join("auris.log");
             std::panic::set_hook(Box::new(move |info| {
                 use std::io::Write;
                 let line = format!(
@@ -246,12 +255,12 @@ pub fn run() {
                 }
             }));
 
-            let db_path = data_root.join("3uxo.db");
+            let db_path = data_root.join("auris.db");
             let repo = Repo::open(&db_path).expect("cannot open db");
 
             // Восстанавливаем записи, оборванные аварийным завершением: склеиваем
             // осиротевшие сегменты в единый файл (см. фичу «склейка фрагментов»).
-            match uxo_core::service::recover_orphan_recordings(
+            match auris_core::service::recover_orphan_recordings(
                 &repo,
                 &data_root,
                 chrono::Utc::now().to_rfc3339(),

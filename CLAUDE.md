@@ -13,21 +13,14 @@
 
 ---
 
-## 1. Бренд и идентичность (ВАЖНО: что НЕ переименовывать)
+## 1. Бренд и идентичность
 
-Продукт называется **Auris** (бывш. «3uxo / третье ухо», ребренд v0.4.0). Имя
-exe — `Auris.exe`. Но **технический «3uxo» оставлен НАМЕРЕННО** — его смена ломает
-авто-апдейт и стирает данные у существующих пользователей:
-
-| Артефакт | Значение | Почему НЕ менять |
-|---|---|---|
-| `identifier` | `com.3uxo.app` (tauri.conf.json) | определяет папку данных (`%APPDATA%\com.3uxo.app`) и идентичность для апдейтера |
-| репозиторий / updater endpoint | `github.com/bglglzd/3uxo` | endpoint авто-апдейта зашит на этот репо |
-| `3uxo.db` | SQLite с встречами пользователя | переименование = потеря всех записей |
-| `3uxo.log` | бэкенд-лог (диагностика) | — |
-| ключи localStorage | `3uxo.settings/theme/labels.*/speakers.*` | переименование = слёт настроек/темы/подписей |
-
-Видимое имя (productName, заголовок окна, тексты, README, иконка, exe) = **Auris**.
+Продукт и репозиторий называются **Auris**. Идентификатор — `com.auris.app`,
+база — `auris.db`, лог — `auris.log`, ключи localStorage — `auris.*`.
+Rust-ядро — `auris-core` / `auris_core`. Старые имена допускаются только в
+миграции данных и её тестах. При первом запуске на Windows данные прежнего
+приложения копируются в новые каталоги; оригиналы сохраняются.
+Перед переходом закройте прежнюю версию. См. `docs/DEVELOPMENT.md`.
 
 ---
 
@@ -35,7 +28,7 @@ exe — `Auris.exe`. Но **технический «3uxo» оставлен Н�
 
 - **Tauri 2** (Rust) + **React 19 + TypeScript + Vite** (фронтенд).
 - Cargo-workspace, 2 крейта:
-  - **`core/`** (`uxo-core`) — доменная логика без GUI/Tauri, собирается и тестится
+  - **`core/`** (`auris-core`) — доменная логика без GUI/Tauri, собирается и тестится
     на любой ОС.
   - **`src-tauri/`** (`auris`, бинарь → `Auris.exe`; lib `auris_lib`) — тонкий
     Tauri-слой: команды (`commands.rs`), запуск/трей/хоткей/монитор (`lib.rs`).
@@ -72,7 +65,7 @@ Windows, `#[cfg(windows)]`).
 - `system.wav` — системный звук через loopback (Render-устройство). **Loopback в
   shared-режиме НЕ шлёт WASAPI-события** (`events_ok=0`), поэтому опрашивается по
   таймеру (polling, 8мс); микрофон — на event-режиме.
-- `capture_loop` логирует в `3uxo.log`: `reads / events_ok / samples / peak`
+- `capture_loop` логирует в `auris.log`: `reads / events_ok / samples / peak`
   (peak≈0 → захвачена тишина).
 - Старт/стоп — кнопка, глобальный хоткей или трей; событие `recording-changed`.
 
@@ -142,7 +135,7 @@ map-reduce (`*_long`, порог `SUMMARY_CHUNK_CHARS`). Результаты с
   ключ»), `SettingsModal` (раскрывающиеся секции: Запись/хоткей, Авто-запись,
   Распознавание, ИИ, Диагностика; версия в футере), `ImportModal`, `HotkeyCapture`,
   `CopyLogButton`, `Markdown`.
-- Состояние: `settings.ts` (localStorage `3uxo.settings`), `theme.ts`, `labels.ts`,
+- Состояние: `settings.ts` (localStorage `auris.settings`), `theme.ts`, `labels.ts`,
   `api.ts` (обёртки `invoke`). Тема применяется до рендера (`initTheme`).
 - Экспорт: `export.ts` — TXT/MD (по реплике) + Стенограмма (сгруппировано). ИИ-
   блоки экспортятся в .md/.txt. (DOCX/PDF — в планах, см. §7.)
@@ -160,8 +153,8 @@ npx tsc --noEmit                  # проверка типов
 npm run tauri dev -- --features gpu,diarize,opus   # полное приложение (нужен Rust+Win)
 ```
 
-- **ВАЖНО: локального Rust-тулчейна на этой машине НЕТ** → Rust собирается и
-  проверяется ТОЛЬКО через CI (push в ветку). Фронт проверяется локально.
+- Локально доступны Rust (MSVC), Node.js и npm. Команды и зависимости —
+  в `docs/DEVELOPMENT.md`; проверяйте Rust и фронтенд перед PR.
 - **Версию держать синхронно** в `package.json` и `src-tauri/tauri.conf.json`.
 - Превью UI: MCP `preview_*` (vite на localhost:1420). `MeetingView`/`AiPanel`
   без данных бэкенда не отрисовать; `SettingsModal` и старт-экран — можно.
@@ -185,13 +178,13 @@ npm run tauri dev -- --features gpu,diarize,opus   # полное приложе
 7. Проверить публикацию: `gh release view vX.Y.Z`, latest endpoint = vX.Y.Z.
 
 - **CI** (`.github/workflows/ci.yml`, on push/PR): jobs `frontend` (ubuntu:
-  npm ci/test/tsc/build), `core` (ubuntu: `cargo test -p uxo-core`), `check-app`
+  npm ci/test/tsc/build), `core` (ubuntu: `cargo test -p auris-core`), `check-app`
   (windows: npm build + `cargo check -p auris --features whisper,diarize,opus`).
 - **Release** (`.github/workflows/release.yml`, on tag `v*`): Windows-сборка
   (Vulkan SDK + LLVM), подпись (секрет `TAURI_SIGNING_PRIVATE_KEY`), публикация
   (не draft, `releaseName: "Auris vX"`), `latest.json`.
 - **Авто-апдейт**: `tauri-plugin-updater`, endpoint
-  `https://github.com/bglglzd/3uxo/releases/latest/download/latest.json`. Юзеры
+  `https://github.com/bglglzd/auris/releases/latest/download/latest.json`. Юзеры
   обновляются на latest.
 
 ---
@@ -209,15 +202,15 @@ npm run tauri dev -- --features gpu,diarize,opus   # полное приложе
   `gh run view <id> --json conclusion --jq .conclusion` == `success`.
 - **Прямой push в `main` запрещён** (авто-режим) → только PR + `gh pr merge`.
   Push тега `git push origin <tag>` — РАЗРЕШ�ён.
-- **Rust локально не собрать** → полагаться на CI (компиляция) + рантайм-тест
-  пользователя для платформенного (WASAPI, диаризация).
+- Проверять Rust локально и в CI; запись WASAPI и диаризацию дополнительно
+  проверять в работающем Windows-приложении.
 - **Единый стиль Auris** для всего нового (токены, шрифты, знак, семантика цвета,
   3 обещания: приватность/спокойствие/живость). Не ломать дизайн-язык.
 - **«Ничего не убираем — только добавляем»** — не удалять существующие функции
   (TXT/MD-экспорт, кнопки и т.п.) при доработках.
 - **Превью перед пушем для UI** — показать live-превью, мержить после «ок».
 - `gh pr edit --base` ломается (GraphQL projectCards) → ретаргет базы через REST:
-  `gh api -X PATCH repos/bglglzd/3uxo/pulls/N -f base=main`.
+  `gh api -X PATCH repos/bglglzd/auris/pulls/N -f base=main`.
 - Git identity: `bglglzd <248948303+bglglzd@users.noreply.github.com>`; never use a personal email in public commits.
 
 ---
@@ -231,5 +224,5 @@ gh run list --workflow=ci.yml --branch <branch> --limit 1 --json databaseId --jq
 gh run view <id> --json conclusion --jq .conclusion         # проверка результата
 gh run list --workflow=release.yml --limit 3
 gh release view vX.Y.Z --json tagName,isDraft,assets
-gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name
+gh api repos/bglglzd/auris/releases/latest --jq .tag_name
 ```

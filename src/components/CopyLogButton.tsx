@@ -15,7 +15,7 @@ export function CopyLogButton({ className = "btn ghost" }: { className?: string 
     }
     const text =
       getLogText() +
-      (backend ? `\n=== backend log (3uxo.log) ===\n${backend}\n` : "");
+      (backend ? `\n=== backend log (auris.log) ===\n${backend}\n` : "");
     await copyToClipboard(text);
     setDone(true);
     setTimeout(() => setDone(false), 1500);

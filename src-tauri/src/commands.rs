@@ -4,15 +4,15 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 
-use uxo_core::ai::{AiConfig, HttpChatBackend, MetadataSuggestion};
-use uxo_core::cli_transcriber::{CliTranscriber, TranscribeOptions};
-use uxo_core::edit::{Range, Waveform};
-use uxo_core::error::{AppError, AppResult};
-use uxo_core::model::Meeting;
-use uxo_core::recorder::Recorder;
-use uxo_core::service::{self, ActiveRecording, AudioEditState};
-use uxo_core::storage::Repo;
-use uxo_core::transcript::Transcript;
+use auris_core::ai::{AiConfig, HttpChatBackend, MetadataSuggestion};
+use auris_core::cli_transcriber::{CliTranscriber, TranscribeOptions};
+use auris_core::edit::{Range, Waveform};
+use auris_core::error::{AppError, AppResult};
+use auris_core::model::Meeting;
+use auris_core::recorder::Recorder;
+use auris_core::service::{self, ActiveRecording, AudioEditState};
+use auris_core::storage::Repo;
+use auris_core::transcript::Transcript;
 
 /// Событие прогресса расшифровки для фронтенда.
 #[derive(Clone, serde::Serialize)]
@@ -31,11 +31,11 @@ pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
-/// Дописывает строку в файл лога `<data_root>/3uxo.log` (переживает краш).
+/// Дописывает строку в файл лога `<data_root>/auris.log` (переживает краш).
 pub(crate) fn flog(data_root: &Path, msg: &str) {
     use std::io::Write;
     let line = format!("[{}] {}\n", chrono::Utc::now().to_rfc3339(), msg);
-    let path = data_root.join("3uxo.log");
+    let path = data_root.join("auris.log");
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -48,7 +48,7 @@ pub(crate) fn flog(data_root: &Path, msg: &str) {
 /// Возвращает «хвост» бэкенд-лога (последние ~64 КБ) для диагностики.
 #[tauri::command]
 pub fn get_backend_log(state: tauri::State<AppState>) -> AppResult<String> {
-    let path = state.data_root.join("3uxo.log");
+    let path = state.data_root.join("auris.log");
     if !path.exists() {
         return Ok(String::new());
     }
@@ -62,7 +62,7 @@ fn meeting_transcript_text(data_root: &Path, id: &str) -> AppResult<String> {
     let transcript = service::load_transcript(data_root, id)?.ok_or_else(|| {
         AppError::InvalidState("нет расшифровки — сначала расшифруйте встречу".into())
     })?;
-    Ok(uxo_core::ai::transcript_to_text(&transcript))
+    Ok(auris_core::ai::transcript_to_text(&transcript))
 }
 
 /// Конфиг авто-записи звонков (читается фоновым монитором).
@@ -179,7 +179,7 @@ pub fn recording_state(state: tauri::State<AppState>) -> RecState {
 /// Текущий уровень дорожек (0..1000) для живых индикаторов записи.
 /// Не идёт запись → нули. Читается-и-сбрасывается (peak с прошлого опроса).
 #[tauri::command]
-pub fn recording_levels(state: tauri::State<AppState>) -> uxo_core::recorder::TrackLevels {
+pub fn recording_levels(state: tauri::State<AppState>) -> auris_core::recorder::TrackLevels {
     state.recorder.levels()
 }
 
@@ -363,8 +363,8 @@ pub async fn transcribe(
     // whisper.cpp — он вызывал нативный краш).
     #[cfg(feature = "whisper")]
     {
-        use uxo_core::transcript::merge_tracks;
-        use uxo_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
+        use auris_core::transcript::merge_tracks;
+        use auris_core::whisper::{WhisperTranscriber, DEFAULT_WINDOW_SECS};
 
         flog(
             &state.data_root,
@@ -415,8 +415,8 @@ pub async fn transcribe(
 
             #[cfg(feature = "diarize")]
             {
-                use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
-                use uxo_core::transcript::assign_speakers;
+                use auris_core::diarize::{Diarizer, PyannoteDiarizer};
+                use auris_core::transcript::assign_speakers;
                 // Потолок числа голосов: выбранный пользователем или авто (0).
                 let max_speakers = speaker_count.unwrap_or(0) as usize;
                 // Модели диаризации скачиваются при первом запуске (фаза download).
@@ -431,7 +431,7 @@ pub async fn transcribe(
             }
             #[cfg(not(feature = "diarize"))]
             {
-                uxo_core::transcript::single_speaker(segs, "spk0")
+                auris_core::transcript::single_speaker(segs, "spk0")
             }
         } else if solo {
             // Соло-режим «я один»: расшифровываем только микрофон, всем сегментам
@@ -439,7 +439,7 @@ pub async fn transcribe(
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let mic_path = {
                 let dst = mic_path.with_file_name("mic_norm.wav");
-                match uxo_core::decode::decode_to_wav_16k_mono(&mic_path, &dst) {
+                match auris_core::decode::decode_to_wav_16k_mono(&mic_path, &dst) {
                     Ok(()) => dst,
                     Err(e) => {
                         flog(&state.data_root, &format!("normalize mic (solo) failed: {e}"));
@@ -458,7 +458,7 @@ pub async fn transcribe(
                 &state.data_root,
                 &format!("transcribed solo: mic={} segs", mic_segs.len()),
             );
-            uxo_core::transcript::single_speaker(mic_segs, uxo_core::transcript::ME)
+            auris_core::transcript::single_speaker(mic_segs, auris_core::transcript::ME)
         } else {
             let mic_path = service::track_path(&state.data_root, &id, "mic.wav")?;
             let system_path = service::track_path(&state.data_root, &id, "system.wav")?;
@@ -471,7 +471,7 @@ pub async fn transcribe(
             let norm = |src: &Path| -> PathBuf {
                 let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("track");
                 let dst = src.with_file_name(format!("{stem}_norm.wav"));
-                match uxo_core::decode::decode_to_wav_16k_mono(src, &dst) {
+                match auris_core::decode::decode_to_wav_16k_mono(src, &dst) {
                     Ok(()) => dst,
                     Err(e) => {
                         flog(&state.data_root, &format!("normalize {stem} failed: {e}"));
@@ -520,8 +520,8 @@ pub async fn transcribe(
             #[cfg(feature = "diarize")]
             {
                 if will_diarize {
-                    use uxo_core::diarize::{Diarizer, PyannoteDiarizer};
-                    use uxo_core::transcript::{assign_speakers, merge_transcripts, single_speaker};
+                    use auris_core::diarize::{Diarizer, PyannoteDiarizer};
+                    use auris_core::transcript::{assign_speakers, merge_transcripts, single_speaker};
                     let interlocutors = speaker_count.unwrap_or(0) as usize;
                     emit("diarize", sys_end, 0, 0);
                     flog(&state.data_root, "transcribe: diarize system track");
@@ -590,7 +590,7 @@ pub async fn waveform(
     buckets: u32,
 ) -> AppResult<Waveform> {
     let path = service::track_path(&state.data_root, &id, &track_file)?;
-    tauri::async_runtime::spawn_blocking(move || uxo_core::edit::waveform(&path, buckets as usize))
+    tauri::async_runtime::spawn_blocking(move || auris_core::edit::waveform(&path, buckets as usize))
         .await
         .map_err(|e| AppError::Audio(format!("waveform join: {e}")))?
 }
@@ -612,7 +612,7 @@ pub async fn apply_audio_edit(
     cuts: Vec<Range>,
 ) -> AppResult<Meeting> {
     let data_root = state.data_root.clone();
-    let cut_count = uxo_core::edit::merge_ranges(&cuts).len();
+    let cut_count = auris_core::edit::merge_ranges(&cuts).len();
     let mid = id.clone();
     // Вырезание перезаписывает WAV-дорожки целиком — только вне async-потока.
     let secs = tauri::async_runtime::spawn_blocking(move || {
@@ -707,7 +707,7 @@ pub async fn suggest_metadata(
 ) -> AppResult<MetadataSuggestion> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
-    uxo_core::ai::suggest_metadata(&backend, &text)
+    auris_core::ai::suggest_metadata(&backend, &text)
 }
 
 #[tauri::command]
@@ -719,7 +719,7 @@ pub async fn summarize(
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
     // Длинные разговоры (2–3 ч) не влезают в контекст — map-reduce по частям.
-    let summary = uxo_core::ai::summarize_long(&backend, &text)?;
+    let summary = auris_core::ai::summarize_long(&backend, &text)?;
     service::save_summary(&state.data_root, &id, &summary)?;
     state.repo.lock().unwrap().update_status(&id, "summarized")?;
     Ok(summary)
@@ -741,7 +741,7 @@ pub async fn literary_text(
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
     // Длинные разговоры переписываем по частям и склеиваем (без сворачивания).
-    let literary = uxo_core::ai::to_literary_long(&backend, &text)?;
+    let literary = auris_core::ai::to_literary_long(&backend, &text)?;
     service::save_literary(&state.data_root, &id, &literary)?;
     Ok(literary)
 }
@@ -760,7 +760,7 @@ pub async fn brief_summary(
 ) -> AppResult<String> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
-    let brief = uxo_core::ai::brief_summary_long(&backend, &text)?;
+    let brief = auris_core::ai::brief_summary_long(&backend, &text)?;
     service::save_brief(&state.data_root, &id, &brief)?;
     Ok(brief)
 }
@@ -779,7 +779,7 @@ pub async fn analyze(
 ) -> AppResult<String> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
-    let analysis = uxo_core::ai::analyze_long(&backend, &text)?;
+    let analysis = auris_core::ai::analyze_long(&backend, &text)?;
     service::save_analysis(&state.data_root, &id, &analysis)?;
     Ok(analysis)
 }
@@ -798,7 +798,7 @@ pub async fn ask(
 ) -> AppResult<String> {
     let text = meeting_transcript_text(&state.data_root, &id)?;
     let backend = HttpChatBackend::new(config);
-    uxo_core::ai::answer_question(&backend, &text, &question)
+    auris_core::ai::answer_question(&backend, &text, &question)
 }
 
 #[tauri::command]

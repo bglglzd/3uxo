@@ -8,7 +8,7 @@
 //! # СТАТУС: не проверено на Linux-машине разработки
 //! Код нельзя собрать без Windows + крейта `wasapi`. Написан по примеру
 //! `wasapi/examples/loopback.rs`. Перед использованием см. риск-лист в
-//! `docs/superpowers/plans/2026-06-04-3uxo-plan-2-wasapi-audio.md`.
+//! `docs/superpowers/plans/2026-06-04-auris-plan-2-wasapi-audio.md`.
 //!
 //! Ключевой приём: shared-режим с `autoconvert: true` просит WASAPI самому
 //! сконвертировать поток устройства в запрошенные 16 кГц/моно/16 бит.
@@ -146,7 +146,7 @@ impl Recorder for WasapiRecorder {
 }
 
 /// Дописывает диагностику захвата в backend-лог. Путь выводим из пути дорожки:
-/// `<data_root>/meetings/<id>/mic.wav` → `<data_root>/3uxo.log` (без проброса
+/// `<data_root>/meetings/<id>/mic.wav` → `<data_root>/auris.log` (без проброса
 /// data_root через сигнатуры).
 fn dlog(track_path: &Path, msg: &str) {
     if let Some(root) = track_path.ancestors().nth(3) {
@@ -154,7 +154,7 @@ fn dlog(track_path: &Path, msg: &str) {
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(root.join("3uxo.log"))
+            .open(root.join("auris.log"))
         {
             let _ = writeln!(f, "[wasapi] {msg}");
         }

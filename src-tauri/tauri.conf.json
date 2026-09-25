@@ -3,7 +3,7 @@
   "productName": "Auris",
   "mainBinaryName": "Auris",
   "version": "0.7.1",
-  "identifier": "com.3uxo.app",
+  "identifier": "com.auris.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -41,7 +41,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/bglglzd/3uxo/releases/latest/download/latest.json"
+        "https://github.com/bglglzd/auris/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg4RjU5NjU2Q0YzRTBFQzUKUldURkRqN1BWcGIxaUZDOFRwTldtZGRNKy9NVmtIejhSYUY0TVZlYmZNZFNhcmsxVGU4YThiTXcK"
     }
