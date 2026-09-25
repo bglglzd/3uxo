@@ -121,3 +121,10 @@ gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
   фикс на ветке → PR → зелёный CI → мерж → **новый** тег (напр. vX.Y.(Z+1)).
 - Тег `vX.Y.0`, который не опубликовался, можно оставить (косметика) или удалить
   (`git push origin :refs/tags/vX.Y.0`). Версию обычно поднимают на патч.
+
+## Релиз без push тега (облачная сессия)
+
+Если `git push origin vX.Y.Z` недоступен, запустите `release.yml` вручную на
+`main` с входом `tag=vX.Y.Z` (Actions → release → Run workflow). tauri-action
+создаст тег и релиз на коммите запуска; дальше всё как обычно (latest.json,
+подписи).

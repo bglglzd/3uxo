@@ -6,7 +6,13 @@ on:
   push:
     tags:
       - "v*"
+  # Ручной запуск: `tag` (напр. v0.8.0) — тег и релиз создаются на коммите
+  # запуска. Нужен, когда push тега недоступен (напр. из облачной сессии).
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, напр. v0.8.0"
+        required: true
 
 permissions:
   contents: write
@@ -47,8 +53,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Auris ${{ github.ref_name }}"
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "Auris ${{ inputs.tag || github.ref_name }}"
           # Сразу публикуем (не черновик), чтобы апдейтер видел новую версию.
           releaseDraft: false
           prerelease: false
