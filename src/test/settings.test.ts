@@ -7,7 +7,12 @@ describe("settings", () => {
   it("returns defaults when empty", () => {
     const s = getSettings();
     expect(s.ai).toEqual({ base_url: "", api_key: "", model: "" });
-    expect(s.whisper).toEqual({ whisperPath: "", model: "medium", language: "ru" });
+    expect(s.whisper).toEqual({
+      whisperPath: "",
+      model: "large-v3-turbo-q8_0",
+      language: "ru",
+    });
+    expect(s.aiAuto).toEqual({ title: true, summary: true });
     expect(s.hotkey).toBe("Ctrl+Shift+R");
     expect(s.autoRecord).toEqual({
       enabled: false,
@@ -30,8 +35,11 @@ describe("settings", () => {
         startDelaySecs: 5,
         minKeepSecs: 12,
       },
+      aiAuto: { title: false, summary: true },
     });
     const s = getSettings();
+    expect(s.whisper.model).toBe("wm");
+    expect(s.aiAuto.title).toBe(false);
     expect(s.ai.base_url).toBe("u");
     expect(s.whisper.language).toBe("ru");
     expect(s.hotkey).toBe("Alt+Shift+5");
@@ -44,6 +52,20 @@ describe("settings", () => {
     expect(s.ai.base_url).toBe("x");
     expect(s.ai.model).toBe("");
     expect(s.whisper.whisperPath).toBe("");
+  });
+
+  it("migrates the old default model once", () => {
+    localStorage.setItem(
+      "3uxo.settings",
+      JSON.stringify({ whisper: { model: "medium", language: "ru" } }),
+    );
+    expect(getSettings().whisper.model).toBe("large-v3-turbo-q8_0");
+    // После сохранения в v0.8 явный выбор medium уважается.
+    saveSettings({ ...getSettings(), whisper: { whisperPath: "", model: "medium", language: "ru" } });
+    expect(getSettings().whisper.model).toBe("medium");
+    // Нестандартный выбор не трогаем.
+    localStorage.setItem("3uxo.settings", JSON.stringify({ whisper: { model: "small" } }));
+    expect(getSettings().whisper.model).toBe("small");
   });
 
   it("falls back to defaults on malformed storage", () => {
@@ -64,6 +86,7 @@ describe("settings", () => {
           startDelaySecs: 5,
           minKeepSecs: 12,
         },
+        aiAuto: { title: true, summary: true },
       }),
     ).toBe(true);
     expect(isAiConfigured(getSettings())).toBe(false);

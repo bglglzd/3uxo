@@ -12,6 +12,8 @@ import type {
   AudioRange,
   Waveform,
   AudioEditState,
+  MeetingContext,
+  ModelInfo,
 } from "./types";
 import { logError, logInfo } from "./log";
 
@@ -55,7 +57,7 @@ export const api = {
     solo?: boolean,
   ): Promise<Transcript> => {
     logInfo(
-      `transcribe start id=${id} model=${whisper.model || "small"} speakers=${speakerCount ?? "auto"}${solo ? " solo" : ""}`,
+      `transcribe start id=${id} model=${whisper.model || "default"} speakers=${speakerCount ?? "auto"}${solo ? " solo" : ""}`,
     );
     return inv("transcribe", {
       id,
@@ -124,6 +126,45 @@ export const api = {
     inv("revert_audio_edit", { id }),
 
   getBackendLog: (): Promise<string> => inv("get_backend_log"),
+
+  // ---- Голоса (диаризация) ----
+  /// Поменять число голосов в готовой расшифровке (мгновенно, без повторной
+  /// расшифровки). null — определить автоматически.
+  reclusterSpeakers: (id: string, speakerCount: number | null): Promise<Transcript> =>
+    inv("recluster_speakers", { id, speakerCount }),
+  /// Есть ли у встречи сохранённый анализ голосов.
+  hasVoiceAnalysis: (id: string): Promise<boolean> =>
+    inv("has_voice_analysis", { id }),
+
+  // ---- Модели ----
+  modelsStatus: (): Promise<ModelInfo[]> => inv("models_status"),
+  downloadModel: (id: string): Promise<void> => inv("download_model", { id }),
+  deleteModel: (id: string): Promise<void> => inv("delete_model", { id }),
+
+  // ---- ИИ-отчёты (v0.8) ----
+  generateReport: (
+    id: string,
+    kind: ReportKind,
+    config: AiConfig,
+    context: MeetingContext,
+  ): Promise<string> => inv("generate_report", { id, kind, config, context }),
+  getReports: (id: string): Promise<Partial<Record<ReportKind, string>>> =>
+    inv("get_reports", { id }),
+  suggestMeta: (
+    id: string,
+    config: AiConfig,
+    context: MeetingContext,
+  ): Promise<MetadataSuggestion> => inv("suggest_meta", { id, config, context }),
+  askNamed: (
+    id: string,
+    config: AiConfig,
+    question: string,
+    context: MeetingContext,
+  ): Promise<string> => inv("ask_named", { id, config, question, context }),
+
+  /// Сохранить двоичный файл (DOCX) — данные в base64.
+  saveBinaryFile: (path: string, base64: string): Promise<void> =>
+    inv("save_binary_file", { path, base64 }),
 
   /// Зарегистрировать глобальную горячую клавишу старт/стоп записи.
   /// Пустая строка/null — выключить хоткей.

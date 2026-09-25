@@ -9,7 +9,6 @@
 //! Ожидаемый формат входа — то, что пишет рекордер: WAV PCM, моно, 16 кГц,
 //! 16 бит (см. `crate::audio`). Whisper как раз хочет 16 кГц f32 моно.
 
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -25,8 +24,8 @@ pub struct WhisperTranscriber {
     language: Option<String>,
 }
 
-/// Размер модели по умолчанию (medium — заметно лучше для русского, ~1.5 ГБ).
-pub const DEFAULT_MODEL_SIZE: &str = "medium";
+/// Модель по умолчанию — см. [`crate::models::DEFAULT_WHISPER`].
+pub const DEFAULT_MODEL_SIZE: &str = crate::models::DEFAULT_WHISPER;
 
 /// Длина окна (сек) при пооконной расшифровке — для прогресса и памяти.
 pub const DEFAULT_WINDOW_SECS: usize = 60;
@@ -44,51 +43,14 @@ fn rms(samples: &[f32]) -> f32 {
     (sum / samples.len() as f64).sqrt() as f32
 }
 
-/// Гарантирует наличие ggml-модели нужного размера в `<data_dir>/models`,
-/// скачивая её с HuggingFace при первом обращении (с прогрессом 0.0..=1.0).
-/// Качается только модель (не данные пользователя); транскрибация — локально.
+/// Гарантирует наличие ggml-модели в `<data_dir>/models` (скачивает один
+/// раз; прогресс зовётся только при реальной загрузке).
 pub fn ensure_model(
     data_dir: &Path,
     size: &str,
     on_progress: &dyn Fn(f32),
 ) -> AppResult<PathBuf> {
-    let models_dir = data_dir.join("models");
-    std::fs::create_dir_all(&models_dir)?;
-    let path = models_dir.join(format!("ggml-{size}.bin"));
-    if path.exists() && std::fs::metadata(&path)?.len() > 1_000_000 {
-        return Ok(path);
-    }
-    let url = format!(
-        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{size}.bin"
-    );
-    let resp = ureq::get(&url)
-        .call()
-        .map_err(|e| AppError::Http(format!("download model: {e}")))?;
-    let total: u64 = resp
-        .header("Content-Length")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    let tmp = path.with_extension("part");
-    {
-        let mut reader = resp.into_reader();
-        let mut file = std::fs::File::create(&tmp)?;
-        let mut buf = [0u8; 65536];
-        let mut downloaded: u64 = 0;
-        loop {
-            let n = reader.read(&mut buf)?;
-            if n == 0 {
-                break;
-            }
-            file.write_all(&buf[..n])?;
-            downloaded += n as u64;
-            if total > 0 {
-                on_progress(downloaded as f32 / total as f32);
-            }
-        }
-    }
-    std::fs::rename(&tmp, &path)?;
-    on_progress(1.0);
-    Ok(path)
+    crate::models::ensure_whisper(data_dir, size, on_progress)
 }
 
 impl WhisperTranscriber {
@@ -100,7 +62,7 @@ impl WhisperTranscriber {
         language: Option<String>,
         on_download: &dyn Fn(f32),
     ) -> AppResult<Self> {
-        let size = size.filter(|s| !s.is_empty()).unwrap_or(DEFAULT_MODEL_SIZE);
+        let size = crate::models::whisper_id(size);
         let model_path = ensure_model(data_dir, size, on_download)?;
         // По умолчанию — русский. Пусто/не задано → "ru"; "auto" → автоопределение.
         let language = match language {
@@ -143,7 +105,9 @@ impl WhisperTranscriber {
 
         let ctx = &self.ctx;
         let win = window_secs.max(1) * SAMPLE_RATE;
-        let total = audio.len().div_ceil(win).max(1);
+        // Окна режем в паузах (не посреди слова): ищем тишину в последних 10 с.
+        let chunks = crate::audio::quiet_chunks(&audio, win, 10 * SAMPLE_RATE, SAMPLE_RATE / 5);
+        let total = chunks.len().max(1);
         let mut segments = Vec::new();
 
         // Число потоков по ядрам CPU (whisper по умолчанию берёт мало → медленно).
@@ -152,12 +116,18 @@ impl WhisperTranscriber {
             .unwrap_or(4)
             .clamp(1, 8) as std::os::raw::c_int;
 
-        for (i, chunk) in audio.chunks(win).enumerate() {
+        for (i, &(from, to)) in chunks.iter().enumerate() {
+            let chunk = &audio[from..to];
             let mut state = ctx
                 .create_state()
                 .map_err(|e| AppError::Audio(format!("whisper: create_state: {e}")))?;
 
-            let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            // Beam search заметно точнее жадного декодирования (меньше пропусков
+            // и искажённых слов); у turbo-моделей декодер лёгкий, цена небольшая.
+            let mut params = FullParams::new(SamplingStrategy::BeamSearch {
+                beam_size: 5,
+                patience: -1.0,
+            });
             params.set_n_threads(n_threads);
             match self.language.as_deref() {
                 Some("auto") | None => {}
@@ -169,12 +139,15 @@ impl WhisperTranscriber {
             params.set_print_progress(false);
             params.set_print_realtime(false);
             params.set_print_timestamps(false);
+            // Не выдумывать «[музыка]», «(смеётся)» и пустые токены.
+            params.set_suppress_blank(true);
+            params.set_suppress_nst(true);
 
             state
                 .full(params, chunk)
                 .map_err(|e| AppError::Audio(format!("whisper: full: {e}")))?;
 
-            let offset = (i * win) as f64 / SAMPLE_RATE as f64;
+            let offset = from as f64 / SAMPLE_RATE as f64;
             let n = state.full_n_segments();
             for s in 0..n {
                 let Some(seg) = state.get_segment(s) else {

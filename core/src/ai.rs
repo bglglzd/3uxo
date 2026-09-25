@@ -276,6 +276,238 @@ pub fn to_literary_long(backend: &dyn ChatBackend, transcript_text: &str) -> App
     Ok(parts.join("\n\n"))
 }
 
+// ── Отчёты-пресеты (v0.8) ───────────────────────────────────────────────────
+//
+// Набор выстроен по задачам пользователя, без пересечений:
+// - `summary`  «Итоги встречи»     — что обсудили и к чему пришли (главный отчёт);
+// - `tasks`    «Задачи»            — только поручения: кто, что, к какому сроку;
+// - `analysis` «Разбор разговора»  — как шёл разговор: позиции, тон, риски;
+// - `literary` «Чистовой текст»    — весь разговор связным текстом без потерь;
+// - `followup` «Письмо по итогам»  — готовое письмо участникам.
+
+/// Общие правила для всех отчётов.
+const RULES: &str = "Пиши по-русски (если разговор на другом языке — на языке разговора). \
+    Опирайся ТОЛЬКО на расшифровку: ничего не выдумывай, не додумывай имён, сроков и цифр; \
+    если чего-то не прозвучало — так и пиши или пропускай. Расшифровка сделана автоматически \
+    и может содержать ошибки распознавания — восстанавливай очевидный смысл, но не \
+    сочиняй. Называй людей так, как они подписаны в расшифровке. Без вступлений \
+    вроде «Вот итоги» — сразу результат в Markdown.";
+
+/// Системный промпт отчёта вида `kind` или `None`, если вид неизвестен.
+pub fn report_prompt(kind: &str) -> Option<String> {
+    let body = match kind {
+        "summary" => "Сделай итоги встречи. Структура (пустые разделы пропускай):\n\
+            ## Коротко\n2–3 предложения: о чём был разговор и чем он закончился.\n\
+            ## Главное\nКлючевые темы, факты и цифры — маркированный список, по пункту на мысль.\n\
+            ## Решения\nЧто решили или согласовали.\n\
+            ## Задачи\nСписок «- [ ] что сделать — кто — срок» (кто/срок — только если прозвучали).\n\
+            ## Открытые вопросы\nЧто осталось нерешённым или требует уточнения.",
+        "tasks" => "Извлеки из разговора все задачи, поручения и обещания что-то сделать.\n\
+            ## Задачи\nТаблица Markdown с колонками: № | Задача | Ответственный | Срок | Откуда \
+            (короткая цитата или контекст). Задача — с глагола, конкретно. Ответственный и срок — \
+            только если прозвучали, иначе «—».\n\
+            ## Договорённости\nСписок того, о чём договорились (без задач).\n\
+            ## Нужно уточнить\nЗадачи без ответственного/срока и спорные моменты.\n\
+            Если задач нет — так и напиши одной строкой.",
+        "analysis" => "Сделай аналитический разбор разговора — не пересказ, а оценку.\n\
+            ## Участники и их позиции\nЧего хотел каждый, какие интересы стояли за позицией.\n\
+            ## Ход разговора\nКлючевые повороты, сильные аргументы, возражения и как на них ответили.\n\
+            ## Тон и атмосфера\nНастрой, напряжение, доверие; на чём оно менялось.\n\
+            ## Согласие и разногласия\n\
+            ## Риски и сигналы\nЧто может пойти не так, недосказанности, противоречия.\n\
+            ## Рекомендации\nКонкретные следующие шаги и что сделать иначе в следующий раз.",
+        "literary" => "Перепиши расшифровку в связный, гладкий текст — как хорошо отредактированную \
+            статью или конспект, который приятно читать. Сохрани ВСЕ факты, детали, имена, числа, \
+            примеры и ход мысли; ничего не сокращай по смыслу. Убери оговорки, повторы, \
+            слова-паразиты и обрывы фраз. Абзацы; подзаголовки (##) — только при смене темы. \
+            Прямую речь передавай косвенно, указывая, кто говорит.",
+        "followup" => "Напиши письмо участникам по итогам разговора — готовое к отправке.\n\
+            Первая строка — «**Тема:** …». Далее: короткое приветствие; 1–2 предложения, о чём \
+            говорили; «Договорились:» — список; «Следующие шаги:» — список «кто — что — срок»; \
+            вежливое завершение. Деловой, дружелюбный тон, без канцелярита. Неизвестное \
+            (имя адресата, дата) — в квадратных скобках, напр. [имя].",
+        _ => return None,
+    };
+    Some(format!("{body}\n\n{RULES}"))
+}
+
+/// Человеческое название отчёта (для заголовков экспорта и ошибок).
+pub fn report_title(kind: &str) -> &'static str {
+    match kind {
+        "summary" => "Итоги встречи",
+        "tasks" => "Задачи",
+        "analysis" => "Разбор разговора",
+        "literary" => "Чистовой текст",
+        "followup" => "Письмо по итогам",
+        "brief" => "Краткое резюме",
+        _ => "Отчёт",
+    }
+}
+
+/// Контекст встречи для модели: заголовок и участники (если заданы).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct MeetingContext {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub participants: String,
+    /// Имена говорящих, заданные пользователем: id ("me", "spk0"…) → имя.
+    #[serde(default)]
+    pub names: std::collections::HashMap<String, String>,
+}
+
+impl MeetingContext {
+    fn header(&self) -> String {
+        let mut h = String::new();
+        if !self.title.trim().is_empty() {
+            h.push_str(&format!("Встреча: {}\n", self.title.trim()));
+        }
+        if !self.participants.trim().is_empty() {
+            h.push_str(&format!("Участники: {}\n", self.participants.trim()));
+        }
+        h
+    }
+}
+
+/// Расшифровка в текст для модели: подряд идущие реплики одного говорящего
+/// склеены, говорящие — по именам пользователя (иначе «Я», «Спикер 2»…).
+pub fn transcript_to_named_text(
+    transcript: &Transcript,
+    names: &std::collections::HashMap<String, String>,
+) -> String {
+    let name_of = |id: &str| -> String {
+        names
+            .get(id)
+            .map(|n| n.trim())
+            .filter(|n| !n.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| speaker_label(id))
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut last: Option<&str> = None;
+    for s in &transcript.segments {
+        let text = s.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if last == Some(s.speaker.as_str()) {
+            if let Some(l) = out.last_mut() {
+                l.push(' ');
+                l.push_str(text);
+                continue;
+            }
+        }
+        out.push(format!("{}: {}", name_of(&s.speaker), text));
+        last = Some(s.speaker.as_str());
+    }
+    out.join("\n")
+}
+
+/// Строит отчёт вида `kind` по разговору любой длины. Короткий — один проход.
+/// Длинный: `literary` переписывается по частям и склеивается (без потерь),
+/// остальные — «map-reduce»: из каждой части выписываются подробные заметки
+/// (факты, решения, задачи с исполнителями и сроками, цитаты), затем по
+/// заметкам строится итоговый отчёт по тому же промпту.
+pub fn generate_report(
+    backend: &dyn ChatBackend,
+    kind: &str,
+    transcript_text: &str,
+    ctx: &MeetingContext,
+) -> AppResult<String> {
+    let system = report_prompt(kind)
+        .ok_or_else(|| AppError::InvalidInput(format!("unknown report kind: {kind}")))?;
+    let header = ctx.header();
+    if transcript_text.len() <= SUMMARY_CHUNK_CHARS {
+        let user = format!("{header}\nРасшифровка:\n{transcript_text}");
+        return backend.chat(&system, &user);
+    }
+
+    let chunks = split_chunks(transcript_text, SUMMARY_CHUNK_CHARS);
+    let total = chunks.len();
+    if kind == "literary" {
+        let mut parts = Vec::with_capacity(total);
+        for (i, chunk) in chunks.iter().enumerate() {
+            let user = format!(
+                "{header}Это часть {}/{} длинного разговора. Перепиши ТОЛЬКО эту часть, \
+                 без вступлений и выводов.\n\n{chunk}",
+                i + 1,
+                total
+            );
+            parts.push(backend.chat(&system, &user)?);
+        }
+        return Ok(parts.join("\n\n"));
+    }
+
+    let notes_system = format!(
+        "Ты готовишь подробные рабочие заметки по ОДНОЙ ЧАСТИ длинного разговора, чтобы \
+         потом по ним собрать итоговый отчёт. Выпиши: темы и ключевые факты/цифры, решения, \
+         задачи и обещания (кто — что — срок), позиции и возражения участников, важные \
+         цитаты, открытые вопросы. Кратко, списками, ничего важного не теряя.\n\n{RULES}"
+    );
+    let mut notes = Vec::with_capacity(total);
+    for (i, chunk) in chunks.iter().enumerate() {
+        let user = format!("{header}Часть {}/{} разговора:\n\n{chunk}", i + 1, total);
+        notes.push(backend.chat(&notes_system, &user)?);
+    }
+    let mut combined = notes.join("\n\n---\n\n");
+    // Заметок всё ещё слишком много — сжимаем их тем же способом.
+    while combined.len() > SUMMARY_CHUNK_CHARS {
+        let parts = split_chunks(&combined, SUMMARY_CHUNK_CHARS);
+        if parts.len() <= 1 {
+            break;
+        }
+        let mut next = Vec::with_capacity(parts.len());
+        for p in &parts {
+            next.push(backend.chat(&notes_system, p)?);
+        }
+        let joined = next.join("\n\n---\n\n");
+        if joined.len() >= combined.len() {
+            break;
+        }
+        combined = joined;
+    }
+    let user = format!(
+        "{header}Ниже — заметки по частям одного длинного разговора (по порядку). \
+         Собери по ним единый отчёт, без повторов.\n\n{combined}"
+    );
+    backend.chat(&system, &user)
+}
+
+/// Авто-заголовок с учётом контекста и имён говорящих.
+pub fn suggest_metadata_ctx(
+    backend: &dyn ChatBackend,
+    transcript_text: &str,
+) -> AppResult<MetadataSuggestion> {
+    let system = "По расшифровке разговора верни СТРОГО JSON без пояснений с полями:\n\
+        title — конкретный заголовок встречи в 3–7 слов, по сути разговора, без кавычек и \
+        слов «встреча/разговор/обсуждение» в начале (пример: «Бюджет рекламы на III квартал»);\n\
+        participants — имена участников через запятую, только если они прозвучали \
+        (иначе пустая строка);\n\
+        topic — тема одним коротким предложением.\n\
+        Язык — язык разговора.";
+    // Для заголовка хватает начала и конца длинного разговора.
+    let text = if transcript_text.len() > SUMMARY_CHUNK_CHARS {
+        let head: String = transcript_text.chars().take(SUMMARY_CHUNK_CHARS * 2 / 3).collect();
+        let tail: String = {
+            let v: Vec<char> = transcript_text.chars().collect();
+            v[v.len().saturating_sub(SUMMARY_CHUNK_CHARS / 3)..].iter().collect()
+        };
+        format!("{head}\n…\n{tail}")
+    } else {
+        transcript_text.to_string()
+    };
+    let content = backend.chat(system, &text)?;
+    let json = extract_json(&content);
+    let mut suggestion: MetadataSuggestion = serde_json::from_str(json)?;
+    suggestion.title = suggestion
+        .title
+        .trim()
+        .trim_matches(|c| c == '"' || c == '«' || c == '»')
+        .trim()
+        .to_string();
+    Ok(suggestion)
+}
+
 /// Ответ на вопрос пользователя по расшифровке.
 pub fn answer_question(
     backend: &dyn ChatBackend,
@@ -448,6 +680,72 @@ mod tests {
             }
         });
         format!("http://127.0.0.1:{port}")
+    }
+
+    #[test]
+    fn every_preset_has_prompt_and_title() {
+        for k in ["summary", "tasks", "analysis", "literary", "followup"] {
+            let p = report_prompt(k).unwrap();
+            assert!(p.contains("ничего не выдумывай"), "{k}");
+            assert_ne!(report_title(k), "Отчёт");
+        }
+        assert!(report_prompt("brief").is_none());
+        assert!(report_prompt("../x").is_none());
+    }
+
+    #[test]
+    fn generate_report_short_single_pass_with_context() {
+        let b = MockChatBackend::new("## Коротко\nок");
+        let ctx = MeetingContext {
+            title: "Бюджет".into(),
+            participants: "Иван".into(),
+            names: Default::default(),
+        };
+        let out = generate_report(&b, "summary", "Иван: привет", &ctx).unwrap();
+        assert_eq!(out, "## Коротко\nок");
+        assert_eq!(*b.calls.lock().unwrap(), 1);
+        let (sys, user) = b.last.lock().unwrap().clone().unwrap();
+        assert!(sys.contains("## Решения"));
+        assert!(user.contains("Встреча: Бюджет") && user.contains("Иван: привет"));
+        assert!(generate_report(&b, "nope", "x", &ctx).is_err());
+    }
+
+    #[test]
+    fn generate_report_long_uses_notes_then_reduce() {
+        let line = "Я: довольно длинная строка разговора для проверки разбиения\n";
+        let big = line.repeat((SUMMARY_CHUNK_CHARS / line.len()) * 2 + 10);
+        let b = MockChatBackend::new("заметки");
+        let out = generate_report(&b, "tasks", &big, &MeetingContext::default()).unwrap();
+        assert_eq!(out, "заметки");
+        assert!(*b.calls.lock().unwrap() >= 3);
+        let (sys, user) = b.last.lock().unwrap().clone().unwrap();
+        assert!(sys.contains("Ответственный"));
+        assert!(user.contains("заметки по частям"));
+
+        let lit = MockChatBackend::new("часть");
+        let out = generate_report(&lit, "literary", &big, &MeetingContext::default()).unwrap();
+        assert!(out.contains("часть\n\nчасть"));
+    }
+
+    #[test]
+    fn named_text_uses_labels_and_merges_runs() {
+        let t = merge_tracks(
+            vec![
+                Segment { start_secs: 0.0, end_secs: 1.0, text: "привет".into() },
+                Segment { start_secs: 1.0, end_secs: 2.0, text: "как ты".into() },
+            ],
+            vec![Segment { start_secs: 3.0, end_secs: 4.0, text: "норм".into() }],
+        );
+        let mut names = std::collections::HashMap::new();
+        names.insert("them".to_string(), "Олег".to_string());
+        assert_eq!(transcript_to_named_text(&t, &names), "Я: привет как ты\nОлег: норм");
+    }
+
+    #[test]
+    fn suggest_metadata_ctx_strips_quotes() {
+        let b = MockChatBackend::new(r#"{"title":"«Бюджет на Q3»","participants":"","topic":"t"}"#);
+        let s = suggest_metadata_ctx(&b, "x").unwrap();
+        assert_eq!(s.title, "Бюджет на Q3");
     }
 
     #[test]

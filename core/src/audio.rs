@@ -25,6 +25,38 @@ pub fn write_silence_wav(path: &Path, secs: u64) -> AppResult<()> {
     Ok(())
 }
 
+/// Границы окон для пооконной расшифровки: окна около `target` сэмплов, но
+/// разрез ставится в самое тихое место (по RMS кадров длиной `frame`) внутри
+/// последних `search` сэмплов окна — чтобы не резать слово пополам.
+pub fn quiet_chunks(samples: &[f32], target: usize, search: usize, frame: usize) -> Vec<(usize, usize)> {
+    let len = samples.len();
+    let frame = frame.max(1);
+    let target = target.max(frame * 2);
+    let search = search.min(target / 2);
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    while start < len {
+        let hard_end = start + target;
+        // Хвост короче полуокна не отделяем — он уйдёт в текущее окно.
+        if hard_end + target / 2 >= len {
+            out.push((start, len));
+            break;
+        }
+        let mut best = (hard_end, f32::INFINITY);
+        let mut pos = hard_end - search;
+        while pos + frame <= hard_end {
+            let e: f32 = samples[pos..pos + frame].iter().map(|x| x * x).sum();
+            if e < best.1 {
+                best = (pos + frame / 2, e);
+            }
+            pos += frame;
+        }
+        out.push((start, best.0));
+        start = best.0;
+    }
+    out
+}
+
 /// Возвращает длительность WAV-файла в секундах (округление вниз).
 pub fn wav_duration_secs(path: &Path) -> AppResult<u64> {
     let reader = hound::WavReader::open(path).map_err(|e| AppError::Audio(e.to_string()))?;
@@ -71,6 +103,31 @@ pub fn concat_wavs(parts: &[PathBuf], dst: &Path) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quiet_chunks_cut_in_silence_and_cover_everything() {
+        // 25 «секунд» по 100 сэмплов: громко, но тишина на 8.5 и 17.2 с.
+        let sr = 100;
+        let mut v = vec![0.5f32; 25 * sr];
+        for x in &mut v[850..860] {
+            *x = 0.0;
+        }
+        for x in &mut v[1720..1730] {
+            *x = 0.0;
+        }
+        let c = quiet_chunks(&v, 10 * sr, 3 * sr, 10);
+        assert_eq!(c.first().unwrap().0, 0);
+        assert_eq!(c.last().unwrap().1, v.len());
+        for w in c.windows(2) {
+            assert_eq!(w[0].1, w[1].0);
+        }
+        assert_eq!(c[0].1, 855);
+        assert!((1715..=1730).contains(&c[1].1), "cut {}", c[1].1);
+        assert_eq!(c.len(), 3);
+        // Короткий файл — одно окно.
+        assert_eq!(quiet_chunks(&v[..300], 10 * sr, 3 * sr, 10), vec![(0, 300)]);
+        assert!(quiet_chunks(&[], 1000, 300, 10).is_empty());
+    }
 
     #[test]
     fn writes_and_measures_three_seconds() {

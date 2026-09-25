@@ -40,7 +40,7 @@ jobs:
         run: cargo test -p uxo-core
 
   # Компиляция GUI-крейта (src-tauri) с whisper И diarize на Windows. Покрывает
-  # uxo-core/whisper + uxo-core/diarize (Burn) и команды/lib приложения. Нужен
+  # uxo-core/whisper + uxo-core/diarize (ONNX Runtime) и команды/lib приложения. Нужен
   # собранный фронтенд: generate_context! встраивает ассеты из ../dist.
   check-app:
     runs-on: windows-latest
@@ -60,7 +60,21 @@ jobs:
       - name: Set LIBCLANG_PATH
         shell: pwsh
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-      # Компиляция приложения с whisper + diarize + opus (без GPU/Vulkan).
-      # opus тянет libopus (audiopus_sys, cmake — есть на раннере).
-      - name: cargo check (app + whisper + diarize + opus)
-        run: cargo check -p auris --features whisper,diarize,opus
+      # Полная сборка приложения с whisper + diarize + opus (без GPU/Vulkan):
+      # именно build (а не check) — ловит ошибки линковки whisper.cpp и
+      # статического ONNX Runtime до релиза. opus тянет libopus (cmake).
+      - name: cargo build (app + whisper + diarize + opus)
+        run: cargo build -p auris --features whisper,diarize,opus
+
+  # Диаризация на Windows по-настоящему: ONNX Runtime + модели + эталонная
+  # запись pyannote (2 голоса). Проверяет рантайм там, где живут пользователи.
+  diarize-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Diarization tests (unit + e2e on real models)
+        run: |
+          cargo test -p uxo-core --features diarize
+          cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored

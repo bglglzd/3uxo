@@ -11,6 +11,7 @@ import { RecordingMonitor } from "./components/RecordingMonitor";
 import { SettingsModal } from "./components/SettingsModal";
 import { ImportModal } from "./components/ImportModal";
 import { checkForUpdates } from "./updater";
+import { runAutoAi } from "./aiauto";
 
 type ProgressEvent = {
   id: string;
@@ -131,6 +132,13 @@ export default function App() {
           [id]: { running: false, percent: 100, doneToken: (t[id]?.doneToken ?? 0) + 1 },
         }));
         await refresh();
+        // ИИ сам придумывает заголовок и подводит итоги (если подключён).
+        const m = await api.getMeeting(id).catch(() => null);
+        if (m) {
+          void runAutoAi(m).then((changed) => {
+            if (changed) void refresh();
+          });
+        }
       } catch (e) {
         setTrans((t) => ({
           ...t,

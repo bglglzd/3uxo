@@ -5,12 +5,14 @@
 pub mod ai;
 pub mod audio;
 pub mod call_detector;
+pub mod cluster;
 pub mod cli_transcriber;
 pub mod decode;
 pub mod diarize;
 pub mod edit;
 pub mod error;
 pub mod model;
+pub mod models;
 pub mod recorder;
 pub mod service;
 pub mod storage;

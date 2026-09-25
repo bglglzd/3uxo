@@ -6,6 +6,8 @@ import { api } from "../api";
 import { AUTO_RECORD_APPS, customProcs, resolveProcesses } from "../autorecord";
 import { CopyLogButton } from "./CopyLogButton";
 import { HotkeyCapture } from "./HotkeyCapture";
+import { ModelsManager } from "./ModelsManager";
+import { DEFAULT_WHISPER_MODEL } from "../settings";
 
 /// Переключатель-тумблер в стиле Auris.
 function Switch({
@@ -307,33 +309,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <details className="settings-section">
           <summary>
             <span className="sec-title">Распознавание</span>
-            <span className="sec-sub">Whisper · локально, офлайн</span>
+            <span className="sec-sub">Модели · локально, офлайн</span>
             <span className="sec-chev" aria-hidden="true">
               ⌄
             </span>
           </summary>
           <div className="sec-body">
             <p className="hint">
-              Расшифровка идёт локально, внутри приложения. Нужную модель Auris
-              скачает сам один раз при первой расшифровке — ставить ничего не
-              нужно.
+              Расшифровка и разделение голосов идут локально. Модели скачиваются
+              один раз (можно заранее — здесь) и дальше работают без интернета.
             </p>
             <div className="field">
-              <label>Модель</label>
-              <select
-                value={s.whisper.model || "medium"}
-                onChange={(e) => wh("model", e.target.value)}
-              >
-                <option value="base">base — быстрее всего, ~142 МБ</option>
-                <option value="small">small — быстрее, ~466 МБ</option>
-                <option value="medium">
-                  medium — точнее для русского, ~1.5 ГБ (рекомендуется)
-                </option>
-                <option value="large-v3">large-v3 — максимум качества, ~3 ГБ</option>
-              </select>
-              <span className="hint">
-                Больше модель — точнее, но медленнее на CPU.
-              </span>
+              <label>Модель распознавания</label>
+              <ModelsManager
+                selected={s.whisper.model || DEFAULT_WHISPER_MODEL}
+                onSelect={(id) => wh("model", id)}
+              />
             </div>
             <div className="field">
               <label>Язык</label>
@@ -367,7 +358,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <details className="settings-section">
           <summary>
             <span className="sec-title">Искусственный интеллект</span>
-            <span className="sec-sub">Резюме и анализ · через ваш ключ</span>
+            <span className="sec-sub">Итоги, задачи, разбор · через ваш ключ</span>
             <span className="sec-chev" aria-hidden="true">
               ⌄
             </span>
@@ -399,6 +390,34 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 value={s.ai.model}
                 onChange={(e) => ai("model", e.target.value)}
                 placeholder="qwen3.6-27b-q4"
+              />
+            </div>
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">Заголовок сам</div>
+                <div className="hint">
+                  После расшифровки ИИ придумает заголовок, участников и тему (если
+                  вы не меняли заголовок вручную).
+                </div>
+              </div>
+              <Switch
+                on={s.aiAuto.title}
+                onChange={(v) => setS({ ...s, aiAuto: { ...s.aiAuto, title: v } })}
+                label="Авто-заголовок"
+              />
+            </div>
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">Итоги встречи сразу</div>
+                <div className="hint">
+                  После расшифровки ИИ сразу подведёт итоги: главное, решения,
+                  задачи.
+                </div>
+              </div>
+              <Switch
+                on={s.aiAuto.summary}
+                onChange={(v) => setS({ ...s, aiAuto: { ...s.aiAuto, summary: v } })}
+                label="Авто-итоги"
               />
             </div>
           </div>

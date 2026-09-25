@@ -140,6 +140,64 @@ pub fn assign_speakers(whisper: Vec<Segment>, diar: Vec<DiarSegment>) -> Transcr
     Transcript { segments }
 }
 
+/// Переразмечает говорящих у реплик, для которых `pick` истинно, по разметке
+/// диаризации (`spk0`, `spk1`… по порядку появления; прочие реплики не
+/// трогаются). Если `single` задан и голос вышел один — всем выбранным
+/// репликам ставится `single` (напр. «Собеседник» для записанной встречи).
+pub fn relabel_speakers(
+    transcript: &Transcript,
+    diar: &[DiarSegment],
+    pick: impl Fn(&TranscriptSegment) -> bool,
+    single: Option<&str>,
+) -> Transcript {
+    use std::collections::HashMap;
+    let mut remap: HashMap<u32, usize> = HashMap::new();
+    let mut segments = transcript.segments.clone();
+    let mut picked = Vec::new();
+    for (i, s) in segments.iter_mut().enumerate() {
+        if !pick(s) {
+            continue;
+        }
+        picked.push(i);
+        let idx = match best_speaker(diar, s.start_secs, s.end_secs) {
+            Some(raw) => {
+                let next = remap.len();
+                *remap.entry(raw).or_insert(next)
+            }
+            None => 0,
+        };
+        s.speaker = format!("spk{idx}");
+    }
+    if let Some(name) = single {
+        if remap.len() <= 1 {
+            for i in picked {
+                segments[i].speaker = name.to_string();
+            }
+        }
+    }
+    Transcript { segments }
+}
+
+/// Если во всей ленте один голос `spkN` — заменяет его на `name`.
+pub fn collapse_single_speaker(t: Transcript, name: &str) -> Transcript {
+    let mut ids: Vec<&str> = t.segments.iter().map(|s| s.speaker.as_str()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.len() != 1 {
+        return t;
+    }
+    Transcript {
+        segments: t
+            .segments
+            .into_iter()
+            .map(|mut s| {
+                s.speaker = name.to_string();
+                s
+            })
+            .collect(),
+    }
+}
+
 /// Объединяет две готовые ленты в одну, отсортированную по времени начала
 /// (стабильно). Для записей с несколькими собеседниками: дорожка «Я» (микрофон)
 /// + диаризованная дорожка собеседников (системный звук).
@@ -293,6 +351,39 @@ mod tests {
         let t = assign_speakers(whisper, diar);
         // Ближайший по середине (10.5) — кластер 2 (первый назначенный → spk0).
         assert_eq!(t.segments[0].speaker, "spk0");
+    }
+
+    #[test]
+    fn relabel_keeps_me_and_collapses_single_voice() {
+        let t = merge_tracks(vec![seg(0.0, "я")], vec![seg(2.0, "он"), seg(5.0, "снова он")]);
+        let one = vec![DiarSegment { start_secs: 0.0, end_secs: 9.0, speaker: 4 }];
+        let r = relabel_speakers(&t, &one, |s| s.speaker != ME, Some(THEM));
+        let sp: Vec<&str> = r.segments.iter().map(|s| s.speaker.as_str()).collect();
+        assert_eq!(sp, vec!["me", "them", "them"]);
+
+        let two = vec![
+            DiarSegment { start_secs: 0.0, end_secs: 4.0, speaker: 9 },
+            DiarSegment { start_secs: 4.0, end_secs: 9.0, speaker: 2 },
+        ];
+        let r = relabel_speakers(&t, &two, |s| s.speaker != ME, Some(THEM));
+        let sp: Vec<&str> = r.segments.iter().map(|s| s.speaker.as_str()).collect();
+        assert_eq!(sp, vec!["me", "spk0", "spk1"]);
+        // Текст не трогается.
+        assert_eq!(r.segments[2].text, "снова он");
+    }
+
+    #[test]
+    fn collapse_single_only_when_one_voice() {
+        let t = single_speaker(vec![seg(0.0, "a"), seg(1.0, "b")], "spk0");
+        assert!(collapse_single_speaker(t, THEM).segments.iter().all(|s| s.speaker == THEM));
+        let t = assign_speakers(
+            vec![seg(0.0, "a"), seg(5.0, "b")],
+            vec![
+                DiarSegment { start_secs: 0.0, end_secs: 2.0, speaker: 0 },
+                DiarSegment { start_secs: 4.0, end_secs: 7.0, speaker: 1 },
+            ],
+        );
+        assert_eq!(collapse_single_speaker(t.clone(), THEM), t);
     }
 
     #[test]
