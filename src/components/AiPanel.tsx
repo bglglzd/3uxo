@@ -153,9 +153,14 @@ export function AiPanel({ meeting, labels, hasTranscript, reports, onReport, onM
           ) : (
             <div className="btn-row">
               <CopyButton
-                text={() => stripMarkdown(content)}
+                // Инструкция для ИИ копируется как есть: агенты понимают Markdown.
+                text={() => (kind === "agent" ? content : stripMarkdown(content))}
                 label="📋 Копировать"
-                title="Скопировать как обычный текст, без Markdown"
+                title={
+                  kind === "agent"
+                    ? "Скопировать промпт (с разметкой) — вставьте его в ИИ-агента"
+                    : "Скопировать как обычный текст, без Markdown"
+                }
               />
               <button
                 className="btn ghost"

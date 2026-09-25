@@ -114,11 +114,12 @@ export function SpeakersPanel({
               </span>
               <button
                 type="button"
-                className="btn ghost voice-play"
+                className="btn ghost voice-play icon-btn"
                 onClick={() => onPlaySample(s.sample.start, s.sample.end)}
-                title={`Послушать: «${s.sample.text.slice(0, 80)}»`}
+                title={`Послушать образец голоса: «${s.sample.text.slice(0, 80)}»`}
+                aria-label={`Образец голоса: ${name}`}
               >
-                ▶ Образец
+                ▶
               </button>
               {(s.id === "me" || mergeTargets.length === 0) && <span />}
               {s.id !== "me" && mergeTargets.length > 0 && (
@@ -146,12 +147,13 @@ export function SpeakersPanel({
                 ) : (
                   <button
                     type="button"
-                    className="btn ghost"
+                    className="btn ghost icon-btn"
                     disabled={busy}
                     onClick={() => setMergeFrom(s.id)}
-                    title="Если один человек разделился на два голоса — объедините их"
+                    title="Объединить: если один человек разделился на два голоса"
+                    aria-label={`Объединить голос ${name} с другим`}
                   >
-                    ⤵ Объединить
+                    ⤵
                   </button>
                 )
               )}

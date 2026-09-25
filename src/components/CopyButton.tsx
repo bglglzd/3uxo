@@ -26,7 +26,13 @@ export function CopyButton({
   };
 
   return (
-    <button className={className} onClick={copy} title={title} type="button">
+    <button
+      className={className}
+      onClick={copy}
+      title={title}
+      aria-label={title}
+      type="button"
+    >
       {done ? doneLabel : label}
     </button>
   );

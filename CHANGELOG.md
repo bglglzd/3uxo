@@ -1,0 +1,80 @@
+# Changelog
+
+All notable changes to Auris. Versions follow [Semantic Versioning](https://semver.org/);
+installers for every version are on [GitHub Releases](https://github.com/bglglzd/auris/releases).
+
+## [0.8.1] — 2026-09-25
+
+### Added
+- **AI agent brief** («Инструкция для ИИ») — a new AI preset that turns the conversation into a ready-to-paste prompt for Claude, Cursor, ChatGPT and other agents: task, context, requirements, constraints, exact details, acceptance criteria and open questions. Copied with Markdown intact.
+- Release notes are shown in the in-app update dialog.
+
+### Changed
+- **Compact interface.** Everything fits on screen right after launch: the window opens centered at 1120×720 (minimum 720×520); denser sidebar, cards and buttons; transcript and voice actions are icon buttons with tooltips; audio tools live in the player row; theme and settings share one row.
+- **New app icon** built from the Auris mark — a dark tile with the blue-teal ear (installer, taskbar, tray, favicon).
+- Settings: the auto-record section is collapsed while auto-record is off; the sticky footer no longer lets content show through.
+
+### Fixed
+- Wide tables in AI reports no longer overflow their card.
+
+## [0.8.0] — 2026-09-25
+
+### Added
+- **NVIDIA Parakeet TDT 0.6B v3** speech recognition (ONNX Runtime) — the new default engine: accurate Russian with punctuation, 25 European languages, ~10× faster than real time on a CPU, no hallucinations on silence. Whisper is used automatically for other languages.
+- **Voices panel**: talk-time share, voice sample playback, names, merge two voices, and change the number of voices instantly without re-transcribing.
+- **Model manager** in Settings: status of every model, download in advance, delete unused ones.
+- **AI presets without overlap**: Meeting summary, Tasks, Conversation review, Clean text, Follow-up e-mail. Speaker names are passed to the model. After transcription the AI sets the title and prepares the summary automatically (configurable).
+- **Export dialog**: Word (.docx), Markdown, plain text and SRT subtitles — transcript plus selected AI reports in one document.
+- **Updates with consent**: Auris checks on launch and every 6 hours, shows what's new and installs + restarts only after you agree (never during a recording).
+
+### Changed
+- **Speaker separation rebuilt** on pyannote segmentation-3.0 + WeSpeaker ResNet34 (ONNX Runtime) with a new clustering algorithm; the speaker count is detected automatically, including group calls. About 25× faster than before.
+- Whisper: large-v3-turbo is the default Whisper model; beam search; audio is split at pauses instead of mid-word.
+- The old «Brief» and «Digest» reports are replaced by «Meeting summary» (saved ones are still shown and exported).
+
+### Fixed
+- «Downloading model» no longer appears on every transcription — models download exactly once.
+- The previous diarization engine found no speech on some recordings, which produced a wrong number of speakers.
+
+## [0.7.1] — 2026-08-18
+### Fixed
+- Audio editor: tracks are released before rewriting on Windows, zoom keeps the selection in view, Space no longer hijacks focused buttons, edit errors stay visible.
+
+## [0.7.0] — 2026-08
+### Added
+- **Audio editor**: loudness timeline per track, cut ranges, “keep only this”, zoom, preview with cuts skipped, precise boundaries; applies to all tracks and shifts the transcript; one-click revert to the original.
+
+## [0.6.3]
+### Fixed
+- More resilient system-audio (loopback) capture; live level meters while recording.
+
+## [0.6.2]
+### Fixed
+- Centered play/pause icon in the player.
+
+## [0.6.1]
+### Added
+- Edit transcripts (text, speaker, delete lines) and AI reports after generation.
+
+## [0.6.0]
+### Added
+- Pause/resume with seamless segment merge and crash recovery.
+- Auto-record debounce (ignores notification sounds, drops very short recordings).
+- Solo mode — a note with a single voice.
+- Copy as plain text.
+
+## [0.5.x]
+- Configurable global hotkey and auto-recording of calls; system-audio capture via polling; recorded tracks normalized before transcription; capture diagnostics; version shown in Settings; app binary renamed to `Auris.exe`.
+
+## [0.4.0]
+- Rebrand to **Auris — «ваше третье ухо»**: new name, logo and design system.
+
+## [0.3.x]
+- Liquid-glass redesign with light and dark themes and a responsive layout; drag-and-drop import; Ogg/Opus voice messages; stenogram export; AI brief, analysis and literary text.
+
+## Earlier
+- Two-track recording (microphone + system audio), local Whisper transcription, meeting library, import of external recordings, speaker diarization, AI summaries and questions via an OpenAI-compatible endpoint.
+
+[0.8.1]: https://github.com/bglglzd/auris/releases/tag/v0.8.1
+[0.8.0]: https://github.com/bglglzd/auris/releases/tag/v0.8.0
+[0.7.1]: https://github.com/bglglzd/auris/releases/tag/v0.7.1

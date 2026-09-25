@@ -908,7 +908,7 @@ fn named_transcript_text(
 }
 
 /// Строит ИИ-отчёт вида `kind` ("summary" | "tasks" | "analysis" | "literary" |
-/// "followup") и сохраняет его. `context` — заголовок, участники и имена
+/// "followup" | "agent") и сохраняет его. `context` — заголовок, участники и имена
 /// говорящих (из интерфейса), чтобы отчёт говорил о людях по именам.
 #[tauri::command]
 pub async fn generate_report(

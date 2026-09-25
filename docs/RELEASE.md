@@ -1,130 +1,79 @@
-# Auris — релиз и деплой (runbook)
+# Releasing Auris
 
-Деплой Auris = опубликованный GitHub-релиз по git-тегу `vX.Y.Z` + сгенерированный
-`latest.json` для авто-обновления. Пользователи получают обновление автоматически
-через `tauri-plugin-updater`.
+A release is a signed, published GitHub release with a tag `vX.Y.Z` plus a generated
+`latest.json`. Installed copies of Auris find it through the updater, show the release
+notes and install it after the user agrees.
 
-См. также [`../CLAUDE.md`](../CLAUDE.md) (общий контекст).
+## Checklist
 
----
+1. **Branch** from the latest `main` (direct pushes to `main` are not used — everything goes through a PR).
+2. **Bump the version** in both `package.json` and `src-tauri/tauri.conf.json` (keep them equal), then run `npm install --package-lock-only`.
+3. **Update `CHANGELOG.md`** — a new section at the top.
+4. **Check locally**:
+   ```bash
+   npx tsc --noEmit && npm test && npm run build
+   cargo test -p uxo-core
+   ```
+5. **Open a PR** and wait until every CI job has `conclusion: success`
+   (check the conclusion, not the exit code of `gh run watch`):
+   ```bash
+   gh run view <run-id> --json conclusion --jq .conclusion   # → success
+   ```
+6. **Squash-merge** the PR.
+7. **Start the release build** — either way works:
+   - push a tag on `main`:
+     ```bash
+     git checkout main && git pull
+     git tag vX.Y.Z && git push origin vX.Y.Z
+     ```
+   - or run **Actions → release → Run workflow** on `main` with `tag = vX.Y.Z` and
+     `notes` = the changelog section (Markdown). The workflow creates the tag itself.
+8. **Verify the publication**:
+   ```bash
+   gh run view <release-run-id> --json conclusion --jq .conclusion    # success
+   gh release view vX.Y.Z --json isDraft,assets                        # setup.exe, .msi, .sig, latest.json
+   curl -sL https://github.com/bglglzd/auris/releases/latest/download/latest.json | grep version
+   ```
 
-## 0. Предпосылки
+The release notes (`notes` input or the release body) are what users see in the
+«Update available» dialog, so write them for users.
 
-- Локального Rust-тулчейна на машине разработки НЕТ → весь Rust проверяется через
-  CI. Фронт (`tsc`/`vitest`/`vite build`) проверяется локально.
-- Прямой `git push origin main` блокируется авто-режимом → изменения вливаются
-  только через PR (`gh pr merge`). Push тега (`git push origin vX.Y.Z`) разрешён.
-- Секреты GitHub Actions для подписи апдейтов уже настроены:
-  `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-- Публичный ключ апдейтера зашит в `tauri.conf.json → plugins.updater.pubkey`.
+## Workflows
 
----
+### `ci.yml` — every push to `main` and every PR
+| Job | Runner | What it checks |
+|---|---|---|
+| `frontend` | ubuntu | `npm ci`, `npm test`, `tsc`, `vite build` |
+| `core` | ubuntu | `cargo test -p uxo-core` |
+| `check-app` | windows | full `cargo build` of the app with `whisper,diarize,opus,parakeet` (catches link errors) |
+| `onnx-windows` | windows | ONNX tests + end-to-end diarization and Parakeet tests on real models |
 
-## 1. Пошаговый релиз
+### `release.yml` — tag `v*` or manual run
+Builds on Windows with LLVM and the Vulkan SDK, runs `tauri-action` with
+`--features gpu,diarize,opus,parakeet`, signs the update artifacts with
+`TAURI_SIGNING_PRIVATE_KEY` and publishes a non-draft release «Auris vX.Y.Z» with
+`latest.json`.
 
-```bash
-# 1) Ветка от свежего main
-git checkout main && git fetch origin main -q && git reset --hard origin/main
-git checkout -b <type>/<short-name>          # feat/… fix/… chore/…
+## Updater
 
-# 2) Изменения + БАМП ВЕРСИИ (синхронно в двух файлах)
-#    package.json: "version": "X.Y.Z"
-#    src-tauri/tauri.conf.json: "version": "X.Y.Z"
+- The endpoint is set in `src-tauri/tauri.conf.json → plugins.updater.endpoints`
+  and points at the latest GitHub release of this repository.
+- Signatures are verified with the public key in `plugins.updater.pubkey`; the private
+  key exists only in repository secrets.
+- `releases/latest` is the newest non-draft, non-prerelease release, so users always
+  jump straight to the latest version.
 
-# 3) Локальная проверка фронта (Rust — через CI)
-npx tsc --noEmit && npm test && npm run build
+## Pitfalls
 
-# 4) Push ветки + PR
-git add -A && git commit -m "..."            # см. формат коммита ниже
-git push -u origin <branch>
-gh pr create --base main --head <branch> --title "..." --body "..."
+- **Never tag before CI is green** — a tag on a broken commit produces a failed release build.
+- **Keep versions in sync** in `package.json` and `tauri.conf.json`.
+- **Do not change** the app `identifier` in `tauri.conf.json`: it defines the data folder
+  and updater identity of existing installations.
+- **Icons**: regenerate from a 1024×1024 PNG/SVG with `npx tauri icon <file> -o src-tauri/icons`
+  and delete the generated `android/` and `ios/` folders (desktop-only app).
 
-# 5) ДОЖДАТЬСЯ ЗЕЛЁНОГО CI ПО conclusion (не по коду watch!)
-RID=$(gh run list --workflow=ci.yml --branch <branch> --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run watch $RID --interval 30
-gh run view $RID --json conclusion --jq .conclusion     # ДОЛЖНО быть "success"
+## Fixing a broken release
 
-# 6) Мерж в main
-gh pr merge <N> --squash --delete-branch
-
-# 7) Тег на main → запуск релиз-сборки
-git checkout main && git fetch origin main -q && git reset --hard origin/main
-git show HEAD:package.json | grep '"version"'           # сверить версию
-git tag vX.Y.Z && git push origin vX.Y.Z
-
-# 8) Дождаться релиз-сборки и ПРОВЕРИТЬ публикацию по conclusion
-RID=$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run watch $RID --interval 45
-gh run view $RID --json conclusion --jq .conclusion     # "success"
-gh release view vX.Y.Z --json tagName,isDraft,assets    # assets: setup.exe/.msi/.sig + latest.json
-gh api repos/bglglzd/3uxo/releases/latest --jq .tag_name # == vX.Y.Z
-```
-
-Коммиты заканчивать строкой:
-`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
-
----
-
-## 2. Что делают workflow'ы
-
-### `.github/workflows/ci.yml` (on push / pull_request)
-- **frontend** (ubuntu): `npm ci`, `npm test`, `npx tsc --noEmit`, `npm run build`.
-- **core** (ubuntu): `cargo test -p uxo-core` (доменная логика, кросс-платформенно).
-- **check-app** (windows): `npm run build` + установка LLVM (libclang для whisper-rs)
-  + `cargo check -p auris --features whisper,diarize,opus`. Именно здесь
-  компилируется весь Tauri-слой и WASAPI/Windows-код (валидация «слепого» Rust).
-
-### `.github/workflows/release.yml` (on tag `v*`, и workflow_dispatch)
-- **build-windows** (windows): setup-node, rust-toolchain, LLVM, **Vulkan SDK**,
-  `npm ci`, `tauri-apps/tauri-action` с `args: --features gpu,diarize,opus`.
-  Подписывает апдейты, публикует НЕ-draft релиз `Auris vX`, прикладывает
-  `latest.json` (`includeUpdaterJson: true`).
-
----
-
-## 3. Авто-обновление
-
-- Endpoint (зашит в `tauri.conf.json`):
-  `https://github.com/bglglzd/3uxo/releases/latest/download/latest.json`.
-- GitHub `releases/latest` = самый свежий не-draft/не-prerelease релиз. Апдейтер
-  всегда ведёт на него — промежуточные версии пользователь «перепрыгивает».
-- `latest.json` содержит версию, подписи и URL'ы `Auris_X.Y.Z_x64-setup.exe` /
-  `_x64_en-US.msi`. Проверка: `curl -sL <endpoint> | grep version`.
-
----
-
-## 4. КРИТИЧЕСКИЕ грабли (проверено на практике)
-
-1. **Сверяй `gh run view --json conclusion`, НЕ код выхода `gh run watch`.**
-   `gh run watch` однажды завершился 0, пока сборка падала → **v0.5.0 уехал
-   сломанным (E0716) и не опубликовался**. Всегда подтверждай `conclusion ==
-   success` ПЕРЕД тегом и считай релиз живым только после `gh release view` +
-   latest endpoint.
-2. **Версию бампить в ОБОИХ файлах** (`package.json` и `tauri.conf.json`), иначе
-   рассинхрон.
-3. **`mainBinaryName: "Auris"`** в `tauri.conf.json` задаёт имя exe (`Auris.exe`);
-   без него имя берётся из Cargo-пакета (`auris`).
-4. **Cargo.lock** при переименовании пакета можно править вручную или дать cargo
-   перегенерировать (CI без `--locked`).
-5. **`gh pr edit --base` ломается** (GraphQL projectCards deprecation). Ретаргет
-   базы PR: `gh api -X PATCH repos/bglglzd/3uxo/pulls/N -f base=main`.
-6. **Иконки**: `npx tauri icon src-tauri/auris-icon.svg` (принимает SVG напрямую)
-   регенерит десктоп-форматы в `src-tauri/icons/`. Mobile (android/ios) — удалять
-   (приложение десктопное). Исходник иконки — `src-tauri/auris-icon.svg`.
-
----
-
-## 5. Откат / починка сломанного релиза
-
-- Если релиз-сборка упала — тег указывает на сломанный коммит, релиз НЕ
-  публикуется (latest остаётся прежним, пользователи не затронуты). Чинить:
-  фикс на ветке → PR → зелёный CI → мерж → **новый** тег (напр. vX.Y.(Z+1)).
-- Тег `vX.Y.0`, который не опубликовался, можно оставить (косметика) или удалить
-  (`git push origin :refs/tags/vX.Y.0`). Версию обычно поднимают на патч.
-
-## Релиз без push тега (облачная сессия)
-
-Если `git push origin vX.Y.Z` недоступен, запустите `release.yml` вручную на
-`main` с входом `tag=vX.Y.Z` (Actions → release → Run workflow). tauri-action
-создаст тег и релиз на коммите запуска; дальше всё как обычно (latest.json,
-подписи).
+If the release build fails, nothing is published and users are unaffected. Fix it in a
+new PR and release the next patch version (`vX.Y.Z+1`). An unpublished tag can be
+deleted with `git push origin :refs/tags/vX.Y.Z`.
