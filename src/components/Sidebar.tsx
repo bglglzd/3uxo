@@ -45,7 +45,7 @@ export function Sidebar(p: Props) {
   return (
     <aside className={p.open ? "sidebar open" : "sidebar"}>
       <div className="brand">
-        <AurisMark size={30} />
+        <AurisMark size={26} />
         <div className="brand-lockup">
           <span className="brand-word">auris</span>
           <span className="brand-divider" />
@@ -134,25 +134,31 @@ export function Sidebar(p: Props) {
             <rect x="5" y="11" width="14" height="9" rx="2" />
             <path d="M8 11V8a4 4 0 0 1 8 0v3" />
           </svg>
-          <span>Работает локально · открытый код</span>
+          <span>Локально · открытый код</span>
         </div>
-        <div className="theme-switch" role="group" aria-label="Тема оформления">
-          <button
-            className={theme === "light" ? "active" : ""}
-            onClick={() => pickTheme("light")}
-          >
-            ☀ Светлая
-          </button>
-          <button
-            className={theme === "dark" ? "active" : ""}
-            onClick={() => pickTheme("dark")}
-          >
-            🌙 Тёмная
+        <div className="footer-row">
+          <div className="theme-switch" role="group" aria-label="Тема оформления">
+            <button
+              className={theme === "light" ? "active" : ""}
+              onClick={() => pickTheme("light")}
+              title="Светлая тема"
+              aria-label="Светлая тема"
+            >
+              ☀
+            </button>
+            <button
+              className={theme === "dark" ? "active" : ""}
+              onClick={() => pickTheme("dark")}
+              title="Тёмная тема"
+              aria-label="Тёмная тема"
+            >
+              ☾
+            </button>
+          </div>
+          <button className="settings-trigger" onClick={p.onOpenSettings}>
+            ⚙ Настройки
           </button>
         </div>
-        <button className="settings-trigger" onClick={p.onOpenSettings}>
-          ⚙ Настройки
-        </button>
       </div>
     </aside>
   );

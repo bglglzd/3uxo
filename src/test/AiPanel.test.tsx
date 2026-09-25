@@ -59,6 +59,7 @@ describe("AiPanel", () => {
     ["Разбор разговора", "analysis"],
     ["Чистовой текст", "literary"],
     ["Письмо по итогам", "followup"],
+    ["Инструкция для ИИ", "agent"],
   ])("creates «%s»", async (title, kind) => {
     render(<Host />);
     await userEvent.click(screen.getByRole("button", { name: new RegExp(title) }));

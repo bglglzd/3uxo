@@ -13,6 +13,10 @@ on:
       tag:
         description: "Тег релиза, напр. v0.8.0"
         required: true
+      notes:
+        description: "Что нового (Markdown) — покажется в окне обновления"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -55,6 +59,7 @@ jobs:
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: "Auris ${{ inputs.tag || github.ref_name }}"
+          releaseBody: ${{ inputs.notes }}
           # Сразу публикуем (не черновик), чтобы апдейтер видел новую версию.
           releaseDraft: false
           prerelease: false

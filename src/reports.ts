@@ -38,6 +38,12 @@ export const REPORT_META: Record<ReportKind, ReportMeta> = {
     what: "Весь разговор связным текстом без повторов и слов-паразитов — для лекций и интервью.",
     busy: "Пишу текст…",
   },
+  agent: {
+    title: "Инструкция для ИИ",
+    icon: "❯",
+    what: "Готовый промпт для ИИ-агента: задача, контекст, требования, критерии — вставьте в Claude, Cursor, ChatGPT.",
+    busy: "Пишу инструкцию…",
+  },
   followup: {
     title: "Письмо по итогам",
     icon: "✉",
@@ -59,11 +65,19 @@ export const REPORT_ORDER: ReportKind[] = [
   "analysis",
   "literary",
   "followup",
+  "agent",
   "brief",
 ];
 
 /// Отчёты, которые можно создать (кнопки-пресеты).
-export const PRESETS: ReportKind[] = ["summary", "tasks", "analysis", "literary", "followup"];
+export const PRESETS: ReportKind[] = [
+  "summary",
+  "tasks",
+  "agent",
+  "analysis",
+  "literary",
+  "followup",
+];
 
 /// Событие «отчёты встречи обновились» (напр. авто-итоги после расшифровки).
 export const REPORTS_EVENT = "auris-reports-updated";

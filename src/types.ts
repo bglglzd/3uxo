@@ -78,6 +78,7 @@ export type ReportKind =
   | "analysis"
   | "literary"
   | "followup"
+  | "agent"
   | "brief";
 
 /// Контекст встречи для ИИ: заголовок, участники и имена говорящих.

@@ -468,40 +468,46 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
               <span>{clock(duration)}</span>
             </div>
           </div>
-        </div>
-        <div className="track-downloads">
-          <button
-            className="btn ghost"
-            onClick={() => setEditorOpen(true)}
-            disabled={transcribing}
-            title={
-              transcribing
-                ? "Идёт расшифровка — правка аудио будет доступна после неё"
-                : "Вырезать лишнее из записи на таймлайне громкости"
-            }
-          >
-            ✂ Редактор аудио
-          </button>
-          {isImported ? (
+          <div className="track-tools">
             <button
-              className="btn ghost"
-              onClick={() => downloadAudio("audio.wav", "запись")}
+              className="btn ghost small"
+              onClick={() => setEditorOpen(true)}
+              disabled={transcribing}
+              title={
+                transcribing
+                  ? "Идёт расшифровка — правка аудио будет доступна после неё"
+                  : "Редактор аудио: вырезать лишнее из записи"
+              }
             >
-              ⬇ Скачать аудио
+              ✂ Редактор
             </button>
-          ) : (
-            <>
-              <button className="btn ghost" onClick={() => downloadAudio("mic.wav", "Я")}>
-                ⬇ Аудио «Я»
-              </button>
+            {isImported ? (
               <button
-                className="btn ghost"
-                onClick={() => downloadAudio("system.wav", "Собеседник")}
+                className="btn ghost small"
+                onClick={() => downloadAudio("audio.wav", "запись")}
+                title="Скачать аудио (WAV)"
               >
-                ⬇ Аудио собеседника
+                ⬇ Аудио
               </button>
-            </>
-          )}
+            ) : (
+              <>
+                <button
+                  className="btn ghost small"
+                  onClick={() => downloadAudio("mic.wav", "Я")}
+                  title="Скачать дорожку «Я» (WAV)"
+                >
+                  ⬇ «Я»
+                </button>
+                <button
+                  className="btn ghost small"
+                  onClick={() => downloadAudio("system.wav", "Собеседник")}
+                  title="Скачать дорожку собеседника (WAV)"
+                >
+                  ⬇ Собеседник
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <audio
           ref={micRef}
@@ -559,23 +565,27 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
                 ⬇ Экспорт
               </button>
               <CopyButton
+                className="btn ghost icon-btn"
                 text={() => transcriptToPlain(transcript!, nameOf)}
-                label="📋 Копировать"
+                label="📋"
+                doneLabel="✓"
                 title="Скопировать текст расшифровки без Markdown"
               />
               <button
-                className="btn ghost"
+                className="btn ghost icon-btn"
                 onClick={startEdit}
                 title="Исправить ошибки распознавания"
+                aria-label="Редактировать расшифровку"
               >
-                ✎ Редактировать
+                ✎
               </button>
               <button
-                className="btn ghost"
+                className="btn ghost icon-btn"
                 onClick={doTranscribe}
                 title="Расшифровать заново (текущие правки текста пропадут)"
+                aria-label="Расшифровать заново"
               >
-                ↻ Заново
+                ↻
               </button>
             </div>
           ) : (

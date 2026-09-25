@@ -171,7 +171,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </details>
 
         {/* ---------- Авто-запись звонков ---------- */}
-        <details className="settings-section" open>
+        <details className="settings-section" open={s.autoRecord.enabled}>
           <summary>
             <span className="sec-title">Авто-запись звонков</span>
             <span className="sec-sub">Старт записи при звонке в мессенджерах</span>

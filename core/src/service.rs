@@ -640,6 +640,7 @@ pub const REPORT_KINDS: &[(&str, &str)] = &[
     ("analysis", "analysis.md"),
     ("literary", "literary.md"),
     ("followup", "followup.md"),
+    ("agent", "agent.md"),
     ("brief", "brief.md"),
 ];
 

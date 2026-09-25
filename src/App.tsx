@@ -271,7 +271,7 @@ export default function App() {
               <span className="ripple-ring" />
               <span className="ripple-ring d1" />
               <span className="ripple-ring d2" />
-              <AurisMark size={90} />
+              <AurisMark size={72} />
             </div>
             <h2>Выбери встречу</h2>
             <p>
@@ -297,7 +297,8 @@ export default function App() {
                 <p>
                   Запись, расшифровка и разделение голосов выполняются{" "}
                   <b>локально на вашем устройстве</b> — аудио и тексты никуда не
-                  загружаются. ИИ-функции (резюме, анализ) — по желанию и через
+                  загружаются. ИИ-функции (итоги, задачи, инструкции для ИИ) — по
+                  желанию и через
                   ваш ключ. Открытый код.
                 </p>
               </div>
