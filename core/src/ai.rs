@@ -51,24 +51,184 @@ pub trait ChatBackend: Send + Sync {
 }
 
 /// Реальный бэкенд: HTTP к {base_url}/chat/completions (OpenAI-совместимый).
+///
+/// Модель на сервере пользователя может меняться (выкатили новую версию —
+/// сменилось имя). Поэтому: пустая модель или «auto» — берём ту, что сервер
+/// отдаёт в `/models`; если сервер ответил «такой модели нет» — один раз
+/// перечитываем список, выбираем ближайшую актуальную и повторяем запрос.
 pub struct HttpChatBackend {
     config: AiConfig,
+    /// Модель, которой реально отвечает сервер (после авто-выбора/подмены).
+    model: std::sync::Mutex<Option<String>>,
+}
+
+/// Модели, которые отдаёт OpenAI-совместимый сервер (`GET {base}/models`).
+/// Понимает `{"data":[{"id":…}]}` (OpenAI, vLLM, llama.cpp, LM Studio) и
+/// `{"models":[{"name"|"model":…}]}` (Ollama и новые llama.cpp).
+pub fn list_models(config: &AiConfig) -> AppResult<Vec<String>> {
+    let url = format!("{}/models", config.base_url.trim_end_matches('/'));
+    let resp = ureq::get(&url)
+        .set("Authorization", &format!("Bearer {}", config.api_key))
+        .timeout(std::time::Duration::from_secs(15))
+        .call()
+        .map_err(http_err)?;
+    let v: serde_json::Value = resp.into_json().map_err(|e| AppError::Http(e.to_string()))?;
+    let mut out: Vec<String> = Vec::new();
+    for key in ["data", "models"] {
+        if let Some(arr) = v.get(key).and_then(|x| x.as_array()) {
+            for m in arr {
+                let id = m
+                    .get("id")
+                    .or_else(|| m.get("model"))
+                    .or_else(|| m.get("name"))
+                    .and_then(|x| x.as_str());
+                if let Some(id) = id {
+                    if !out.iter().any(|o| o == id) {
+                        out.push(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Какую модель использовать: настроенную, если сервер её отдаёт; иначе —
+/// ближайшую по имени (самый длинный общий префикс: «qwen3.5-27b» →
+/// «qwen3.6-27b»), а без совпадений — первую. `None` — сервер пуст.
+pub fn pick_model(configured: &str, available: &[String]) -> Option<String> {
+    let want = configured.trim();
+    if available.is_empty() {
+        return None;
+    }
+    if !want.is_empty() && want != "auto" {
+        if let Some(m) = available.iter().find(|m| m.as_str() == want) {
+            return Some(m.clone());
+        }
+        let common = |a: &str, b: &str| {
+            a.chars()
+                .zip(b.chars())
+                .take_while(|(x, y)| x.eq_ignore_ascii_case(y))
+                .count()
+        };
+        let best = available
+            .iter()
+            .map(|m| (common(want, m), m))
+            .max_by_key(|(n, _)| *n)
+            .filter(|(n, _)| *n >= 3)
+            .map(|(_, m)| m.clone());
+        if best.is_some() {
+            return best;
+        }
+    }
+    Some(available[0].clone())
+}
+
+/// Результат проверки подключения к ИИ (для настроек).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct AiCheck {
+    pub ok: bool,
+    /// Модели на сервере.
+    pub models: Vec<String>,
+    /// Какую модель стоит использовать (актуальная на сервере).
+    pub model: String,
+    /// Настроенной модели на сервере больше нет — выбрана другая.
+    pub changed: bool,
+    pub latency_ms: u64,
+    pub error: Option<String>,
+}
+
+/// Проверяет сервер: доступен ли, какие модели отдаёт и какую использовать.
+pub fn check(config: &AiConfig) -> AiCheck {
+    let t = std::time::Instant::now();
+    match list_models(config) {
+        Ok(models) => {
+            let model = pick_model(&config.model, &models).unwrap_or_else(|| config.model.clone());
+            let want = config.model.trim();
+            let changed = !models.is_empty() && !want.is_empty() && want != "auto" && model != want;
+            AiCheck {
+                ok: true,
+                models,
+                model,
+                changed,
+                latency_ms: t.elapsed().as_millis() as u64,
+                error: None,
+            }
+        }
+        Err(e) => AiCheck {
+            ok: false,
+            model: config.model.clone(),
+            latency_ms: t.elapsed().as_millis() as u64,
+            error: Some(e.to_string()),
+            ..Default::default()
+        },
+    }
+}
+
+/// Ошибка HTTP с телом ответа (сервер обычно объясняет, что не так).
+fn http_err(e: ureq::Error) -> AppError {
+    match e {
+        ureq::Error::Status(code, resp) => {
+            let body = resp.into_string().unwrap_or_default();
+            AppError::Http(format!("HTTP {code}: {}", body.chars().take(400).collect::<String>()))
+        }
+        other => AppError::Http(other.to_string()),
+    }
+}
+
+/// Похоже ли на «такой модели на сервере нет».
+fn is_model_missing(e: &AppError) -> bool {
+    let s = e.to_string().to_lowercase();
+    (s.contains("http 404") || s.contains("http 400") || s.contains("http 422"))
+        && s.contains("model")
+}
+
+/// Убирает блок рассуждений `<think>…</think>` reasoning-моделей (Qwen3,
+/// DeepSeek-R1 и др.) — пользователю нужен только ответ.
+pub fn strip_think(s: &str) -> String {
+    let mut out = s.to_string();
+    while let (Some(a), Some(b)) = (out.find("<think>"), out.find("</think>")) {
+        if b < a {
+            break;
+        }
+        out.replace_range(a..b + "</think>".len(), "");
+    }
+    out.trim().to_string()
 }
 
 impl HttpChatBackend {
     pub fn new(config: AiConfig) -> Self {
-        Self { config }
+        Self { config, model: std::sync::Mutex::new(None) }
     }
-}
 
-impl ChatBackend for HttpChatBackend {
-    fn chat(&self, system: &str, user: &str) -> AppResult<String> {
+    /// Модель, которой реально шли запросы (после авто-выбора), если менялась.
+    pub fn used_model(&self) -> Option<String> {
+        self.model.lock().unwrap().clone()
+    }
+
+    fn current_model(&self) -> AppResult<String> {
+        if let Some(m) = self.model.lock().unwrap().clone() {
+            return Ok(m);
+        }
+        let want = self.config.model.trim();
+        if !want.is_empty() && want != "auto" {
+            return Ok(want.to_string());
+        }
+        // Модель не задана — берём ту, что отдаёт сервер.
+        let models = list_models(&self.config)?;
+        let m = pick_model(want, &models)
+            .ok_or_else(|| AppError::Http("сервер ИИ не отдаёт ни одной модели".into()))?;
+        *self.model.lock().unwrap() = Some(m.clone());
+        Ok(m)
+    }
+
+    fn post(&self, model: &str, system: &str, user: &str) -> AppResult<String> {
         let url = format!(
             "{}/chat/completions",
             self.config.base_url.trim_end_matches('/')
         );
         let body = serde_json::json!({
-            "model": self.config.model,
+            "model": model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
@@ -78,7 +238,7 @@ impl ChatBackend for HttpChatBackend {
             .set("Authorization", &format!("Bearer {}", self.config.api_key))
             .set("Content-Type", "application/json")
             .send_json(body)
-            .map_err(|e| AppError::Http(e.to_string()))?;
+            .map_err(http_err)?;
         let value: serde_json::Value =
             resp.into_json().map_err(|e| AppError::Http(e.to_string()))?;
         let content = value
@@ -88,7 +248,26 @@ impl ChatBackend for HttpChatBackend {
             .and_then(|m| m.get("content"))
             .and_then(|c| c.as_str())
             .ok_or_else(|| AppError::Http("unexpected response shape".into()))?;
-        Ok(content.to_string())
+        Ok(strip_think(content))
+    }
+}
+
+impl ChatBackend for HttpChatBackend {
+    fn chat(&self, system: &str, user: &str) -> AppResult<String> {
+        let model = self.current_model()?;
+        match self.post(&model, system, user) {
+            Err(e) if is_model_missing(&e) => {
+                // Модель на сервере сменилась — берём актуальную и повторяем.
+                let models = list_models(&self.config).map_err(|_| e)?;
+                let next = match pick_model(&model, &models) {
+                    Some(m) if m != model => m,
+                    _ => return Err(AppError::Http(format!("модель «{model}» недоступна на сервере"))),
+                };
+                *self.model.lock().unwrap() = Some(next.clone());
+                self.post(&next, system, user)
+            }
+            other => other,
+        }
     }
 }
 
@@ -768,6 +947,99 @@ mod tests {
         let b = MockChatBackend::new(r#"{"title":"«Бюджет на Q3»","participants":"","topic":"t"}"#);
         let s = suggest_metadata_ctx(&b, "x").unwrap();
         assert_eq!(s.title, "Бюджет на Q3");
+    }
+
+    #[test]
+    fn pick_model_prefers_configured_then_closest() {
+        let av = vec!["qwen3.6-27b-q4".to_string(), "llama-3.1-8b".to_string()];
+        assert_eq!(pick_model("llama-3.1-8b", &av).as_deref(), Some("llama-3.1-8b"));
+        // Выкатили новую версию — старое имя исчезло, берём ближайшее.
+        assert_eq!(pick_model("qwen3.5-27b-q4", &av).as_deref(), Some("qwen3.6-27b-q4"));
+        assert_eq!(pick_model("", &av).as_deref(), Some("qwen3.6-27b-q4"));
+        assert_eq!(pick_model("auto", &av).as_deref(), Some("qwen3.6-27b-q4"));
+        assert_eq!(pick_model("zzz", &av).as_deref(), Some("qwen3.6-27b-q4"));
+        assert_eq!(pick_model("x", &[]), None);
+    }
+
+    #[test]
+    fn strip_think_removes_reasoning() {
+        assert_eq!(strip_think("<think>hmm\nплан</think>\n\n## Итоги"), "## Итоги");
+        assert_eq!(strip_think("просто ответ"), "просто ответ");
+    }
+
+    /// Мок-сервер на несколько запросов: `/models` отдаёт список, а
+    /// `/chat/completions` отвечает 404 для модели `old`, иначе — текстом.
+    fn spawn_model_server(models: &'static str) -> (String, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let seen2 = seen.clone();
+        thread::spawn(move || {
+            for stream in listener.incoming().take(6) {
+                let Ok(mut stream) = stream else { continue };
+                // Читаем заголовки и тело целиком (тело может прийти отдельно).
+                let mut data: Vec<u8> = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    let n = stream.read(&mut buf).unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    data.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&data).to_string();
+                    if let Some(h) = text.find("\r\n\r\n") {
+                        let len = text[..h]
+                            .lines()
+                            .find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                            .unwrap_or(0);
+                        if data.len() >= h + 4 + len {
+                            break;
+                        }
+                    }
+                }
+                let req = String::from_utf8_lossy(&data).to_string();
+                seen2.lock().unwrap().push(req.lines().next().unwrap_or("").to_string());
+                let (status, body) = if req.starts_with("GET /models") {
+                    ("200 OK", models.to_string())
+                } else if req.contains("\"model\":\"old\"") {
+                    ("404 Not Found", r#"{"error":{"message":"model 'old' not found"}}"#.to_string())
+                } else {
+                    let model = if req.contains("\"model\":\"new-2\"") { "new-2" } else { "?" };
+                    ("200 OK", format!(r#"{{"choices":[{{"message":{{"content":"ответ от {model}"}}}}]}}"#))
+                };
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+        (format!("http://127.0.0.1:{port}"), seen)
+    }
+
+    #[test]
+    fn backend_follows_updated_server_model() {
+        let (base, _seen) = spawn_model_server(r#"{"data":[{"id":"new-2"}]}"#);
+        let b = HttpChatBackend::new(AiConfig { base_url: base, api_key: "k".into(), model: "old".into() });
+        assert_eq!(b.chat("s", "u").unwrap(), "ответ от new-2");
+        assert_eq!(b.used_model().as_deref(), Some("new-2"));
+    }
+
+    #[test]
+    fn backend_auto_model_and_check() {
+        let (base, _) = spawn_model_server(r#"{"models":[{"name":"new-2"}]}"#);
+        let cfg = AiConfig { base_url: base, api_key: "k".into(), model: "".into() };
+        let b = HttpChatBackend::new(cfg);
+        assert_eq!(b.chat("s", "u").unwrap(), "ответ от new-2");
+
+        let (base, _) = spawn_model_server(r#"{"data":[{"id":"new-2"}]}"#);
+        let c = check(&AiConfig { base_url: base, api_key: "k".into(), model: "old".into() });
+        assert!(c.ok && c.changed);
+        assert_eq!(c.model, "new-2");
+        assert_eq!(c.models, vec!["new-2".to_string()]);
+
+        let bad = check(&AiConfig { base_url: "http://127.0.0.1:1".into(), api_key: "k".into(), model: "m".into() });
+        assert!(!bad.ok && bad.error.is_some());
     }
 
     #[test]

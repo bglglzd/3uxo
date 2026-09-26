@@ -64,6 +64,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
   const [title, setTitle] = useState(meeting.title);
   const [participants, setParticipants] = useState(meeting.participants);
   const [topic, setTopic] = useState(meeting.topic);
+  const [notes, setNotes] = useState(meeting.notes ?? "");
   const [labels, setLbls] = useState<SpeakerLabels>(() => getLabels(meeting.id));
 
   // Сколько голосов (для разделения): "auto" (по умолчанию) | "1".."8".
@@ -97,6 +98,7 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     setTitle(meeting.title);
     setParticipants(meeting.participants);
     setTopic(meeting.topic);
+    setNotes(meeting.notes ?? "");
     setTime(0);
     setPlaying(false);
     setError("");
@@ -110,6 +112,12 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     api.getReports(meeting.id).then(setReports).catch(() => {});
     api.hasVoiceAnalysis(meeting.id).then(setHasVoices).catch(() => setHasVoices(false));
   }, [meeting.id, isImported]);
+
+  // Встречу поправили извне (меню «⋯» в списке, авто-заголовок) — подтягиваем.
+  useEffect(() => setTitle(meeting.title), [meeting.title]);
+  useEffect(() => setParticipants(meeting.participants), [meeting.participants]);
+  useEffect(() => setTopic(meeting.topic), [meeting.topic]);
+  useEffect(() => setNotes(meeting.notes ?? ""), [meeting.notes]);
 
   // Отчёты обновились в фоне (авто-итоги после расшифровки).
   useEffect(() => {
@@ -224,6 +232,16 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
     if (title !== meeting.title) localStorage.setItem(`3uxo.titleEdited.${meeting.id}`, "1");
     try {
       await api.updateMeetingMeta(meeting.id, title, participants, topic);
+      onMetaSaved();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const saveNotes = async () => {
+    if (notes === (meeting.notes ?? "")) return;
+    try {
+      await api.updateMeetingNotes(meeting.id, notes);
       onMetaSaved();
     } catch (e) {
       setError(String(e));
@@ -426,6 +444,15 @@ export function MeetingView({ meeting, transState, onTranscribe, onMetaSaved }: 
             placeholder="тема"
           />
         </div>
+        <textarea
+          className="mv-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={saveNotes}
+          rows={Math.min(8, Math.max(1, notes.split("\n").length))}
+          placeholder="🗒 Заметки к встрече — что важно не забыть…"
+          aria-label="Заметки к встрече"
+        />
       </div>
 
       {shownError && (

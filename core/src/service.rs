@@ -142,6 +142,7 @@ pub fn stop_recording(
         folder: active.id.clone(),
         status: "recorded".into(),
         source: "recorded".into(),
+        notes: String::new(),
     };
     repo.insert(&meeting)?;
     Ok(meeting)
@@ -206,6 +207,7 @@ pub fn recover_orphan_recordings(
                 folder: id.clone(),
                 status: "recorded".into(),
                 source: "recorded".into(),
+                notes: String::new(),
             };
             repo.insert(&meeting)?;
         }
@@ -277,6 +279,7 @@ pub fn import_to_meeting(
         folder: id,
         status: "recorded".into(),
         source: "imported".into(),
+        notes: String::new(),
     })
 }
 
@@ -1036,6 +1039,7 @@ mod tests {
             folder: id.into(),
             status: "recorded".into(),
             source: "recorded".into(),
+            notes: String::new(),
         })
         .unwrap();
     }

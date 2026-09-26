@@ -324,6 +324,8 @@ pub fn run() {
             commands::suggest_meta,
             commands::ask_named,
             commands::save_binary_file,
+            commands::update_meeting_notes,
+            commands::ai_check,
             update_hotkey,
         ])
         .run(tauri::generate_context!())

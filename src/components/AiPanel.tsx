@@ -198,8 +198,15 @@ export function AiPanel({ meeting, labels, hasTranscript, reports, onReport, onM
     <div className="card">
       <div className="card-head">
         <h3>ИИ-ассистент</h3>
-        <span className="ai-key-pill" title="ИИ-функции работают через ваш API-ключ">
-          ИИ · ваш ключ
+        <span
+          className="ai-key-pill"
+          title={
+            getSettings().ai.model
+              ? `Модель: ${getSettings().ai.model} · через ваш ключ`
+              : "ИИ-функции работают через ваш API-ключ"
+          }
+        >
+          {getSettings().ai.model ? `ИИ · ${getSettings().ai.model}` : "ИИ · ваш ключ"}
         </span>
         <div className="spacer" />
         <button

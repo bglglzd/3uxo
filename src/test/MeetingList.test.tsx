@@ -40,7 +40,8 @@ describe("MeetingList", () => {
     const onSelect = vi.fn();
     const onDelete = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={onSelect} onDelete={onDelete} />);
-    await userEvent.click(screen.getByRole("button", { name: "Удалить встречу" }));
+    await userEvent.click(screen.getByRole("button", { name: "Действия со встречей" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Удалить встречу/ }));
     // подтверждаем во всплывшем диалоге
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDelete).toHaveBeenCalledWith("a");
@@ -50,8 +51,42 @@ describe("MeetingList", () => {
   it("does not delete when the dialog is cancelled", async () => {
     const onDelete = vi.fn();
     render(<MeetingList meetings={meetings} onSelect={vi.fn()} onDelete={onDelete} />);
-    await userEvent.click(screen.getByRole("button", { name: "Удалить встречу" }));
+    await userEvent.click(screen.getByRole("button", { name: "Действия со встречей" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Удалить встречу/ }));
     await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it("renames and adds notes from the ⋯ menu", async () => {
+    const onEdit = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <MeetingList meetings={meetings} onSelect={onSelect} onDelete={vi.fn()} onEdit={onEdit} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Действия со встречей" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Переименовать/ }));
+    const title = screen.getByLabelText("Название");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Бюджет Q3");
+    await userEvent.type(screen.getByLabelText("Заметки"), "перезвонить в пятницу");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onEdit).toHaveBeenCalledWith("a", {
+      title: "Бюджет Q3",
+      participants: "Иван",
+      topic: "Планы",
+      notes: "перезвонить в пятницу",
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows the first line of notes in the list", () => {
+    render(
+      <MeetingList
+        meetings={[{ ...meetings[0], notes: "\nважно: смета\nвторая строка" }]}
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("важно: смета")).toBeInTheDocument();
   });
 });

@@ -3,6 +3,22 @@
 All notable changes to Auris. Versions follow [Semantic Versioning](https://semver.org/);
 installers for every version are on [GitHub Releases](https://github.com/bglglzd/auris/releases).
 
+## [0.8.2] — 2026-09-26
+
+### Added
+- **Follows your AI server's model.** Auris asks the server which models it serves (`GET /models`) on launch and every 6 hours; when you roll out a new model and the old name disappears, it switches to the current one automatically and tells you. As a safety net, if the server answers “model not found” during a request, Auris picks the current model and retries. Leave the model field empty to always use what the server serves.
+- **Check connection** in Settings → Artificial intelligence: server status, latency and the list of models to pick from; «Follow the server model» switch.
+- **Meeting menu «⋯»** in the list: rename, notes and details, delete.
+- **Meeting notes** — free-form notes per meeting, editable in the meeting and from the menu; the first line is shown in the list and search covers notes.
+
+### Changed
+- «Note · just me» and «Import recording» are now uniform sidebar buttons with icons (a person and a download arrow).
+- The AI badge shows the model in use.
+- Reasoning blocks (`<think>…</think>`) of reasoning models are removed from AI answers.
+
+### Fixed
+- Dialogs opened from the meeting list (delete confirmation, edit) are centered on the window instead of being clipped to the sidebar.
+
 ## [0.8.1] — 2026-09-25
 
 ### Added
@@ -75,6 +91,7 @@ installers for every version are on [GitHub Releases](https://github.com/bglglzd
 ## Earlier
 - Two-track recording (microphone + system audio), local Whisper transcription, meeting library, import of external recordings, speaker diarization, AI summaries and questions via an OpenAI-compatible endpoint.
 
+[0.8.2]: https://github.com/bglglzd/auris/releases/tag/v0.8.2
 [0.8.1]: https://github.com/bglglzd/auris/releases/tag/v0.8.1
 [0.8.0]: https://github.com/bglglzd/auris/releases/tag/v0.8.0
 [0.7.1]: https://github.com/bglglzd/auris/releases/tag/v0.7.1

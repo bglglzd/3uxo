@@ -9,6 +9,7 @@ import { HotkeyCapture } from "./HotkeyCapture";
 import { ModelsManager } from "./ModelsManager";
 import { DEFAULT_MODEL } from "../settings";
 import { findUpdate } from "../updater";
+import type { AiCheck } from "../types";
 
 /// Переключатель-тумблер в стиле Auris.
 function Switch({
@@ -39,6 +40,26 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [proc, setProc] = useState("");
   const [version, setVersion] = useState("");
   const [updState, setUpdState] = useState("");
+  const [aiCheck, setAiCheck] = useState<AiCheck | null>(null);
+  const [aiChecking, setAiChecking] = useState(false);
+
+  // Проверка ИИ-сервера по введённым (ещё не сохранённым) параметрам.
+  const checkAi = async () => {
+    setAiChecking(true);
+    setAiCheck(null);
+    try {
+      const r = await api.aiCheck(s.ai);
+      setAiCheck(r);
+      // Модель не указана или исчезла с сервера — подставляем актуальную.
+      if (r.ok && r.model && (!s.ai.model.trim() || r.changed)) {
+        setS((p) => ({ ...p, ai: { ...p.ai, model: r.model } }));
+      }
+    } catch (e) {
+      setAiCheck({ ok: false, models: [], model: "", changed: false, latency_ms: 0, error: String(e) });
+    } finally {
+      setAiChecking(false);
+    }
+  };
 
   // Ручная проверка обновлений: нашлось — App покажет диалог обновления.
   const checkNow = async () => {
@@ -402,10 +423,60 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="field">
               <label>Модель</label>
-              <input
-                value={s.ai.model}
-                onChange={(e) => ai("model", e.target.value)}
-                placeholder="qwen3.6-27b-q4"
+              <div className="input-with-btn">
+                <input
+                  value={s.ai.model}
+                  onChange={(e) => ai("model", e.target.value)}
+                  placeholder="пусто — та, что сейчас на сервере"
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={checkAi}
+                  disabled={aiChecking || !s.ai.base_url || !s.ai.api_key}
+                  title="Проверить сервер и получить список моделей"
+                >
+                  {aiChecking ? "Проверяю…" : "Проверить подключение"}
+                </button>
+              </div>
+              {aiCheck &&
+                (aiCheck.ok ? (
+                  <div className="ai-check ok">
+                    <span>
+                      ✓ Сервер отвечает · {aiCheck.latency_ms} мс
+                      {aiCheck.changed && " · модель на сервере обновилась — выбрана актуальная"}
+                    </span>
+                    {aiCheck.models.length > 0 && (
+                      <div className="model-chips">
+                        {aiCheck.models.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={m === s.ai.model ? "seg-btn on" : "seg-btn"}
+                            onClick={() => ai("model", m)}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="ai-check err">✕ Не удалось подключиться: {aiCheck.error}</div>
+                ))}
+            </div>
+            <div className="row-switch">
+              <div>
+                <div className="row-switch-title">Следить за моделью сервера</div>
+                <div className="hint">
+                  Если на сервере выкатили новую модель, Auris сам переключится на неё
+                  (проверка при запуске и каждые 6 часов) и сообщит об этом.
+                </div>
+              </div>
+              <Switch
+                on={s.aiAuto.followModel}
+                onChange={(v) => setS({ ...s, aiAuto: { ...s.aiAuto, followModel: v } })}
+                label="Следить за моделью сервера"
               />
             </div>
             <div className="row-switch">

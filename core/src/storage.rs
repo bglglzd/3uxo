@@ -31,7 +31,8 @@ impl Repo {
                 duration_secs INTEGER NOT NULL,
                 folder TEXT NOT NULL,
                 status TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'recorded'
+                source TEXT NOT NULL DEFAULT 'recorded',
+                notes TEXT NOT NULL DEFAULT ''
             )",
             [],
         )?;
@@ -44,6 +45,12 @@ impl Repo {
         if !Self::column_exists(conn, "source")? {
             conn.execute(
                 "ALTER TABLE meetings ADD COLUMN source TEXT NOT NULL DEFAULT 'recorded'",
+                [],
+            )?;
+        }
+        if !Self::column_exists(conn, "notes")? {
+            conn.execute(
+                "ALTER TABLE meetings ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
                 [],
             )?;
         }
@@ -66,8 +73,8 @@ impl Repo {
     pub fn insert(&self, m: &Meeting) -> AppResult<()> {
         self.conn.execute(
             "INSERT INTO meetings
-                (id, created_at, title, participants, topic, duration_secs, folder, status, source)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                (id, created_at, title, participants, topic, duration_secs, folder, status, source, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 m.id,
                 m.created_at,
@@ -77,7 +84,8 @@ impl Repo {
                 m.duration_secs,
                 m.folder,
                 m.status,
-                m.source
+                m.source,
+                m.notes
             ],
         )?;
         Ok(())
@@ -86,7 +94,7 @@ impl Repo {
     /// Все встречи, новейшие сверху.
     pub fn list(&self) -> AppResult<Vec<Meeting>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, created_at, title, participants, topic, duration_secs, folder, status, source
+            "SELECT id, created_at, title, participants, topic, duration_secs, folder, status, source, notes
              FROM meetings ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], Self::row_to_meeting)?;
@@ -99,7 +107,7 @@ impl Repo {
 
     pub fn get(&self, id: &str) -> AppResult<Meeting> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, created_at, title, participants, topic, duration_secs, folder, status, source
+            "SELECT id, created_at, title, participants, topic, duration_secs, folder, status, source, notes
              FROM meetings WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], Self::row_to_meeting)?;
@@ -162,6 +170,18 @@ impl Repo {
         Ok(())
     }
 
+    /// Сохраняет заметки пользователя к встрече.
+    pub fn update_notes(&self, id: &str, notes: &str) -> AppResult<()> {
+        let n = self.conn.execute(
+            "UPDATE meetings SET notes = ?1 WHERE id = ?2",
+            params![notes, id],
+        )?;
+        if n == 0 {
+            return Err(AppError::NotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
     fn row_to_meeting(row: &rusqlite::Row) -> rusqlite::Result<Meeting> {
         Ok(Meeting {
             id: row.get(0)?,
@@ -173,6 +193,7 @@ impl Repo {
             folder: row.get(6)?,
             status: row.get(7)?,
             source: row.get(8)?,
+            notes: row.get(9)?,
         })
     }
 }
@@ -192,6 +213,7 @@ mod tests {
             folder: id.into(),
             status: "recorded".into(),
             source: "recorded".into(),
+            notes: String::new(),
         }
     }
 
@@ -262,6 +284,16 @@ mod tests {
     }
 
     #[test]
+    fn notes_roundtrip_and_update() {
+        let repo = Repo::open_in_memory().unwrap();
+        repo.insert(&sample("a", "2026-06-04T10:00:00Z")).unwrap();
+        assert_eq!(repo.get("a").unwrap().notes, "");
+        repo.update_notes("a", "перезвонить Олегу\nбюджет Q3").unwrap();
+        assert_eq!(repo.get("a").unwrap().notes, "перезвонить Олегу\nбюджет Q3");
+        assert!(repo.update_notes("missing", "x").is_err());
+    }
+
+    #[test]
     fn migrates_old_schema_without_source_column() {
         // Эмулируем БД прежней версии: таблица без столбца `source`.
         let conn = Connection::open_in_memory().unwrap();
@@ -283,6 +315,7 @@ mod tests {
         let repo = Repo::init(conn).unwrap();
         let m = repo.get("a").unwrap();
         assert_eq!(m.source, "recorded");
+        assert_eq!(m.notes, "");
         assert_eq!(m.title, "t");
     }
 }

@@ -4,6 +4,7 @@ import { getTheme, setTheme, type Theme } from "../theme";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
 import { AurisMark } from "./AurisMark";
+import type { MeetingPatch } from "./MeetingEditDialog";
 
 interface Props {
   meetings: Meeting[];
@@ -22,6 +23,7 @@ interface Props {
   onImport: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, patch: MeetingPatch) => void | Promise<void>;
   onOpenSettings: () => void;
 }
 
@@ -38,7 +40,9 @@ export function Sidebar(p: Props) {
     const needle = q.trim().toLowerCase();
     if (!needle) return p.meetings;
     return p.meetings.filter((m) =>
-      `${m.title} ${m.participants} ${m.topic}`.toLowerCase().includes(needle),
+      `${m.title} ${m.participants} ${m.topic} ${m.notes ?? ""}`
+        .toLowerCase()
+        .includes(needle),
     );
   }, [p.meetings, q]);
 
@@ -68,21 +72,34 @@ export function Sidebar(p: Props) {
       />
 
       {!p.recording && (
-        <label
-          className={p.solo ? "solo-toggle on" : "solo-toggle"}
-          title="Заметка для себя: один голос «Я», без разделения собеседников"
+        <button
+          type="button"
+          className={p.solo ? "side-btn toggle on" : "side-btn toggle"}
+          aria-pressed={p.solo}
+          onClick={() => p.onSoloChange(!p.solo)}
+          title="Заметка для себя: записывается только ваш микрофон, один голос «Я»"
         >
-          <input
-            type="checkbox"
-            checked={p.solo}
-            onChange={(e) => p.onSoloChange(e.target.checked)}
-          />
-          <span className="solo-check" aria-hidden="true" />
-          <span className="solo-label">Заметка · я один</span>
-        </label>
+          <svg
+            className="btn-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="7.5" r="3.5" />
+            <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+          </svg>
+          Заметка · я один
+          <span className="side-btn-state" aria-hidden="true">
+            {p.solo ? "✓" : ""}
+          </span>
+        </button>
       )}
 
-      <button className="import-btn" onClick={p.onImport}>
+      <button className="side-btn" onClick={p.onImport}>
         <svg
           className="btn-icon"
           viewBox="0 0 24 24"
@@ -116,6 +133,7 @@ export function Sidebar(p: Props) {
           progress={p.progress}
           onSelect={p.onSelect}
           onDelete={p.onDelete}
+          onEdit={p.onEdit}
         />
       </div>
 
