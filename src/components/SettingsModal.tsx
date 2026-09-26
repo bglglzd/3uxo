@@ -13,7 +13,7 @@ import type { AiCheck } from "../types";
 import { isMac } from "../platform";
 import { MacPermissions } from "./MacPermissions";
 
-/// Переключатель-тумблер в стиле Auris.
+/// Переключатель-тумблер в стиле Memiro.
 function Switch({
   on,
   onChange,
@@ -69,7 +69,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const u = await findUpdate();
     if (u) {
       setUpdState(`Доступна версия ${u.version}`);
-      window.dispatchEvent(new Event("auris-check-updates"));
+      window.dispatchEvent(new Event("memiro-check-updates"));
     } else {
       setUpdState("У вас последняя версия");
     }
@@ -212,7 +212,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   Автоматически записывать звонки
                 </div>
                 <div className="hint">
-                  Auris следит за выбранными приложениями и сам начинает запись,
+                  Memiro следит за выбранными приложениями и сам начинает запись,
                   когда начинается звонок.
                 </div>
               </div>
@@ -376,7 +376,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               />
               <span className="hint">
                 По умолчанию «ru». Впиши «auto» для автоопределения. Parakeet
-                определяет язык сам; если выбран язык вне его 25 — Auris
+                определяет язык сам; если выбран язык вне его 25 — Memiro
                 автоматически возьмёт Whisper.
               </span>
             </div>
@@ -475,7 +475,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <div>
                 <div className="row-switch-title">Следить за моделью сервера</div>
                 <div className="hint">
-                  Если на сервере выкатили новую модель, Auris сам переключится на неё
+                  Если на сервере выкатили новую модель, Memiro сам переключится на неё
                   (проверка при запуске и каждые 6 часов) и сообщит об этом.
                 </div>
               </div>
@@ -538,7 +538,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <div className="modal-actions">
           <span className="modal-version">
-            {version ? `Auris v${version}` : "Auris"}{" "}
+            {version ? `Memiro AI v${version}` : "Memiro AI"}{" "}
             <button type="button" className="link-btn" onClick={checkNow}>
               {updState || "Проверить обновления"}
             </button>

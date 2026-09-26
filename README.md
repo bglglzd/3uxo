@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="104" alt="Auris" />
+  <img src="src-tauri/icons/128x128@2x.png" width="104" alt="Memiro AI" />
 </p>
 
-<h1 align="center">Auris</h1>
+<h1 align="center">Memiro AI</h1>
 
 <p align="center">
-  <strong>Your third ear for meetings — private, local-first, for Windows and macOS.</strong><br />
+  <strong>The memory of your meetings — private, local-first, for Windows and macOS.</strong><br />
   Record any call, transcribe it on your own computer, see who said what, and turn the conversation into notes, tasks and AI-ready briefs.
 </p>
 
@@ -24,16 +24,16 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/meeting-dark.png" width="860" alt="A meeting in Auris: player, voices panel and transcript" />
+  <img src="docs/screenshots/meeting-dark.png" width="860" alt="A meeting in Memiro: player, voices panel and transcript" />
 </p>
 
-## Why Auris
+## Why Memiro AI
 
-Most meeting tools upload your conversations to someone else's cloud. Auris keeps them on your machine: recording, speech recognition and speaker separation all run locally. AI features are optional and use **your own** OpenAI-compatible endpoint and key.
+Most meeting tools upload your conversations to someone else's cloud. Memiro keeps them on your machine: recording, speech recognition and speaker separation all run locally. AI features are optional and use **your own** OpenAI-compatible endpoint and key.
 
 - **Private by default** — audio, transcripts and reports never leave your computer.
-- **Native on Windows and Mac** — Apple Silicon and Intel Macs included; on macOS Auris follows the platform's look and feel: translucent sidebar, SF font, menu bar, ⌘ shortcuts.
-- **Works with any app** — Zoom, Teams, Telegram, Discord, Google Meet, a browser tab: if you can hear it, Auris can record it.
+- **Native on Windows and Mac** — Apple Silicon and Intel Macs included; on macOS Memiro follows the platform's look and feel: translucent sidebar, SF font, menu bar, ⌘ shortcuts.
+- **Works with any app** — Zoom, Teams, Telegram, Discord, Google Meet, a browser tab: if you can hear it, Memiro can record it.
 - **Accurate Russian and 25 European languages** — NVIDIA Parakeet v3 runs on a regular CPU; Whisper covers every other language.
 - **Knows who is speaking** — automatic speaker detection, even in group calls.
 - **From talk to action** — meeting summary, task table, conversation review, clean text, follow-up e-mail and a ready-made prompt for AI agents.
@@ -48,7 +48,7 @@ Most meeting tools upload your conversations to someone else's cloud. Auris keep
 | ✦ **AI assistant** *(optional, your key)* | Auto title after transcription and six focused presets: **Meeting summary**, **Tasks** (who / what / when), **Conversation review**, **Clean text**, **Follow-up e-mail**, **AI agent brief** — a structured prompt for Claude, Cursor, ChatGPT and other agents. Ask any question about the meeting. Long meetings are handled chunk by chunk. |
 | ⬇ **Export** | One dialog: **Word (.docx)**, Markdown, plain text or **SRT subtitles** — transcript (with or without timestamps) plus any AI reports in a single document. |
 | ✂ **Audio editor** | Loudness timeline per track, cut unwanted parts, preview, apply to every track at once and keep the transcript in sync; one-click revert to the original. |
-| 🔄 **Updates** | Signed updates. Auris checks for a new version, shows what's new, and installs and restarts only after you agree. |
+| 🔄 **Updates** | Signed updates. Memiro checks for a new version, shows what's new, and installs and restarts only after you agree. |
 
 <p align="center">
   <img src="docs/screenshots/ai-dark.png" width="420" alt="AI presets and reports" />
@@ -61,22 +61,24 @@ Most meeting tools upload your conversations to someone else's cloud. Auris keep
 
 ## Get started
 
-1. Download Auris from the [latest release](https://github.com/bglglzd/auris/releases/latest):
-   - **Windows** — `Auris_x.y.z_x64-setup.exe`, run the installer.
-   - **Mac with Apple Silicon** (M1 and newer) — `Auris_x.y.z_aarch64.dmg`; **Intel Mac** — `Auris_x.y.z_x64.dmg`. Drag Auris to *Applications*. See [first launch on macOS](#first-launch-on-macos).
+1. Download Memiro from the [latest release](https://github.com/bglglzd/auris/releases/latest):
+   - **Windows** — `Memiro.AI_x.y.z_x64-setup.exe`, run the installer.
+   - **Mac with Apple Silicon** (M1 and newer) — `Memiro.AI_x.y.z_aarch64.dmg`; **Intel Mac** — `Memiro.AI_x.y.z_x64.dmg`. Drag Memiro AI to *Applications*. See [first launch on macOS](#first-launch-on-macos).
 2. Press **Start recording** (or `Ctrl+Shift+R` / `⌘⇧R`) during a call, or **Import** an existing audio file (m4a, mp3, wav, ogg/opus, flac…).
-3. Open the meeting and press **Transcribe**. On the first run Auris downloads the speech model (~0.5 GB) and the voice models (~33 MB) — once. You can also download them in advance in **Settings → Recognition**.
-4. *(Optional)* In **Settings → Artificial intelligence** enter an OpenAI-compatible base URL, API key and model — OpenAI, OpenRouter, a local Ollama / LM Studio / llama.cpp server, anything compatible. Auris will then title the meeting and prepare a summary automatically.
+3. Open the meeting and press **Transcribe**. On the first run Memiro downloads the speech model (~0.5 GB) and the voice models (~33 MB) — once. You can also download them in advance in **Settings → Recognition**.
+4. *(Optional)* In **Settings → Artificial intelligence** enter an OpenAI-compatible base URL, API key and model — OpenAI, OpenRouter, a local Ollama / LM Studio / llama.cpp server, anything compatible. Memiro will then title the meeting and prepare a summary automatically.
+
+> **Coming from Auris?** Memiro AI is the new name of Auris (since 0.10). Just accept the update: meetings, settings and models stay, and the old «Auris» program is removed automatically.
 
 > Please follow the call-recording consent laws that apply to you and to everyone on the call.
 
 ### First launch on macOS
 
-Auris for Mac is not yet notarized by Apple, so the first time macOS will say it can't verify the developer:
+Memiro for Mac is not yet notarized by Apple, so the first time macOS will say it can't verify the developer:
 
-1. Open *Applications*, **right-click Auris → Open**, then **Open** again. (Or: *System Settings → Privacy & Security* → **Open Anyway**.) This is needed only once.
+1. Open *Applications*, **right-click Memiro AI → Open**, then **Open** again. (Or: *System Settings → Privacy & Security* → **Open Anyway**.) This is needed only once.
 2. **Microphone** — macOS asks on the first recording; allow it.
-3. **Voices of the other side** — system audio is captured through ScreenCaptureKit, which needs *System Settings → Privacy & Security → Screen & System Audio Recording* → enable **Auris**, then restart the app. Settings → Recording in Auris shows the status and opens the right page. Only sound is recorded, never the screen, and Auris's own sounds are excluded. Without this permission Auris still records your microphone and tells you so.
+3. **Voices of the other side** — system audio is captured through ScreenCaptureKit, which needs *System Settings → Privacy & Security → Screen & System Audio Recording* → enable **Memiro AI**, then restart the app. Settings → Recording in Memiro shows the status and opens the right page. Only sound is recorded, never the screen, and Memiro's own sounds are excluded. Without this permission Memiro still records your microphone and tells you so.
 
 Updates install in place like on Windows.
 
@@ -157,7 +159,7 @@ CI runs the frontend and core tests, a full Windows build of the app, macOS buil
 ```
 core/        uxo-core — recording, storage, decoding, recognition, diarization, AI (no GUI)
 src-tauri/   Tauri 2 desktop layer: commands, tray, hotkey, macOS menu bar, auto-record monitor
-src/         React 19 + TypeScript UI (Auris design system in App.css)
+src/         React 19 + TypeScript UI (Memiro design system in App.css)
 docs/        release runbook, status, screenshots
 ```
 
@@ -171,4 +173,4 @@ Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) 
 
 ## License
 
-[MIT](LICENSE) © Auris contributors. Speech and voice models are downloaded from their authors and keep their own licenses (NVIDIA Parakeet — CC-BY-4.0, OpenAI Whisper — MIT, pyannote segmentation-3.0 — MIT, WeSpeaker ResNet34 — CC-BY-4.0).
+[MIT](LICENSE) © Memiro AI contributors. Speech and voice models are downloaded from their authors and keep their own licenses (NVIDIA Parakeet — CC-BY-4.0, OpenAI Whisper — MIT, pyannote segmentation-3.0 — MIT, WeSpeaker ResNet34 — CC-BY-4.0).

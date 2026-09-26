@@ -64,8 +64,19 @@ jobs:
       # Полная сборка приложения с whisper + diarize + opus (без GPU/Vulkan):
       # именно build (а не check) — ловит ошибки линковки whisper.cpp и
       # статического ONNX Runtime до релиза. opus тянет libopus (cmake).
-      - name: cargo build (app + whisper + diarize + opus + parakeet)
-        run: cargo build -p auris --features whisper,diarize,opus,parakeet
+      # Через tauri CLI и с NSIS-установщиком — проверяет и хуки установщика
+      # (миграция с Auris). Без артефактов обновления: ключ только в релизе.
+      - name: tauri build (app + NSIS installer, whisper + diarize + opus + parakeet)
+        run: >-
+          npm run tauri build -- --debug --bundles nsis
+          --features whisper,diarize,opus,parakeet
+          --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Check installer
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse target/debug/bundle/nsis -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $exe) { throw "NSIS installer not found" }
+          $exe.Name
 
   # Диаризация на Windows по-настоящему: ONNX Runtime + модели + эталонная
   # запись pyannote (2 голоса). Проверяет рантайм там, где живут пользователи.
@@ -83,7 +94,7 @@ jobs:
 
   # macOS: сборка приложения через tauri CLI (он включает macos-private-api для
   # прозрачного окна) + e2e диаризации на ONNX Runtime 1.23.2 (load-dynamic —
-  # та же dylib, что уходит в Auris.app). Apple Silicon — с Metal, Intel — CPU.
+  # та же dylib, что уходит в Memiro AI.app). Apple Silicon — с Metal, Intel — CPU.
   macos:
     strategy:
       fail-fast: false
@@ -125,7 +136,7 @@ jobs:
         run: |
           cargo test -p uxo-core --features diarize,parakeet
           cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored
-      - name: Build Auris.app (${{ matrix.arch }})
+      - name: Build Memiro AI.app (${{ matrix.arch }})
         # Без артефактов обновления: ключ подписи есть только у release.yml.
         run: >-
           npm run tauri build -- --debug --bundles app
@@ -133,10 +144,10 @@ jobs:
           --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Check bundle
         run: |
-          APP=$(find target -maxdepth 5 -type d -path "*bundle/macos/Auris.app" | head -1)
+          APP=$(find target -maxdepth 5 -type d -path "*bundle/macos/Memiro AI.app" | head -1)
           test -n "$APP"
           test -f "$APP/Contents/Frameworks/libonnxruntime.dylib"
           /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP/Contents/Info.plist"
-          lipo -archs "$APP/Contents/MacOS/Auris"
+          lipo -archs "$APP/Contents/MacOS/Memiro"
           codesign -dv "$APP" 2>&1 | head -5

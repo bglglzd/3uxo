@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Auris записывает ваш голос во время встреч и звонков. Звук остаётся на этом Mac.</string>
+  <string>Memiro AI записывает ваш голос во время встреч и звонков. Звук остаётся на этом Mac.</string>
   <key>NSScreenCaptureUsageDescription</key>
-  <string>Auris записывает звук собеседников (системный звук) во время звонков. Изображение экрана не сохраняется.</string>
+  <string>Memiro AI записывает звук собеседников (системный звук) во время звонков. Изображение экрана не сохраняется.</string>
   <key>NSAudioCaptureUsageDescription</key>
-  <string>Auris записывает звук собеседников (системный звук) во время звонков.</string>
+  <string>Memiro AI записывает звук собеседников (системный звук) во время звонков.</string>
   <key>CFBundleDevelopmentRegion</key>
   <string>ru</string>
 </dict>

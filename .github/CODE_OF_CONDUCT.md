@@ -1,6 +1,6 @@
 # Code of Conduct
 
-We want the Auris community to be welcoming, constructive, and respectful.
+We want the Memiro community to be welcoming, constructive, and respectful.
 
 ## Expected behaviour
 

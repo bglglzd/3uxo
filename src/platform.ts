@@ -1,6 +1,6 @@
 /// Платформа, на которой запущено приложение. На macOS интерфейс следует
 /// Apple HIG (системный шрифт, полупрозрачный сайдбар, ⌘ в подписях), на
-/// Windows — прежний вид Auris.
+/// Windows — прежний вид Memiro.
 export type Platform = "macos" | "windows" | "linux";
 
 export function detectPlatform(ua: string = typeof navigator !== "undefined" ? navigator.userAgent : ""): Platform {

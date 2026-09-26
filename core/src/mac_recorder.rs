@@ -2,7 +2,7 @@
 //!
 //! - `mic.wav` — микрофон через CoreAudio (`cpal`), любая частота → 16 кГц моно.
 //! - `system.wav` — системный звук (собеседники) через ScreenCaptureKit
-//!   (macOS 13+): поток сразу 16 кГц моно; звук самого Auris исключён.
+//!   (macOS 13+): поток сразу 16 кГц моно; звук самого Memiro исключён.
 //!
 //! Разрешения: микрофон — `NSMicrophoneUsageDescription` в Info.plist (macOS
 //! спросит сам); системный звук — «Запись экрана и системного звука» в
@@ -78,7 +78,7 @@ fn spawn_mic(sink: Sink) -> AppResult<(mpsc::Sender<()>, JoinHandle<()>)> {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     let handle = std::thread::Builder::new()
-        .name("auris-mic".into())
+        .name("memiro-mic".into())
         .spawn(move || {
             let build = || -> Result<cpal::Stream, String> {
                 let host = cpal::default_host();
@@ -169,11 +169,11 @@ impl SCStreamOutputTrait for SystemAudio {
     }
 }
 
-/// Запускает захват системного звука (16 кГц моно, без звука самого Auris).
+/// Запускает захват системного звука (16 кГц моно, без звука самого Memiro).
 fn start_system(sink: Sink) -> Result<SCStream, String> {
     if !screen_capture_access(true) {
         return Err(
-            "нет доступа к системному звуку: разрешите Auris в «Системные настройки → \
+            "нет доступа к системному звуку: разрешите Memiro в «Системные настройки → \
              Конфиденциальность и безопасность → Запись экрана и системного звука» и \
              перезапустите приложение"
                 .into(),

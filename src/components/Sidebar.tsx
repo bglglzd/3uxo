@@ -3,7 +3,7 @@ import type { Meeting, TranscribeState } from "../types";
 import { getTheme, setTheme, type Theme } from "../theme";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
-import { AurisMark } from "./AurisMark";
+import { MemiroMark } from "./MemiroMark";
 import type { MeetingPatch } from "./MeetingEditDialog";
 import { useAppMenu } from "../appmenu";
 import { isMac } from "../platform";
@@ -58,14 +58,16 @@ export function Sidebar(p: Props) {
     <aside className={p.open ? "sidebar open" : "sidebar"}>
       {isMac && <div className="mac-drag" data-tauri-drag-region />}
       <div className="brand">
-        <AurisMark size={26} />
+        <MemiroMark size={26} />
         <div className="brand-lockup">
-          <span className="brand-word">auris</span>
+          <span className="brand-word">
+            memiro<span className="brand-ai">AI</span>
+          </span>
           <span className="brand-divider" />
           <span className="brand-desc">
-            ваше
+            память
             <br />
-            третье ухо
+            ваших встреч
           </span>
         </div>
       </div>

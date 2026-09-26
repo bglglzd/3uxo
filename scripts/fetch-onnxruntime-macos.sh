@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Скачивает ONNX Runtime для macOS и кладёт в src-tauri/macos/libonnxruntime.dylib
-# (оттуда Tauri бандлит его в Auris.app/Contents/Frameworks).
+# (оттуда Tauri бандлит его в Memiro AI.app/Contents/Frameworks).
 #
 # Версия 1.23.2 — последняя, у которой Microsoft выпускает сборку и для Intel
-# (x86_64), и для Apple Silicon (arm64). Auris работает с ней через ort
+# (x86_64), и для Apple Silicon (arm64). Memiro работает с ней через ort
 # `load-dynamic` + `api-23`.
 #
 #   scripts/fetch-onnxruntime-macos.sh            # под текущую архитектуру

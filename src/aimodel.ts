@@ -4,7 +4,7 @@ import { getSettings, saveSettings } from "./settings";
 import { logError, logInfo } from "./log";
 
 /// Событие «модель ИИ на сервере сменилась» — detail: { from, to }.
-export const AI_MODEL_EVENT = "auris-ai-model";
+export const AI_MODEL_EVENT = "memiro-ai-model";
 
 export interface AiModelChange {
   from: string;

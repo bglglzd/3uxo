@@ -1,6 +1,6 @@
 # macOS: ScreenCaptureKit (через screencapturekit → Swift-мост) линкует
 # рантайм Swift по @rpath (libswift_Concurrency.dylib и др.). Он лежит в
 # /usr/lib/swift (системный, macOS 12+), но rpath из build.rs зависимости не
-# доходит до наших бинарей (Auris, тесты) — задаём его для всего workspace.
+# доходит до наших бинарей (Memiro, тесты) — задаём его для всего workspace.
 [target.'cfg(target_os = "macos")']
 rustflags = ["-C", "link-arg=-Wl,-rpath,/usr/lib/swift"]

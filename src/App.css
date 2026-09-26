@@ -1,11 +1,11 @@
 /* ============================================================
-   Auris — ваше третье ухо
+   Memiro AI — память ваших встреч
    Display/лого: Manrope · UI/текст: Golos Text · Mono: JetBrains Mono
    Tokens for dark (default) + light ([data-theme="light"]).
    ============================================================ */
 
 :root {
-  /* Auris: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text. */
+  /* Memiro: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text. */
   --font-display: "Manrope Variable", system-ui, sans-serif;
   --font-ui: "Golos Text Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
@@ -133,7 +133,7 @@
   --spk-5: #d96aa0;
 }
 
-/* ---------- Brand animations (Auris) ---------- */
+/* ---------- Brand animations (Memiro) ---------- */
 @keyframes ripple {
   0% {
     transform: scale(0.65);
@@ -270,21 +270,21 @@ textarea::placeholder {
   box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
 }
 
-/* Сигнатура-лок-ап: знак + auris │ ваше третье ухо */
+/* Сигнатура-лок-ап: знак + memiro AI │ память ваших встреч */
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 2px 6px 14px;
 }
-.auris-mark {
+.memiro-mark {
   flex: none;
   display: block;
 }
-.auris-mark .am-a {
+.memiro-mark .am-a {
   stop-color: var(--brand-a);
 }
-.auris-mark .am-b {
+.memiro-mark .am-b {
   stop-color: var(--brand-b);
 }
 .brand-lockup {
@@ -300,6 +300,21 @@ textarea::placeholder {
   color: var(--text);
   line-height: 1;
 }
+.brand-ai {
+  margin-left: 3px;
+  padding: 1px 4px 2px;
+  border-radius: 5px;
+  background: var(--brand-grad);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 0.5em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: 0.45em;
+}
+:root[data-theme="dark"] .brand-ai {
+  color: var(--on-accent);
+}
 .brand-divider {
   width: 1px;
   height: 22px;
@@ -307,6 +322,7 @@ textarea::placeholder {
   background: var(--glass-border-strong);
 }
 .brand-desc {
+  white-space: nowrap;
   font-family: var(--font-ui);
   font-size: 10.5px;
   font-weight: 500;
@@ -314,7 +330,7 @@ textarea::placeholder {
   color: var(--text-faint);
 }
 
-/* Record button — Auris: idle = brand-grad + пульсирующая точка;
+/* Record button — Memiro: idle = brand-grad + пульсирующая точка;
    запись = record-grad + квадрат-stop. */
 .record {
   position: relative;
@@ -377,7 +393,7 @@ textarea::placeholder {
   opacity: 0.92;
 }
 
-/* Import — контурная (Auris): поверхность + рамка, приглушённая иконка download. */
+/* Import — контурная (Memiro): поверхность + рамка, приглушённая иконка download. */
 .import-btn {
   display: flex;
   align-items: center;
@@ -617,7 +633,7 @@ textarea::placeholder {
   justify-content: center;
   margin-bottom: 2px;
 }
-.empty-mark .auris-mark {
+.empty-mark .memiro-mark {
   position: relative;
   z-index: 1;
 }
@@ -886,7 +902,7 @@ textarea::placeholder {
   overflow-y: auto;
   scroll-behavior: smooth;
 }
-/* Auris: лента-список — аватар-инициалы + имя/таймкод + реплика. */
+/* Memiro: лента-список — аватар-инициалы + имя/таймкод + реплика. */
 .turn {
   display: flex;
   gap: 12px;
@@ -3050,7 +3066,22 @@ details.adv[open] summary::before {
   .brand-word {
     font-size: 18px;
   }
-  .brand-divider {
+  .brand-ai {
+  margin-left: 3px;
+  padding: 1px 4px 2px;
+  border-radius: 5px;
+  background: var(--brand-grad);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 0.5em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: 0.45em;
+}
+:root[data-theme="dark"] .brand-ai {
+  color: var(--on-accent);
+}
+.brand-divider {
     height: 20px;
   }
   .brand-desc {
@@ -3538,7 +3569,7 @@ details.adv[open] summary::before {
 }
 
 /* ============================================================
-   macOS — Apple HIG. Узнаваемый Auris (знак, градиенты, цвета спикеров,
+   macOS — Apple HIG. Узнаваемый Memiro (знак, градиенты, цвета спикеров,
    кольца-эхо), но по-маковски: системный шрифт SF, полупрозрачный сайдбар
    на нативной вибрации (windowEffects: sidebar), «светофор» в сайдбаре,
    плотные контролы 13 pt, радиусы 6–10 px, акцентное кольцо фокуса.

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Auris",
-  "mainBinaryName": "Auris",
-  "version": "0.9.0",
+  "productName": "Memiro AI",
+  "mainBinaryName": "Memiro",
+  "version": "0.10.0",
   "identifier": "com.3uxo.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "Auris",
+        "title": "Memiro AI",
         "width": 1120,
         "height": 720,
         "minWidth": 720,
@@ -33,6 +33,14 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/hooks.nsh"
+      },
+      "wix": {
+        "upgradeCode": "1e80fb85-5177-5635-8650-55fc18e718a0"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

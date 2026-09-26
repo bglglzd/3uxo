@@ -15,12 +15,12 @@ interface Props {
 }
 
 /**
- * Знак Auris — ушная раковина, ловящая входящий звук: дуга-чаша + концентричные
+ * Знак Memiro — ушная раковина, ловящая входящий звук: дуга-чаша + концентричные
  * волны + точка-канал. Единственный фирменный вектор, рисуется кодом.
  * Градиент — через стопы с цветами темы (`--brand-a`/`--brand-b`), id уникален
  * на инстанс (useId), чтобы несколько знаков на странице не конфликтовали.
  */
-export function AurisMark({
+export function MemiroMark({
   size = 30,
   tone = "brand",
   waves = 2,
@@ -34,7 +34,7 @@ export function AurisMark({
       height={size}
       viewBox="0 0 64 64"
       fill="none"
-      className={className ? `auris-mark ${className}` : "auris-mark"}
+      className={className ? `memiro-mark ${className}` : "memiro-mark"}
       aria-hidden="true"
     >
       {tone === "brand" && (

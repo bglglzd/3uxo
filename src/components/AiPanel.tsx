@@ -222,7 +222,7 @@ export function AiPanel({ meeting, labels, hasTranscript, reports, onReport, onM
         {!configured && (
           <p className="hint ai-setup">
             Подключите свою модель в «Настройки → Искусственный интеллект» — и после
-            каждой расшифровки Auris сам придумает заголовок и подведёт итоги.
+            каждой расшифровки Memiro сам придумает заголовок и подведёт итоги.
           </p>
         )}
         {auto && (

@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { getVersion } from "@tauri-apps/api/app";
 // Локальные шрифты (бандлятся в сборку, без CDN/утечек).
-// Auris: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text.
+// Memiro: заголовки/лого — Manrope 800; интерфейс/текст — Golos Text.
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/golos-text";
 import "@fontsource-variable/jetbrains-mono";
@@ -28,8 +28,8 @@ window.addEventListener("unhandledrejection", (e) =>
 );
 
 getVersion()
-  .then((v) => setAppInfo(`Auris ${v} · ${navigator.userAgent}`))
-  .catch(() => setAppInfo(navigator.userAgent));
+  .then((v) => setAppInfo(`Memiro AI ${v} · ${navigator.userAgent}`))
+  .catch(() => setAppInfo(`Memiro AI · ${navigator.userAgent}`));
 logInfo("app started");
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
