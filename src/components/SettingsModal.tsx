@@ -10,6 +10,8 @@ import { ModelsManager } from "./ModelsManager";
 import { DEFAULT_MODEL } from "../settings";
 import { findUpdate } from "../updater";
 import type { AiCheck } from "../types";
+import { isMac } from "../platform";
+import { MacPermissions } from "./MacPermissions";
 
 /// Переключатель-тумблер в стиле Auris.
 function Switch({
@@ -185,13 +187,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               />
               <span className="hint">
                 Работает в любом приложении: нажми — начнётся запись, нажми ещё
-                раз — остановится. Также доступно из значка в трее.
+                раз — остановится. Также доступно из значка{" "}
+                {isMac ? "в строке меню" : "в трее"}.
               </span>
             </div>
+            {isMac && <MacPermissions />}
           </div>
         </details>
 
-        {/* ---------- Авто-запись звонков ---------- */}
+        {/* ---------- Авто-запись звонков (Windows: детектор звонков по WASAPI) ---------- */}
+        {!isMac && (
         <details className="settings-section" open={s.autoRecord.enabled}>
           <summary>
             <span className="sec-title">Авто-запись звонков</span>
@@ -339,6 +344,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </details>
+        )}
 
         {/* ---------- Распознавание (Whisper) ---------- */}
         <details className="settings-section">

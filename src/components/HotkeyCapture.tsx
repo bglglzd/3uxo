@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { accelKeys, isMac } from "../platform";
 
 interface Props {
   /// Текущий акселератор, напр. "Ctrl+Shift+R" (пусто — хоткей выключен).
@@ -76,12 +77,20 @@ export function HotkeyCapture({ value, onChange }: Props) {
         return;
       }
       const mods: string[] = [];
-      if (e.ctrlKey) mods.push("Ctrl");
-      if (e.shiftKey) mods.push("Shift");
-      if (e.altKey) mods.push("Alt");
-      if (e.metaKey) mods.push("Super");
+      // Порядок как в подписях системы: ⌃⌥⇧⌘ на Mac, Ctrl+Shift+Alt+Win иначе.
+      if (isMac) {
+        if (e.ctrlKey) mods.push("Ctrl");
+        if (e.altKey) mods.push("Alt");
+        if (e.shiftKey) mods.push("Shift");
+        if (e.metaKey) mods.push("Super");
+      } else {
+        if (e.ctrlKey) mods.push("Ctrl");
+        if (e.shiftKey) mods.push("Shift");
+        if (e.altKey) mods.push("Alt");
+        if (e.metaKey) mods.push("Super");
+      }
       if (mods.length === 0) {
-        setHint("Добавьте модификатор: Ctrl / Alt / Shift / Super");
+        setHint(isMac ? "Добавьте модификатор: ⌘ / ⌥ / ⇧ / ⌃" : "Добавьте модификатор: Ctrl / Alt / Shift / Win");
         return;
       }
       onChange([...mods, key].join("+"));
@@ -93,7 +102,7 @@ export function HotkeyCapture({ value, onChange }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [listening, onChange]);
 
-  const parts = value ? value.split("+") : [];
+  const parts = accelKeys(value);
 
   return (
     <div className="hotkey">
@@ -146,7 +155,7 @@ export function HotkeyCapture({ value, onChange }: Props) {
       </div>
       {(hint || listening) && (
         <div className="hotkey-hint">
-          {hint || "Esc — отмена. Например: Ctrl + Shift + R"}
+          {hint || (isMac ? "Esc — отмена. Например: ⌘ ⇧ R" : "Esc — отмена. Например: Ctrl + Shift + R")}
         </div>
       )}
     </div>

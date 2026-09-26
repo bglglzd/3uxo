@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Meeting, TranscribeState } from "../types";
 import { getTheme, setTheme, type Theme } from "../theme";
 import { RecordButton } from "./RecordButton";
 import { MeetingList } from "./MeetingList";
 import { AurisMark } from "./AurisMark";
 import type { MeetingPatch } from "./MeetingEditDialog";
+import { useAppMenu } from "../appmenu";
+import { isMac } from "../platform";
 
 interface Props {
   meetings: Meeting[];
@@ -31,10 +33,16 @@ export function Sidebar(p: Props) {
   const [q, setQ] = useState("");
   const [theme, setThemeState] = useState<Theme>(() => getTheme());
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   const pickTheme = (t: Theme) => {
     setTheme(t);
     setThemeState(t);
   };
+
+  // Строка меню macOS: ⌘F — поиск, «Вид → тема».
+  useAppMenu("find", () => searchRef.current?.focus());
+  useAppMenu("theme", () => pickTheme(getTheme() === "dark" ? "light" : "dark"));
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -48,6 +56,7 @@ export function Sidebar(p: Props) {
 
   return (
     <aside className={p.open ? "sidebar open" : "sidebar"}>
+      {isMac && <div className="mac-drag" data-tauri-drag-region />}
       <div className="brand">
         <AurisMark size={26} />
         <div className="brand-lockup">
@@ -119,6 +128,7 @@ export function Sidebar(p: Props) {
 
       <div className="search">
         <input
+          ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Поиск встреч"

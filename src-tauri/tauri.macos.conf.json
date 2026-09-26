@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "title": "Auris",
+        "width": 1120,
+        "height": 720,
+        "minWidth": 720,
+        "minHeight": 520,
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true,
+        "trafficLightPosition": { "x": 18, "y": 20 },
+        "windowEffects": { "effects": ["sidebar"], "state": "followsWindowActiveState" }
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "category": "public.app-category.productivity",
+    "copyright": "© Auris",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist",
+      "frameworks": ["macos/libonnxruntime.dylib"],
+      "dmg": {
+        "windowSize": { "width": 560, "height": 340 },
+        "appPosition": { "x": 150, "y": 170 },
+        "applicationFolderPosition": { "x": 410, "y": 170 }
+      }
+    }
+  }
+}

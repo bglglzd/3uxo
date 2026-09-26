@@ -10,9 +10,14 @@ import App from "./App";
 import "./App.css";
 import { logError, logInfo, setAppInfo } from "./log";
 import { initTheme } from "./theme";
+import { initPlatform } from "./platform";
+import { initAppMenu } from "./appmenu";
 
 // Применяем тему до рендера, чтобы не было вспышки светлого/тёмного.
 initTheme();
+// Платформа (macOS → вид по Apple HIG) и события строки меню macOS.
+initPlatform();
+void initAppMenu();
 
 // Глобальный перехват ошибок → в диагностический лог.
 window.addEventListener("error", (e) =>

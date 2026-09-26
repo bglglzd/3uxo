@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Auris записывает ваш голос во время встреч и звонков. Звук остаётся на этом Mac.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Auris записывает звук собеседников (системный звук) во время звонков. Изображение экрана не сохраняется.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Auris записывает звук собеседников (системный звук) во время звонков.</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>ru</string>
+</dict>
+</plist>

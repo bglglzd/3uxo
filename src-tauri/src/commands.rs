@@ -121,7 +121,60 @@ pub fn start_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResu
     let rec = service::start_recording(state.recorder.as_ref(), &state.data_root, id.clone())?;
     *active = Some(rec);
     notify(&app, "🔴 Auris — запись начата", "Идёт запись звонка");
+    report_recorder_warning(&app, &state);
     Ok(id)
+}
+
+/// Если запись стартовала неполной (напр. на macOS без доступа к системному
+/// звуку) — пишет в лог и шлёт фронтенду событие `recording-warning`.
+pub fn report_recorder_warning<R: tauri::Runtime>(app: &tauri::AppHandle<R>, state: &AppState) {
+    if let Some(w) = state.recorder.warning() {
+        flog(&state.data_root, &format!("recorder warning: {w}"));
+        let _ = app.emit("recording-warning", w);
+    }
+}
+
+/// Какая платформа: фронтенд подстраивает вид и подписи (⌘ на macOS).
+#[tauri::command]
+pub fn platform() -> &'static str {
+    std::env::consts::OS
+}
+
+/// Разрешения macOS для записи: микрофон спрашивает сама система, а доступ к
+/// системному звуку («Запись экрана и системного звука») — проверяем здесь.
+/// `request = true` — показать системный запрос. На других ОС всегда `true`.
+#[tauri::command]
+pub fn system_audio_access(request: bool) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        uxo_core::mac_recorder::screen_capture_access(request)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = request;
+        true
+    }
+}
+
+/// Открывает нужный раздел «Конфиденциальность и безопасность» (macOS):
+/// `kind` = "screen" (запись экрана и системного звука) или "mic".
+#[tauri::command]
+pub fn open_privacy_settings(kind: String) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let pane = if kind == "mic" { "Privacy_Microphone" } else { "Privacy_ScreenCapture" };
+        std::process::Command::new("open")
+            .arg(format!(
+                "x-apple.systempreferences:com.apple.preference.security?{pane}"
+            ))
+            .spawn()?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = kind;
+        Err(AppError::InvalidState("only on macOS".into()))
+    }
 }
 
 #[tauri::command]

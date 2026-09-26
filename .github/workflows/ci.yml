@@ -1,7 +1,8 @@
 name: ci
 
 # Проверки на каждый PR и пуш в main: фронтенд (тесты/типы/сборка), тесты ядра
-# на Linux и компиляция тяжёлых фич (whisper) на Windows. Полная GPU-сборка
+# на Linux, компиляция тяжёлых фич (whisper) на Windows и сборка macOS
+# (Apple Silicon + Intel). Полная GPU-сборка
 # (Vulkan) остаётся в release.yml — здесь только быстрые проверки.
 on:
   push:
@@ -79,3 +80,49 @@ jobs:
           cargo test -p uxo-core --features diarize,parakeet
           cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored
           cargo test --release -p uxo-core --features parakeet --test parakeet_e2e -- --ignored
+
+  # macOS: сборка приложения через tauri CLI (он включает macos-private-api для
+  # прозрачного окна) + e2e диаризации на ONNX Runtime 1.23.2 (load-dynamic —
+  # та же dylib, что уходит в Auris.app). Apple Silicon — с Metal, Intel — CPU.
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+            features: metal,diarize,opus,parakeet
+          - runner: macos-15-intel
+            arch: x86_64
+            features: whisper,diarize,opus,parakeet
+    name: macos (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: ONNX Runtime (macOS dylib)
+        run: |
+          brew list cmake >/dev/null 2>&1 || brew install cmake
+          scripts/fetch-onnxruntime-macos.sh ${{ matrix.arch }}
+          echo "ORT_DYLIB_PATH=$PWD/src-tauri/macos/libonnxruntime.dylib" >> "$GITHUB_ENV"
+      - name: Core tests (+ ONNX, diarization e2e)
+        run: |
+          cargo test -p uxo-core --features diarize,parakeet
+          cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored
+      - name: Build Auris.app (${{ matrix.arch }})
+        run: npm run tauri build -- --debug --bundles app --features ${{ matrix.features }}
+      - name: Check bundle
+        run: |
+          APP=$(find target -maxdepth 5 -type d -path "*bundle/macos/Auris.app" | head -1)
+          test -n "$APP"
+          test -f "$APP/Contents/Frameworks/libonnxruntime.dylib"
+          /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP/Contents/Info.plist"
+          lipo -archs "$APP/Contents/MacOS/Auris"
+          codesign -dv "$APP" 2>&1 | head -5

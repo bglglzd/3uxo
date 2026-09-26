@@ -47,12 +47,24 @@ The release notes (`notes` input or the release body) are what users see in the
 | `core` | ubuntu | `cargo test -p uxo-core` |
 | `check-app` | windows | full `cargo build` of the app with `whisper,diarize,opus,parakeet` (catches link errors) |
 | `onnx-windows` | windows | ONNX tests + end-to-end diarization and Parakeet tests on real models |
+| `macos (arm64)` / `macos (x86_64)` | macos-14 / macos-15-intel | core + ONNX tests and diarization e2e on ONNX Runtime 1.23.2, `tauri build --debug --bundles app` (Metal on arm64), checks the bundled dylib, Info.plist and architecture |
 
 ### `release.yml` — tag `v*` or manual run
-Builds on Windows with LLVM and the Vulkan SDK, runs `tauri-action` with
-`--features gpu,diarize,opus,parakeet`, signs the update artifacts with
-`TAURI_SIGNING_PRIVATE_KEY` and publishes a non-draft release «Auris vX.Y.Z» with
-`latest.json`.
+1. `build-windows` — LLVM + Vulkan SDK, `tauri-action` with
+   `--features gpu,diarize,opus,parakeet`; creates the non-draft release «Auris vX.Y.Z»
+   with `latest.json`.
+2. `build-macos` (after Windows, one architecture at a time) — Apple Silicon on
+   `macos-14` with `metal,diarize,opus,parakeet`, Intel on `macos-15-intel` with
+   `whisper,diarize,opus,parakeet`. Downloads ONNX Runtime 1.23.2
+   (`scripts/fetch-onnxruntime-macos.sh`), uploads `.dmg` and `.app.tar.gz` (+ `.sig`) to
+   the same release and adds `darwin-aarch64` / `darwin-x86_64` to `latest.json`.
+
+All update artifacts are signed with `TAURI_SIGNING_PRIVATE_KEY`. macOS apps are ad-hoc
+signed; for Developer ID signing and notarization add the `APPLE_*` secrets listed in
+`release.yml` and pass them to the macOS step.
+
+After a release check that `latest.json` lists `windows-x86_64`, `darwin-aarch64` and
+`darwin-x86_64`.
 
 ## Updater
 

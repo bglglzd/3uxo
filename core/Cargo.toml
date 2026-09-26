@@ -29,7 +29,8 @@ whisper-rs = { version = "0.16", optional = true }
 # Диаризация (разделение говорящих): pyannote segmentation-3.0 + wespeaker
 # ResNet34 через ONNX Runtime (статически линкуется, бинарники ORT качаются при
 # сборке). Тяжёлая — только за фичей `diarize`.
-ort = { version = "=2.0.0-rc.13", optional = true }
+# Общая часть; бинарники ORT подключаются по платформам (см. target-секции ниже).
+ort = { version = "=2.0.0-rc.13", optional = true, default-features = false, features = ["std"] }
 # Parakeet (NVIDIA NeMo): модель приходит архивом .tar.bz2 (чистый Rust).
 tar = { version = "0.4", optional = true }
 bzip2 = { version = "0.6", optional = true }
@@ -48,6 +49,8 @@ parakeet = ["dep:ort", "dep:tar", "dep:bzip2"]
 # GPU-ускорение через Vulkan (быстро на NVIDIA/AMD/Intel; рантайм vulkan-1.dll
 # идёт с драйвером, ничего вкладывать в установщик не нужно).
 gpu = ["whisper", "whisper-rs/vulkan"]
+# GPU на Mac (Apple Silicon и Intel с Metal) — Metal вместо Vulkan.
+metal = ["whisper", "whisper-rs/metal"]
 
 # Реальный захват звука только на Windows. На Linux/macOS не подтягивается,
 # поэтому воркспейс собирается без WASAPI.
@@ -62,6 +65,18 @@ windows = { version = "0.57", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Threading",
 ] }
+
+# ONNX Runtime: на Windows/Linux — статические бинарники pyke (API 1.27); на
+# macOS — динамически из libonnxruntime.dylib внутри приложения (API 1.23:
+# последняя версия ORT, у которой есть сборка для Intel-Mac).
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+ort = { version = "=2.0.0-rc.13", optional = true, default-features = false, features = ["std", "download-binaries", "tls-native", "copy-dylibs", "api-27"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { version = "=2.0.0-rc.13", optional = true, default-features = false, features = ["std", "load-dynamic", "api-23"] }
+# Захват звука на macOS: микрофон (CoreAudio) и системный звук (ScreenCaptureKit).
+cpal = "0.15"
+screencapturekit = "11"
 
 [dev-dependencies]
 tempfile = "3"

@@ -6,15 +6,40 @@ use commands::AppState;
 use uxo_core::recorder::Recorder;
 use uxo_core::storage::Repo;
 
-/// Выбирает рекордер: настоящий WASAPI на Windows, иначе — мок (тишина).
+/// Выбирает рекордер: WASAPI на Windows, CoreAudio + ScreenCaptureKit на
+/// macOS, иначе — мок (тишина).
 fn build_recorder() -> Box<dyn Recorder> {
     #[cfg(target_os = "windows")]
     {
         Box::new(uxo_core::wasapi_recorder::WasapiRecorder::new())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        Box::new(uxo_core::mac_recorder::MacRecorder::new())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         Box::new(uxo_core::recorder::MockRecorder::new(5))
+    }
+}
+
+/// macOS: ONNX Runtime (диаризация, Parakeet) грузится динамически из
+/// `Auris.app/Contents/Frameworks/libonnxruntime.dylib` — на Intel-Mac
+/// статической сборки ORT нет. Путь задаём до первого обращения к ORT.
+#[cfg(target_os = "macos")]
+fn setup_onnxruntime_path() {
+    if std::env::var_os("ORT_DYLIB_PATH").is_some() {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+    let Some(macos_dir) = exe.parent() else { return };
+    let candidates = [
+        macos_dir.join("../Frameworks/libonnxruntime.dylib"),
+        // `tauri dev`: бинарь в target/…, dylib — в src-tauri/macos.
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("macos/libonnxruntime.dylib"),
+    ];
+    if let Some(p) = candidates.iter().find(|p| p.exists()) {
+        std::env::set_var("ORT_DYLIB_PATH", p);
     }
 }
 
@@ -33,6 +58,9 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
                 ("✅ Auris — запись остановлена", "Запись сохранена")
             };
             let _ = app.notification().builder().title(title).body(body).show();
+            if now_recording {
+                commands::report_recorder_warning(app, &state);
+            }
         }
         Err(e) => {
             let _ = app.emit("recording-error", e.to_string());
@@ -40,7 +68,8 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
-/// Регистрирует глобальную горячую клавишу по умолчанию (Ctrl+Shift+R) —
+/// Регистрирует глобальную горячую клавишу по умолчанию (Ctrl+Shift+R,
+/// на macOS — ⌘⇧R) —
 /// работает сразу при старте, до загрузки фронтенда. Фронтенд при загрузке
 /// перерегистрирует сохранённое сочетание через `update_hotkey`.
 fn setup_global_shortcut(app: &tauri::App) {
@@ -49,7 +78,8 @@ fn setup_global_shortcut(app: &tauri::App) {
     // Снимаем возможную «висящую» регистрацию (от прошлого инстанса), иначе
     // register() падает «HotKey already registered» и валит весь setup-хук.
     let _ = gs.unregister_all();
-    let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR);
+    let primary = if cfg!(target_os = "macos") { Modifiers::SUPER } else { Modifiers::CONTROL };
+    let shortcut = Shortcut::new(Some(primary | Modifiers::SHIFT), Code::KeyR);
     // Не валим запуск, если не удалось: фронт перерегистрирует через
     // update_hotkey, плюс есть управление из трея.
     if let Err(e) = gs.register(shortcut) {
@@ -89,8 +119,16 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&toggle_i, &open_i, &quit_i])?;
 
-    let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+    // На macOS — монохромный шаблон: строка меню сама красит его под тему.
+    #[cfg(target_os = "macos")]
+    let builder = TrayIconBuilder::new()
+        .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+        .icon_as_template(true);
+    #[cfg(not(target_os = "macos"))]
+    let builder = TrayIconBuilder::new().icon(app.default_window_icon().unwrap().clone());
+
+    let _tray = builder
+        .tooltip("Auris")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "quit" => app.exit(0),
@@ -104,6 +142,107 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         })
         .build(app)?;
+    Ok(())
+}
+
+/// Строка меню macOS по канонам Apple: меню приложения (О программе,
+/// Настройки ⌘,, Проверить обновления, Скрыть, Завершить), Файл, Правка
+/// (без неё не работают ⌘C/⌘V в полях), Вид, Окно. Пункты, которые ведёт
+/// фронтенд, приходят ему событием `app-menu` с id пункта.
+#[cfg(target_os = "macos")]
+fn setup_mac_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+    use tauri::Emitter;
+
+    let about = AboutMetadata {
+        name: Some("Auris".into()),
+        version: Some(app.package_info().version.to_string()),
+        comments: Some("Ваше третье ухо — локальная запись и расшифровка встреч".into()),
+        website: Some("https://github.com/bglglzd/auris".into()),
+        website_label: Some("github.com/bglglzd/auris".into()),
+        ..Default::default()
+    };
+    let settings = MenuItemBuilder::with_id("settings", "Настройки…")
+        .accelerator("Cmd+,")
+        .build(app)?;
+    let updates = MenuItemBuilder::with_id("updates", "Проверить обновления…").build(app)?;
+    let app_menu = SubmenuBuilder::new(app, "Auris")
+        .about(Some(about))
+        .separator()
+        .item(&settings)
+        .item(&updates)
+        .separator()
+        .services()
+        .separator()
+        .hide()
+        .hide_others()
+        .show_all()
+        .separator()
+        .quit()
+        .build()?;
+
+    // Без акселератора: ⌘⇧R уже занят глобальным хоткеем (иначе двойной
+    // переключатель, когда окно в фокусе).
+    let record = MenuItemBuilder::with_id("record", "Начать или остановить запись").build(app)?;
+    let solo = MenuItemBuilder::with_id("solo", "Заметка · я один").build(app)?;
+    let import = MenuItemBuilder::with_id("import", "Импорт записи…")
+        .accelerator("Cmd+O")
+        .build(app)?;
+    let file_menu = SubmenuBuilder::new(app, "Файл")
+        .item(&record)
+        .item(&solo)
+        .separator()
+        .item(&import)
+        .separator()
+        .close_window()
+        .build()?;
+
+    let edit_menu = SubmenuBuilder::new(app, "Правка")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+
+    let find = MenuItemBuilder::with_id("find", "Поиск встреч")
+        .accelerator("Cmd+F")
+        .build(app)?;
+    let theme = MenuItemBuilder::with_id("theme", "Светлая / тёмная тема")
+        .accelerator("Cmd+Shift+L")
+        .build(app)?;
+    let view_menu = SubmenuBuilder::new(app, "Вид")
+        .item(&find)
+        .item(&theme)
+        .separator()
+        .fullscreen()
+        .build()?;
+
+    let window_menu = SubmenuBuilder::new(app, "Окно")
+        .minimize()
+        .maximize()
+        .separator()
+        .close_window()
+        .build()?;
+
+    let menu = MenuBuilder::new(app)
+        .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+        .build()?;
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| match event.id.as_ref() {
+        "record" => toggle_and_notify(app),
+        id @ ("settings" | "updates" | "solo" | "import" | "find" | "theme") => {
+            use tauri::Manager;
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            let _ = app.emit("app-menu", id);
+        }
+        _ => {}
+    });
     Ok(())
 }
 
@@ -209,6 +348,9 @@ fn auto_stop_and_maybe_discard<R: tauri::Runtime>(app: &tauri::AppHandle<R>, min
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    setup_onnxruntime_path();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -275,6 +417,8 @@ pub fn run() {
 
             setup_global_shortcut(app);
             setup_tray(app)?;
+            #[cfg(target_os = "macos")]
+            setup_mac_menu(app)?;
             spawn_autorecord_monitor(app.handle().clone());
             Ok(())
         })
@@ -326,6 +470,9 @@ pub fn run() {
             commands::save_binary_file,
             commands::update_meeting_notes,
             commands::ai_check,
+            commands::platform,
+            commands::system_audio_access,
+            commands::open_privacy_settings,
             update_hotkey,
         ])
         .run(tauri::generate_context!())
