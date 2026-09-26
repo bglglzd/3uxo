@@ -126,7 +126,11 @@ jobs:
           cargo test -p uxo-core --features diarize,parakeet
           cargo test -p uxo-core --features diarize --test diarize_e2e -- --ignored
       - name: Build Auris.app (${{ matrix.arch }})
-        run: npm run tauri build -- --debug --bundles app --features ${{ matrix.features }}
+        # Без артефактов обновления: ключ подписи есть только у release.yml.
+        run: >-
+          npm run tauri build -- --debug --bundles app
+          --features ${{ matrix.features }}
+          --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Check bundle
         run: |
           APP=$(find target -maxdepth 5 -type d -path "*bundle/macos/Auris.app" | head -1)
