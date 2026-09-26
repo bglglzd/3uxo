@@ -1,14 +1,14 @@
 # Changelog
 
-All notable changes to Memiro AI (named Auris until 0.9). Versions follow [Semantic Versioning](https://semver.org/);
+All notable changes to Memiro AI. Versions follow [Semantic Versioning](https://semver.org/);
 installers for every version are on [GitHub Releases](https://github.com/bglglzd/auris/releases).
 
 ## [0.10.0] — 2026-09-26
 
 ### Changed
-- **Auris is now Memiro AI** — «память ваших встреч». New name in the app, window, menus, notifications, installers and documentation; the listening mark, colors and design stay.
-- Updating from Auris keeps everything: meetings, transcripts, reports, settings, voice names and downloaded models live in the same data folder.
-- Windows: the Memiro AI installer removes the old «Auris» program (files, shortcuts, the «Apps» entry) after installing, so there are no duplicates; the MSI upgrades an MSI-installed Auris.
+- **New name — Memiro AI** «память ваших встреч»: in the app, window, menus, notifications, installers and documentation; the listening mark, colors and design stay.
+- Updating keeps everything: meetings, transcripts, reports, settings, voice names and downloaded models live in the same data folder.
+- Windows: the installer removes the app installed under the previous name (files, shortcuts, the «Apps» entry), so there are no duplicates; the MSI upgrades a previous MSI install.
 - Installers are now named `Memiro.AI_x.y.z_…`.
 
 ## [0.9.0] — 2026-09-26

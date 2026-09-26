@@ -79,9 +79,9 @@ After a release check that `latest.json` lists `windows-x86_64`, `darwin-aarch64
 
 - **Never tag before CI is green** — a tag on a broken commit produces a failed release build.
 - **Keep versions in sync** in `package.json` and `tauri.conf.json`.
-- **Do not change** `bundle.windows.wix.upgradeCode` (derived from the old name «Auris»:
+- **Do not change** `bundle.windows.wix.upgradeCode` (derived from the previous product name:
   it lets the MSI upgrade old installs) or remove `src-tauri/windows/hooks.nsh` (removes
-  the old «Auris» program after installing Memiro AI). Changing `productName` again needs
+  the app installed under the previous name after installing Memiro AI). Changing `productName` again needs
   the same kind of migration: NSIS keys the install folder, shortcuts and the «Apps» entry
   by the product name.
 - **Do not change** the app `identifier` in `tauri.conf.json`: it defines the data folder

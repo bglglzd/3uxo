@@ -68,8 +68,6 @@ Most meeting tools upload your conversations to someone else's cloud. Memiro kee
 3. Open the meeting and press **Transcribe**. On the first run Memiro downloads the speech model (~0.5 GB) and the voice models (~33 MB) — once. You can also download them in advance in **Settings → Recognition**.
 4. *(Optional)* In **Settings → Artificial intelligence** enter an OpenAI-compatible base URL, API key and model — OpenAI, OpenRouter, a local Ollama / LM Studio / llama.cpp server, anything compatible. Memiro will then title the meeting and prepare a summary automatically.
 
-> **Coming from Auris?** Memiro AI is the new name of Auris (since 0.10). Just accept the update: meetings, settings and models stay, and the old «Auris» program is removed automatically.
-
 > Please follow the call-recording consent laws that apply to you and to everyone on the call.
 
 ### First launch on macOS

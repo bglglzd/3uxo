@@ -15,8 +15,7 @@
 
 ## 1. Бренд и технические идентификаторы (НЕ переименовывать)
 
-Продукт — **Memiro AI** («память ваших встреч»; до 0.10 — **Auris**, ещё раньше —
-3uxo). `productName` — `Memiro AI`, exe — `Memiro.exe` (`mainBinaryName`), на Mac —
+Продукт — **Memiro AI** («память ваших встреч»; до 0.10 продукт назывался иначе). `productName` — `Memiro AI`, exe — `Memiro.exe` (`mainBinaryName`), на Mac —
 `Memiro AI.app`, установщики — `Memiro.AI_x.y.z_…`. В тексте интерфейса — «Memiro»,
 формальное имя (окно, «О программе», установщик, заголовки) — «Memiro AI». Репозиторий
 пока `github.com/bglglzd/auris`. Несколько внутренних идентификаторов сохранили
@@ -29,8 +28,8 @@
 | база встреч | `3uxo.db` | переименование = потеря всех записей |
 | бэкенд-лог | `3uxo.log` | диагностика, «Копировать лог» |
 | ключи localStorage | `3uxo.settings/theme/labels.*/speakers.*/solo.*/titleEdited.*/autotitle.*` | слёт настроек/темы/подписей |
-| `bundle.windows.wix.upgradeCode` | `1e80fb85-5177-5635-8650-55fc18e718a0` (из имени «Auris») | MSI Memiro AI обновляет MSI-установку Auris |
-| NSIS-хук `src-tauri/windows/hooks.nsh` | удаляет старую программу «Auris» после установки | иначе Memiro AI встаёт рядом со старым Auris (NSIS привязывает папку/ярлыки/«Программы» к `productName`) |
+| `bundle.windows.wix.upgradeCode` | `1e80fb85-5177-5635-8650-55fc18e718a0` (из прежнего `productName`) | MSI Memiro AI обновляет прежнюю MSI-установку |
+| NSIS-хук `src-tauri/windows/hooks.nsh` | удаляет программу под прежним именем после установки | иначе Memiro AI встаёт рядом со старой установкой (NSIS привязывает папку/ярлыки/«Программы» к `productName`) |
 
 Эти значения — только в коде; в пользовательской документации их не упоминать.
 Updater endpoint — `github.com/bglglzd/auris/releases/latest/download/latest.json`
