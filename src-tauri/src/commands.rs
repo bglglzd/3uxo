@@ -1140,6 +1140,25 @@ pub async fn ask(
     uxo_core::ai::answer_question(&backend, &text, &question)
 }
 
+/// Заметки пользователя к встрече (свободный текст).
+#[tauri::command]
+pub fn update_meeting_notes(
+    state: tauri::State<AppState>,
+    id: String,
+    notes: String,
+) -> AppResult<()> {
+    state.repo.lock().unwrap().update_notes(&id, &notes)
+}
+
+/// Проверка ИИ-сервера: доступен ли, какие модели отдаёт и какую использовать
+/// (модель на сервере могли обновить — тогда `changed` и новая `model`).
+#[tauri::command]
+pub async fn ai_check(config: AiConfig) -> AppResult<uxo_core::ai::AiCheck> {
+    tauri::async_runtime::spawn_blocking(move || uxo_core::ai::check(&config))
+        .await
+        .map_err(|e| AppError::Http(format!("ai check join: {e}")))
+}
+
 #[tauri::command]
 pub fn update_meeting_meta(
     state: tauri::State<AppState>,

@@ -12,6 +12,7 @@ import type {
   AudioRange,
   Waveform,
   AudioEditState,
+  AiCheck,
   MeetingContext,
   ModelInfo,
 } from "./types";
@@ -100,6 +101,12 @@ export const api = {
     topic: string,
   ): Promise<void> =>
     inv("update_meeting_meta", { id, title, participants, topic }),
+
+  /// Заметки к встрече.
+  updateMeetingNotes: (id: string, notes: string): Promise<void> =>
+    inv("update_meeting_notes", { id, notes }),
+  /// Проверить ИИ-сервер: доступность, модели, актуальная модель.
+  aiCheck: (config: AiConfig): Promise<AiCheck> => inv("ai_check", { config }),
 
   saveTextFile: (path: string, content: string): Promise<void> =>
     inv("save_text_file", { path, content }),

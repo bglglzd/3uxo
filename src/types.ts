@@ -10,6 +10,8 @@ export interface Meeting {
   /// "recorded" (записана приложением, 2 дорожки) | "imported" (один файл).
   /// Необязательно: бэкенд всегда присылает, но старые объекты могут не иметь.
   source?: string;
+  /// Заметки пользователя к встрече (свободный текст).
+  notes?: string;
 }
 
 export type TrackFile = "mic.wav" | "system.wav" | "audio.wav";
@@ -102,6 +104,21 @@ export interface AiAutoConfig {
   title: boolean;
   /// Сразу построить «Итоги встречи».
   summary: boolean;
+  /// Следить за моделью на ИИ-сервере: если её обновили (сменилось имя) —
+  /// переключаться на актуальную автоматически.
+  followModel: boolean;
+}
+
+/// Результат проверки ИИ-сервера.
+export interface AiCheck {
+  ok: boolean;
+  models: string[];
+  /// Какую модель использовать (актуальная на сервере).
+  model: string;
+  /// Настроенной модели на сервере больше нет — выбрана другая.
+  changed: boolean;
+  latency_ms: number;
+  error?: string | null;
 }
 
 export interface AppSettings {

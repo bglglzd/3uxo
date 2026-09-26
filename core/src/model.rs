@@ -26,6 +26,9 @@ pub struct Meeting {
     /// "imported" (импортированный файл, одна дорожка `audio.wav`).
     #[serde(default = "default_source")]
     pub source: String,
+    /// Заметки пользователя к встрече (свободный текст). Пусто — нет заметок.
+    #[serde(default)]
+    pub notes: String,
 }
 
 /// Дефолт для `source` — на случай старых записей без этого поля.
@@ -49,6 +52,7 @@ mod tests {
             folder: "abc".into(),
             status: "recorded".into(),
             source: "recorded".into(),
+            notes: "".into(),
         };
         let json = serde_json::to_string(&m).unwrap();
         let back: Meeting = serde_json::from_str(&json).unwrap();

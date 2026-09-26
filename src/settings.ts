@@ -23,7 +23,7 @@ const DEFAULTS: AppSettings = {
     startDelaySecs: 5,
     minKeepSecs: 12,
   },
-  aiAuto: { title: true, summary: true },
+  aiAuto: { title: true, summary: true, followModel: true },
 };
 
 export function getSettings(): AppSettings {
@@ -55,7 +55,8 @@ export function saveSettings(settings: AppSettings): void {
   localStorage.setItem(KEY, JSON.stringify({ ...settings, version: VERSION }));
 }
 
-/// true, если ИИ настроен достаточно для запросов.
+/// true, если ИИ настроен достаточно для запросов. Модель можно не указывать —
+/// тогда используется та, что сейчас отдаёт сервер.
 export function isAiConfigured(s: AppSettings): boolean {
-  return !!(s.ai.base_url && s.ai.api_key && s.ai.model);
+  return !!(s.ai.base_url && s.ai.api_key);
 }

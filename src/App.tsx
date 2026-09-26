@@ -13,7 +13,10 @@ import { ImportModal } from "./components/ImportModal";
 import { findUpdate, UPDATE_INTERVAL_MS } from "./updater";
 import type { UpdateInfo } from "./updater";
 import { UpdateDialog } from "./components/UpdateDialog";
+import type { MeetingPatch } from "./components/MeetingEditDialog";
 import { runAutoAi } from "./aiauto";
+import { AI_MODEL_EVENT, syncServerModel } from "./aimodel";
+import type { AiModelChange } from "./aimodel";
 
 type ProgressEvent = {
   id: string;
@@ -68,9 +71,26 @@ export default function App() {
     if (u && (manual || u.version !== skippedRef.current)) setUpdate(u);
     return u;
   }, []);
+  // Модель на ИИ-сервере: сверяем при запуске и вместе с проверкой обновлений.
+  const [modelNote, setModelNote] = useState<AiModelChange | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setModelNote((e as CustomEvent<AiModelChange>).detail);
+    window.addEventListener(AI_MODEL_EVENT, on);
+    return () => window.removeEventListener(AI_MODEL_EVENT, on);
+  }, []);
+  useEffect(() => {
+    if (!modelNote) return;
+    const t = setTimeout(() => setModelNote(null), 12000);
+    return () => clearTimeout(t);
+  }, [modelNote]);
+
   useEffect(() => {
     void checkUpdates();
-    const id = setInterval(() => void checkUpdates(), UPDATE_INTERVAL_MS);
+    void syncServerModel();
+    const id = setInterval(() => {
+      void checkUpdates();
+      void syncServerModel();
+    }, UPDATE_INTERVAL_MS);
     const onManual = () => void checkUpdates(true);
     window.addEventListener("auris-check-updates", onManual);
     return () => {
@@ -202,6 +222,16 @@ export default function App() {
     setShowImport(false);
   };
 
+  // Правка встречи из меню «⋯» в списке.
+  const handleEdit = async (id: string, patch: MeetingPatch) => {
+    await api.updateMeetingMeta(id, patch.title, patch.participants, patch.topic);
+    await api.updateMeetingNotes(id, patch.notes);
+    if (patch.title !== meetings.find((m) => m.id === id)?.title) {
+      localStorage.setItem(`3uxo.titleEdited.${id}`, "1");
+    }
+    await refresh();
+  };
+
   const handleDelete = async (id: string) => {
     await api.deleteMeeting(id);
     if (selectedId === id) setSelectedId(null);
@@ -243,6 +273,7 @@ export default function App() {
           setNavOpen(false);
         }}
         onDelete={handleDelete}
+        onEdit={handleEdit}
         onOpenSettings={() => {
           setNavOpen(false);
           setShowSettings(true);
@@ -308,6 +339,18 @@ export default function App() {
       </main>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {modelNote && (
+        <div className="toast" role="status">
+          <span className="toast-icon">✦</span>
+          <span>
+            Модель ИИ на сервере обновилась: <b>{modelNote.from}</b> → <b>{modelNote.to}</b>.
+            Auris переключился на новую.
+          </span>
+          <button className="toast-close" onClick={() => setModelNote(null)} aria-label="Закрыть">
+            ✕
+          </button>
+        </div>
+      )}
       {update && (
         <UpdateDialog
           info={update}

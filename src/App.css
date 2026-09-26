@@ -3288,3 +3288,228 @@ details.adv[open] summary::before {
   width: 100%;
   font-size: 13px;
 }
+
+/* ---------- v0.8.2: встречи, заметки, ИИ-сервер ---------- */
+.side-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-dim);
+  height: 36px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.side-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--hover);
+}
+.side-btn.toggle.on {
+  border-color: var(--teal);
+  color: var(--text);
+  background: color-mix(in srgb, var(--teal) 12%, var(--surface));
+}
+.side-btn.toggle.on .btn-icon {
+  color: var(--teal-ink);
+}
+.side-btn-state {
+  position: absolute;
+  right: 11px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--teal-ink);
+}
+
+.m-row {
+  position: relative;
+}
+.m-row .m-item {
+  grid-template-columns: 1fr;
+  padding-right: 34px;
+}
+.m-note {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-more {
+  position: absolute;
+  top: 7px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.m-row:hover .m-more,
+.m-row.menu-open .m-more,
+.m-more:focus-visible {
+  opacity: 1;
+}
+.m-more:hover,
+.m-row.menu-open .m-more {
+  background: var(--hover);
+  color: var(--text);
+}
+.m-menu {
+  position: absolute;
+  top: 34px;
+  right: 6px;
+  z-index: 40;
+  min-width: 196px;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-strong);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow);
+  animation: rise 0.14s ease;
+}
+.m-menu button {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.m-menu button:hover {
+  background: var(--hover);
+}
+.m-menu button.danger {
+  color: var(--rec);
+}
+
+.edit-meeting-modal {
+  width: min(520px, 100%);
+}
+.edit-meeting-modal textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 110px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mv-notes {
+  width: 100%;
+  margin-top: 8px;
+  resize: vertical;
+  min-height: 34px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--field-border);
+  background: transparent;
+  color: var(--text-dim);
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.mv-notes:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--accent-strong);
+  background: var(--field-bg);
+  color: var(--text);
+}
+
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+}
+.input-with-btn input {
+  flex: 1;
+  min-width: 0;
+}
+.ai-check {
+  margin-top: 8px;
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-check.ok {
+  color: var(--teal-ink);
+}
+.ai-check.err {
+  color: var(--rec);
+}
+.model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.model-chips .seg-btn {
+  border: 1px solid var(--field-border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  max-width: 440px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-strong);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow);
+  font-size: 13px;
+  color: var(--text);
+  animation: rise 0.2s ease;
+}
+.toast-icon {
+  color: var(--violet);
+}
+.toast-close {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+.edit-meeting-modal textarea:focus {
+  outline: none;
+  border-color: var(--accent-strong);
+  box-shadow: var(--focus-ring);
+}

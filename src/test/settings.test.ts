@@ -12,7 +12,7 @@ describe("settings", () => {
       model: "parakeet-tdt-0.6b-v3",
       language: "ru",
     });
-    expect(s.aiAuto).toEqual({ title: true, summary: true });
+    expect(s.aiAuto).toEqual({ title: true, summary: true, followModel: true });
     expect(s.hotkey).toBe("Ctrl+Shift+R");
     expect(s.autoRecord).toEqual({
       enabled: false,
@@ -35,7 +35,7 @@ describe("settings", () => {
         startDelaySecs: 5,
         minKeepSecs: 12,
       },
-      aiAuto: { title: false, summary: true },
+      aiAuto: { title: false, summary: true, followModel: true },
     });
     const s = getSettings();
     expect(s.whisper.model).toBe("wm");
@@ -86,7 +86,7 @@ describe("settings", () => {
           startDelaySecs: 5,
           minKeepSecs: 12,
         },
-        aiAuto: { title: true, summary: true },
+        aiAuto: { title: true, summary: true, followModel: true },
       }),
     ).toBe(true);
     expect(isAiConfigured(getSettings())).toBe(false);
