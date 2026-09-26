@@ -1,11 +1,11 @@
-# Contributing to Auris
+# Contributing to Memiro AI
 
-Thanks for helping improve Auris!
+Thanks for helping improve Memiro!
 
 ## Before opening an issue
 
 - Search existing issues and pull requests first.
-- For a bug, include the Auris version (Settings → footer), Windows version, exact
+- For a bug, include the Memiro version (Settings → footer), Windows version, exact
   steps, expected and actual result. The log is in **Settings → Diagnostics → Copy log**.
 - Never post API keys, private audio or unredacted transcripts in a public issue.
 
@@ -32,7 +32,7 @@ Running the full app needs Windows with Rust, Node.js 20+, CMake and LLVM
 3. Add or update tests when behaviour changes.
 4. Run the checks for the parts you touched and list them in the PR description.
 5. Keep refactors and formatting-only changes out of bug fixes.
-6. UI changes follow the Auris design system in `src/App.css` (tokens, fonts, both themes).
+6. UI changes follow the Memiro design system in `src/App.css` (tokens, fonts, both themes).
 7. Privacy first: nothing leaves the user's machine except requests to the AI endpoint
    the user configured.
 

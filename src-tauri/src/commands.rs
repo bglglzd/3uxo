@@ -120,7 +120,7 @@ pub fn start_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResu
     let id = uuid::Uuid::new_v4().to_string();
     let rec = service::start_recording(state.recorder.as_ref(), &state.data_root, id.clone())?;
     *active = Some(rec);
-    notify(&app, "🔴 Auris — запись начата", "Идёт запись звонка");
+    notify(&app, "🔴 Memiro — запись начата", "Идёт запись звонка");
     report_recorder_warning(&app, &state);
     Ok(id)
 }
@@ -205,7 +205,7 @@ pub async fn stop_recording(
             flog(&state.data_root, &format!("recorded {tf} = {sz} bytes (~{secs}s)"));
         }
     }
-    notify(&app, "✅ Auris — запись сохранена", &meeting.title);
+    notify(&app, "✅ Memiro — запись сохранена", &meeting.title);
     Ok(meeting)
 }
 
@@ -251,7 +251,7 @@ pub fn pause_recording(app: AppHandle, state: tauri::State<AppState>) -> AppResu
     };
     let updated = service::pause_recording(state.recorder.as_ref(), current)?;
     *state.active.lock().unwrap() = Some(updated);
-    notify(&app, "⏸ Auris — пауза", "Запись на паузе");
+    notify(&app, "⏸ Memiro — пауза", "Запись на паузе");
     Ok(())
 }
 
@@ -268,7 +268,7 @@ pub fn resume_recording(app: AppHandle, state: tauri::State<AppState>) -> AppRes
     };
     let updated = service::resume_recording(state.recorder.as_ref(), current)?;
     *state.active.lock().unwrap() = Some(updated);
-    notify(&app, "🔴 Auris — запись продолжена", "Идёт запись");
+    notify(&app, "🔴 Memiro — запись продолжена", "Идёт запись");
     Ok(())
 }
 
@@ -312,7 +312,7 @@ pub async fn import_recording(
     .map_err(|e| AppError::Audio(format!("import join: {e}")))??;
 
     state.repo.lock().unwrap().insert(&meeting)?;
-    notify(&app, "📥 Auris — запись импортирована", &meeting.title);
+    notify(&app, "📥 Memiro — запись импортирована", &meeting.title);
     Ok(meeting)
 }
 
@@ -405,7 +405,7 @@ pub async fn transcribe(
             service::transcribe_to_file(&transcriber, &state.data_root, &id)?
         };
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
-        notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
+        notify(&app, "📝 Memiro — расшифровка готова", "Текст разговора готов");
         return Ok(transcript);
     }
 
@@ -580,7 +580,7 @@ pub async fn transcribe(
         service::save_transcript(&state.data_root, &id, &transcript)?;
         state.repo.lock().unwrap().update_status(&id, "transcribed")?;
         flog(&state.data_root, "transcribe done");
-        notify(&app, "📝 Auris — расшифровка готова", "Текст разговора готов");
+        notify(&app, "📝 Memiro — расшифровка готова", "Текст разговора готов");
         Ok(transcript)
     }
     #[cfg(not(any(feature = "whisper", feature = "parakeet")))]
@@ -885,7 +885,7 @@ pub async fn apply_audio_edit(
     );
     notify(
         &app,
-        "✂ Auris — аудио обновлено",
+        "✂ Memiro — аудио обновлено",
         &format!("Вырезано фрагментов: {cut_count}"),
     );
     Ok(meeting)

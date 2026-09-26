@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 /// Пункты строки меню macOS, которые ведёт фронтенд (см. `setup_mac_menu`).
 export type AppMenuId = "settings" | "updates" | "solo" | "import" | "find" | "theme";
 
-const EVENT = "auris-menu";
+const EVENT = "memiro-menu";
 let started = false;
 
 /// Подписывается на событие бэкенда `app-menu` и пересылает его в окно как

@@ -1,4 +1,4 @@
-# Auris — current status
+# Memiro AI — current status
 
 > Release history lives in [CHANGELOG.md](../CHANGELOG.md). This page tracks what is
 > verified, what still needs real-world testing and what is planned.
@@ -11,7 +11,7 @@
 - Full Windows build of the app with `whisper,diarize,opus,parakeet`.
 - On Windows, with real models: speaker separation of the pyannote reference recording
   (2 voices, ~99% of speech time labelled correctly) and Parakeet transcription.
-- macOS builds of `Auris.app` for Apple Silicon (Metal) and Intel, with ONNX Runtime
+- macOS builds of `Memiro AI.app` for Apple Silicon (Metal) and Intel, with ONNX Runtime
   1.23.2 bundled in `Contents/Frameworks`, and the speaker-separation e2e test on both.
 
 ## Needs testing on real calls

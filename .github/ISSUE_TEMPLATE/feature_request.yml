@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement for Auris
+description: Suggest an improvement for Memiro
 title: "feat: "
 labels: [enhancement]
 body:
@@ -13,7 +13,7 @@ body:
   - type: textarea
     id: idea
     attributes:
-      label: What would you like Auris to do?
+      label: What would you like Memiro to do?
     validations:
       required: true
   - type: textarea

@@ -58,7 +58,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: "Auris ${{ inputs.tag || github.ref_name }}"
+          releaseName: "Memiro AI ${{ inputs.tag || github.ref_name }}"
           releaseBody: ${{ inputs.notes }}
           # Сразу публикуем (не черновик), чтобы апдейтер видел новую версию.
           releaseDraft: false
@@ -103,7 +103,7 @@ jobs:
           X=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
           sudo xcode-select -s "$X"
           xcodebuild -version
-      # ONNX Runtime 1.23.2 (есть и для Intel) → Auris.app/Contents/Frameworks.
+      # ONNX Runtime 1.23.2 (есть и для Intel) → Memiro AI.app/Contents/Frameworks.
       - name: ONNX Runtime (macOS dylib)
         run: |
           # cmake — whisper.cpp; autotools — статический libopus (audiopus_sys).
@@ -123,7 +123,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: "Auris ${{ inputs.tag || github.ref_name }}"
+          releaseName: "Memiro AI ${{ inputs.tag || github.ref_name }}"
           releaseBody: ${{ inputs.notes }}
           releaseDraft: false
           prerelease: false

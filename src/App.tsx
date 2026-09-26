@@ -5,7 +5,7 @@ import { getSettings } from "./settings";
 import { resolveProcesses } from "./autorecord";
 import type { Meeting, TranscribeState, TrackLevels } from "./types";
 import { Sidebar } from "./components/Sidebar";
-import { AurisMark } from "./components/AurisMark";
+import { MemiroMark } from "./components/MemiroMark";
 import { MeetingView } from "./components/MeetingView";
 import { RecordingMonitor } from "./components/RecordingMonitor";
 import { SettingsModal } from "./components/SettingsModal";
@@ -110,10 +110,10 @@ export default function App() {
       void syncServerModel();
     }, UPDATE_INTERVAL_MS);
     const onManual = () => void checkUpdates(true);
-    window.addEventListener("auris-check-updates", onManual);
+    window.addEventListener("memiro-check-updates", onManual);
     return () => {
       clearInterval(id);
-      window.removeEventListener("auris-check-updates", onManual);
+      window.removeEventListener("memiro-check-updates", onManual);
     };
   }, [checkUpdates]);
 
@@ -326,7 +326,7 @@ export default function App() {
               <span className="ripple-ring" />
               <span className="ripple-ring d1" />
               <span className="ripple-ring d2" />
-              <AurisMark size={72} />
+              <MemiroMark size={72} />
             </div>
             <h2>Выбери встречу</h2>
             <p>
@@ -393,7 +393,7 @@ export default function App() {
           <span className="toast-icon">✦</span>
           <span>
             Модель ИИ на сервере обновилась: <b>{modelNote.from}</b> → <b>{modelNote.to}</b>.
-            Auris переключился на новую.
+            Memiro переключился на новую.
           </span>
           <button className="toast-close" onClick={() => setModelNote(null)} aria-label="Закрыть">
             ✕

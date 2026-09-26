@@ -33,7 +33,7 @@ export function UpdateDialog({ info, recording, onLater }: Props) {
       <div className="modal update-modal" onClick={(e) => e.stopPropagation()}>
         <h2>Доступно обновление</h2>
         <p className="lead">
-          Auris {info.version} · у вас {info.currentVersion}
+          Memiro AI {info.version} · у вас {info.currentVersion}
         </p>
         {info.notes.trim() && (
           <div className="update-notes">

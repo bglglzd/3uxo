@@ -2,7 +2,7 @@
 name = "uxo-core"
 version = "0.1.0"
 edition = "2021"
-description = "Auris core domain logic (no GUI dependencies)"
+description = "Memiro AI core domain logic (no GUI dependencies)"
 
 [lib]
 name = "uxo_core"

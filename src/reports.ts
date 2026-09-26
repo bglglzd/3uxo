@@ -80,9 +80,9 @@ export const PRESETS: ReportKind[] = [
 ];
 
 /// Событие «отчёты встречи обновились» (напр. авто-итоги после расшифровки).
-export const REPORTS_EVENT = "auris-reports-updated";
+export const REPORTS_EVENT = "memiro-reports-updated";
 /// Событие «ИИ работает в фоне над встречей» — detail: { id, busy, label? }.
-export const AI_AUTO_EVENT = "auris-ai-auto";
+export const AI_AUTO_EVENT = "memiro-ai-auto";
 
 export interface AiAutoDetail {
   id: string;

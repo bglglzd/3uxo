@@ -24,7 +24,7 @@ fn build_recorder() -> Box<dyn Recorder> {
 }
 
 /// macOS: ONNX Runtime (диаризация, Parakeet) грузится динамически из
-/// `Auris.app/Contents/Frameworks/libonnxruntime.dylib` — на Intel-Mac
+/// `Memiro.app/Contents/Frameworks/libonnxruntime.dylib` — на Intel-Mac
 /// статической сборки ORT нет. Путь задаём до первого обращения к ORT.
 #[cfg(target_os = "macos")]
 fn setup_onnxruntime_path() {
@@ -53,9 +53,9 @@ fn toggle_and_notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
             let _ = app.emit("recording-changed", now_recording);
             use tauri_plugin_notification::NotificationExt;
             let (title, body) = if now_recording {
-                ("🔴 Auris — запись начата", "Идёт запись звонка")
+                ("🔴 Memiro — запись начата", "Идёт запись звонка")
             } else {
-                ("✅ Auris — запись остановлена", "Запись сохранена")
+                ("✅ Memiro — запись остановлена", "Запись сохранена")
             };
             let _ = app.notification().builder().title(title).body(body).show();
             if now_recording {
@@ -115,7 +115,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::Manager;
 
     let toggle_i = MenuItem::with_id(app, "toggle", "Старт/Стоп записи", true, None::<&str>)?;
-    let open_i = MenuItem::with_id(app, "open", "Открыть Auris", true, None::<&str>)?;
+    let open_i = MenuItem::with_id(app, "open", "Открыть Memiro", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&toggle_i, &open_i, &quit_i])?;
 
@@ -128,7 +128,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let builder = TrayIconBuilder::new().icon(app.default_window_icon().unwrap().clone());
 
     let _tray = builder
-        .tooltip("Auris")
+        .tooltip("Memiro AI")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "quit" => app.exit(0),
@@ -155,9 +155,9 @@ fn setup_mac_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::Emitter;
 
     let about = AboutMetadata {
-        name: Some("Auris".into()),
+        name: Some("Memiro AI".into()),
         version: Some(app.package_info().version.to_string()),
-        comments: Some("Ваше третье ухо — локальная запись и расшифровка встреч".into()),
+        comments: Some("Память ваших встреч — локальная запись и расшифровка".into()),
         website: Some("https://github.com/bglglzd/auris".into()),
         website_label: Some("github.com/bglglzd/auris".into()),
         ..Default::default()
@@ -166,7 +166,7 @@ fn setup_mac_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .accelerator("Cmd+,")
         .build(app)?;
     let updates = MenuItemBuilder::with_id("updates", "Проверить обновления…").build(app)?;
-    let app_menu = SubmenuBuilder::new(app, "Auris")
+    let app_menu = SubmenuBuilder::new(app, "Memiro AI")
         .about(Some(about))
         .separator()
         .item(&settings)
@@ -334,7 +334,7 @@ fn auto_stop_and_maybe_discard<R: tauri::Runtime>(app: &tauri::AppHandle<R>, min
                 let _ = app
                     .notification()
                     .builder()
-                    .title("✅ Auris — запись остановлена")
+                    .title("✅ Memiro — запись остановлена")
                     .body("Запись сохранена")
                     .show();
             }

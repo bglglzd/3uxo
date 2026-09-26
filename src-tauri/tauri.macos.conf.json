@@ -4,7 +4,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Auris",
+        "title": "Memiro AI",
         "width": 1120,
         "height": 720,
         "minWidth": 720,
@@ -21,7 +21,7 @@
   "bundle": {
     "targets": ["app", "dmg"],
     "category": "public.app-category.productivity",
-    "copyright": "© Auris",
+    "copyright": "© Memiro AI",
     "macOS": {
       "minimumSystemVersion": "13.0",
       "signingIdentity": "-",

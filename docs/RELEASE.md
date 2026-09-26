@@ -1,7 +1,7 @@
-# Releasing Auris
+# Releasing Memiro AI
 
 A release is a signed, published GitHub release with a tag `vX.Y.Z` plus a generated
-`latest.json`. Installed copies of Auris find it through the updater, show the release
+`latest.json`. Installed copies of Memiro find it through the updater, show the release
 notes and install it after the user agrees.
 
 ## Checklist
@@ -51,7 +51,7 @@ The release notes (`notes` input or the release body) are what users see in the
 
 ### `release.yml` — tag `v*` or manual run
 1. `build-windows` — LLVM + Vulkan SDK, `tauri-action` with
-   `--features gpu,diarize,opus,parakeet`; creates the non-draft release «Auris vX.Y.Z»
+   `--features gpu,diarize,opus,parakeet`; creates the non-draft release «Memiro AI vX.Y.Z»
    with `latest.json`.
 2. `build-macos` (after Windows, one architecture at a time) — Apple Silicon on
    `macos-15` with `metal,diarize,opus,parakeet`, Intel on `macos-15-intel` with
@@ -79,6 +79,11 @@ After a release check that `latest.json` lists `windows-x86_64`, `darwin-aarch64
 
 - **Never tag before CI is green** — a tag on a broken commit produces a failed release build.
 - **Keep versions in sync** in `package.json` and `tauri.conf.json`.
+- **Do not change** `bundle.windows.wix.upgradeCode` (derived from the previous product name:
+  it lets the MSI upgrade old installs) or remove `src-tauri/windows/hooks.nsh` (removes
+  the app installed under the previous name after installing Memiro AI). Changing `productName` again needs
+  the same kind of migration: NSIS keys the install folder, shortcuts and the «Apps» entry
+  by the product name.
 - **Do not change** the app `identifier` in `tauri.conf.json`: it defines the data folder
   and updater identity of existing installations.
 - **Icons**: regenerate from a 1024×1024 PNG/SVG with `npx tauri icon <file> -o src-tauri/icons`

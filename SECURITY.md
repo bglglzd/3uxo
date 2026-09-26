@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the latest release receives fixes. Auris updates itself (with your consent),
+Only the latest release receives fixes. Memiro updates itself (with your consent),
 so please update before reporting.
 
 | Version | Supported |
