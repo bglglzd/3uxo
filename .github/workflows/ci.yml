@@ -116,7 +116,9 @@ jobs:
           xcodebuild -version
       - name: ONNX Runtime (macOS dylib)
         run: |
-          brew list cmake >/dev/null 2>&1 || brew install cmake
+          # cmake — whisper.cpp; autotools — статический libopus (audiopus_sys).
+          brew install cmake autoconf automake libtool || true
+          autoreconf --version | head -1 && cmake --version | head -1
           scripts/fetch-onnxruntime-macos.sh ${{ matrix.arch }}
           echo "ORT_DYLIB_PATH=$PWD/src-tauri/macos/libonnxruntime.dylib" >> "$GITHUB_ENV"
       - name: Core tests (+ ONNX, diarization e2e)

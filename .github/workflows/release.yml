@@ -106,7 +106,9 @@ jobs:
       # ONNX Runtime 1.23.2 (есть и для Intel) → Auris.app/Contents/Frameworks.
       - name: ONNX Runtime (macOS dylib)
         run: |
-          brew list cmake >/dev/null 2>&1 || brew install cmake
+          # cmake — whisper.cpp; autotools — статический libopus (audiopus_sys).
+          brew install cmake autoconf automake libtool || true
+          autoreconf --version | head -1 && cmake --version | head -1
           scripts/fetch-onnxruntime-macos.sh ${{ matrix.arch }}
       # Подпись: ad-hoc (signingIdentity "-" в tauri.macos.conf.json). Для
       # Apple Developer ID добавьте секреты APPLE_CERTIFICATE,
