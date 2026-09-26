@@ -89,7 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             arch: arm64
             features: metal,diarize,opus,parakeet
           - runner: macos-15-intel
@@ -106,6 +106,14 @@ jobs:
       - run: npm ci
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # screencapturekit → apple-metal собирает Swift-мост под SDK macOS 26
+      # (MTLTensor и др.): нужен самый свежий Xcode на раннере. Минимальная
+      # версия приложения (macOS 13) от SDK не зависит.
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
       - name: ONNX Runtime (macOS dylib)
         run: |
           brew list cmake >/dev/null 2>&1 || brew install cmake
