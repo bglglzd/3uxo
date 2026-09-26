@@ -6,7 +6,7 @@
 идут через личный API-ключ пользователя.
 
 > Это главный контекстный файл проекта. Подробный runbook релиза — в
-> [`docs/RELEASE.md`](docs/RELEASE.md). Дизайн-кит бренда (создан ещё под именем Auris) — в
+> [`docs/RELEASE.md`](docs/RELEASE.md). Дизайн-кит бренда — в
 > `<local-design-directory>/auris-rebrand\design_handoff_auris\` (README = токены/
 > экраны, IMPLEMENTATION = как внедрять). ТЗ на ИИ-модуль —
 > `<local-design-directory>/Техническое задание для ИИ-модуля.docx`.
@@ -205,7 +205,7 @@ Ollama), `ai::pick_model` (настроенная → ближайшая по п
 
 ## 4. Фронтенд (`src/`)
 
-- **Дизайн-система Memiro** (`App.css`, прежде Auris): CSS-токены на `:root`/`[data-theme]`
+- **Дизайн-система Memiro** (`App.css`): CSS-токены на `:root`/`[data-theme]`
   (светлая/тёмная). Палитра: `--brand-grad` (сине-бирюзовый), `--teal`
   (приватность), `--record` (запись), `--violet` (ИИ/спикер-3), `--spk-0..5`
   (аватары спикеров). Шрифты: **Manrope** (заголовки/лого, `--font-display`) +
