@@ -3,6 +3,22 @@
 All notable changes to Auris. Versions follow [Semantic Versioning](https://semver.org/);
 installers for every version are on [GitHub Releases](https://github.com/bglglzd/auris/releases).
 
+## [0.9.0] — 2026-09-26
+
+### Added
+- **Auris for macOS** — Apple Silicon and Intel Macs (macOS 13 Ventura or newer), `.dmg` in every release and in-app updates like on Windows.
+  - Two-track recording: your microphone through CoreAudio and the other side through ScreenCaptureKit (only sound, Auris's own audio excluded). Without the «Screen & System Audio Recording» permission Auris records the microphone and says so; Settings → Recording shows the status and opens the right System Settings page.
+  - Native look following Apple's Human Interface Guidelines while staying recognizably Auris: translucent sidebar with window vibrancy, traffic lights in the sidebar, SF system font, compact 13 pt controls, macOS-style lists, sheets and focus rings; the Auris mark, gradients and speaker colors stay.
+  - macOS menu bar: About, Settings ⌘,, Check for updates, Record, Note · just me, Import ⌘O, Edit (copy/paste), Search ⌘F, Light/dark ⌘⇧L, Window. Monochrome menu-bar icon.
+  - Global hotkey ⌘⇧R; shortcuts shown with Mac symbols (⌘ ⇧ ⌥ ⌃).
+  - Speech recognition and voices work as on Windows: Parakeet and speaker separation on ONNX Runtime (bundled), Whisper with Metal on Apple Silicon.
+
+### Changed
+- Auto-recording of calls is shown only on Windows (the call detector is Windows-specific).
+
+### Fixed
+- The web icon (`auris.svg`) was not valid SVG.
+
 ## [0.8.2] — 2026-09-26
 
 ### Added
@@ -91,6 +107,7 @@ installers for every version are on [GitHub Releases](https://github.com/bglglzd
 ## Earlier
 - Two-track recording (microphone + system audio), local Whisper transcription, meeting library, import of external recordings, speaker diarization, AI summaries and questions via an OpenAI-compatible endpoint.
 
+[0.9.0]: https://github.com/bglglzd/auris/releases/tag/v0.9.0
 [0.8.2]: https://github.com/bglglzd/auris/releases/tag/v0.8.2
 [0.8.1]: https://github.com/bglglzd/auris/releases/tag/v0.8.1
 [0.8.0]: https://github.com/bglglzd/auris/releases/tag/v0.8.0

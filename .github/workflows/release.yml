@@ -1,7 +1,7 @@
 name: release
 
-# Собирает Windows-инсталляторы при пуше тега вида v1.2.3 и публикует
-# черновик GitHub-релиза. Запускается также вручную (workflow_dispatch).
+# Собирает установщики Windows и macOS (Apple Silicon + Intel) при пуше тега
+# вида v1.2.3 и публикует GitHub-релиз с latest.json для авто-обновления. Запускается также вручную (workflow_dispatch).
 on:
   push:
     tags:
@@ -67,3 +67,65 @@ jobs:
           includeUpdaterJson: true
           # whisper.cpp с GPU (Vulkan) + диаризация (ONNX Runtime) + Ogg/Opus (libopus).
           args: --features gpu,diarize,opus,parakeet
+
+  # macOS: .dmg + .app.tar.gz (обновления) для Apple Silicon и Intel. Идёт после
+  # Windows и по одной архитектуре за раз — tauri-action дописывает платформы
+  # в тот же релиз и в тот же latest.json без гонок.
+  build-macos:
+    needs: build-windows
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            # whisper.cpp на Metal (GPU Apple Silicon).
+            features: metal,diarize,opus,parakeet
+          - runner: macos-15-intel
+            arch: x86_64
+            features: whisper,diarize,opus,parakeet
+    name: build-macos (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        run: npm ci
+      # screencapturekit → apple-metal собирает Swift-мост под SDK macOS 26
+      # (MTLTensor и др.): нужен самый свежий Xcode на раннере. Минимальная
+      # версия приложения (macOS 13) от SDK не зависит.
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+      # ONNX Runtime 1.23.2 (есть и для Intel) → Auris.app/Contents/Frameworks.
+      - name: ONNX Runtime (macOS dylib)
+        run: |
+          # cmake — whisper.cpp; autotools — статический libopus (audiopus_sys).
+          brew install cmake autoconf automake libtool || true
+          autoreconf --version | head -1 && cmake --version | head -1
+          scripts/fetch-onnxruntime-macos.sh ${{ matrix.arch }}
+      # Подпись: ad-hoc (signingIdentity "-" в tauri.macos.conf.json). Для
+      # Apple Developer ID добавьте секреты APPLE_CERTIFICATE,
+      # APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID,
+      # APPLE_PASSWORD, APPLE_TEAM_ID и пробросьте их в env ниже — tauri
+      # подпишет и нотаризует сам. Пустые переменные не передаём: tauri
+      # попытается импортировать пустой сертификат.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "Auris ${{ inputs.tag || github.ref_name }}"
+          releaseBody: ${{ inputs.notes }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --features ${{ matrix.features }}

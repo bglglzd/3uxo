@@ -17,6 +17,8 @@ import type { MeetingPatch } from "./components/MeetingEditDialog";
 import { runAutoAi } from "./aiauto";
 import { AI_MODEL_EVENT, syncServerModel } from "./aimodel";
 import type { AiModelChange } from "./aimodel";
+import { useAppMenu } from "./appmenu";
+import { isMac } from "./platform";
 
 type ProgressEvent = {
   id: string;
@@ -84,6 +86,22 @@ export default function App() {
     return () => clearTimeout(t);
   }, [modelNote]);
 
+  // Запись стартовала неполной (macOS без доступа к системному звуку).
+  const [recWarn, setRecWarn] = useState<string | null>(null);
+  useEffect(() => {
+    const un = listen<string>("recording-warning", (e) => setRecWarn(e.payload));
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  // Строка меню macOS.
+  useAppMenu("settings", () => setShowSettings(true));
+  useAppMenu("updates", () => void checkUpdates(true));
+  useAppMenu("import", () => {
+    if (!recording) setShowImport(true);
+  });
+
   useEffect(() => {
     void checkUpdates();
     void syncServerModel();
@@ -114,6 +132,10 @@ export default function App() {
       )
       .catch(() => {});
   }, []);
+
+  useAppMenu("solo", () => {
+    if (!recording) changeSolo(!solo);
+  });
 
   // Сброс таймера при старте новой записи (false → true).
   useEffect(() => {
@@ -200,6 +222,7 @@ export default function App() {
 
   const handleStop = async () => {
     const m = await api.stopRecording();
+    setRecWarn(null);
     setRecording(false);
     setPaused(false);
     await refresh();
@@ -284,6 +307,7 @@ export default function App() {
       )}
 
       <main className="content">
+        {isMac && <div className="mac-drag" data-tauri-drag-region />}
         {recording ? (
           <RecordingMonitor levels={levels} solo={solo} />
         ) : selected ? (
@@ -339,6 +363,31 @@ export default function App() {
       </main>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      <div className="toast-stack">
+      {recWarn && (
+        <div className="toast warn" role="alert">
+          <span className="toast-icon">!</span>
+          <span>
+            Запись идёт только с микрофона — голоса собеседников не записываются.
+            <br />
+            {recWarn}
+            {isMac && (
+              <>
+                <br />
+                <button
+                  className="btn btn-sm toast-action"
+                  onClick={() => void api.openPrivacySettings("screen").catch(() => {})}
+                >
+                  Открыть настройки macOS
+                </button>
+              </>
+            )}
+          </span>
+          <button className="toast-close" onClick={() => setRecWarn(null)} aria-label="Закрыть">
+            ✕
+          </button>
+        </div>
+      )}
       {modelNote && (
         <div className="toast" role="status">
           <span className="toast-icon">✦</span>
@@ -351,6 +400,7 @@ export default function App() {
           </button>
         </div>
       )}
+      </div>
       {update && (
         <UpdateDialog
           info={update}

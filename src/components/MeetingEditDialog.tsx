@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Meeting } from "../types";
+import { modEnter } from "../platform";
 
 /// Что можно поправить у встречи из меню «⋯».
 export interface MeetingPatch {
@@ -83,7 +84,7 @@ export function MeetingEditDialog({ meeting, focus = "title", onSave, onCancel }
         </div>
         {error && <div className="ai-error">{error}</div>}
         <div className="modal-actions">
-          <span className="hint">Ctrl+Enter — сохранить</span>
+          <span className="hint">{modEnter()} — сохранить</span>
           <div className="modal-actions-btns">
             <button className="btn ghost" onClick={onCancel} disabled={saving}>
               Отмена

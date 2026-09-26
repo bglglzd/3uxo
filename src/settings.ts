@@ -1,4 +1,5 @@
 import type { AppSettings } from "./types";
+import { defaultHotkey } from "./platform";
 
 const KEY = "3uxo.settings";
 
@@ -15,7 +16,7 @@ const VERSION = 2;
 const DEFAULTS: AppSettings = {
   ai: { base_url: "", api_key: "", model: "" },
   whisper: { whisperPath: "", model: DEFAULT_MODEL, language: "ru" },
-  hotkey: "Ctrl+Shift+R",
+  hotkey: defaultHotkey(),
   autoRecord: {
     enabled: false,
     apps: [],

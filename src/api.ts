@@ -206,4 +206,13 @@ export const api = {
     const url = convertFileSrc(path);
     return bust ? `${url}?v=${bust}` : url;
   },
+
+  /// macOS: есть ли доступ к системному звуку («Запись экрана и системного
+  /// звука»). `request` — показать системный запрос. На Windows всегда true.
+  systemAudioAccess: (request = false): Promise<boolean> =>
+    inv("system_audio_access", { request }),
+
+  /// macOS: открыть раздел «Конфиденциальность и безопасность».
+  openPrivacySettings: (kind: "screen" | "mic"): Promise<void> =>
+    inv("open_privacy_settings", { kind }),
 };

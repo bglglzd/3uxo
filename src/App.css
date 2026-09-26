@@ -3479,11 +3479,19 @@ details.adv[open] summary::before {
   font-size: 11.5px;
 }
 
-.toast {
+.toast-stack {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
   max-width: 440px;
   display: flex;
   align-items: flex-start;
@@ -3502,6 +3510,21 @@ details.adv[open] summary::before {
 .toast-icon {
   color: var(--violet);
 }
+.toast.warn .toast-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f0a868;
+  color: #1a1206;
+  font-weight: 800;
+  font-size: 12px;
+}
+.toast-action {
+  margin-top: 8px;
+}
 .toast-close {
   border: none;
   background: none;
@@ -3512,4 +3535,284 @@ details.adv[open] summary::before {
   outline: none;
   border-color: var(--accent-strong);
   box-shadow: var(--focus-ring);
+}
+
+/* ============================================================
+   macOS — Apple HIG. Узнаваемый Auris (знак, градиенты, цвета спикеров,
+   кольца-эхо), но по-маковски: системный шрифт SF, полупрозрачный сайдбар
+   на нативной вибрации (windowEffects: sidebar), «светофор» в сайдбаре,
+   плотные контролы 13 pt, радиусы 6–10 px, акцентное кольцо фокуса.
+   Включается атрибутом data-platform="macos" (src/platform.ts).
+   ============================================================ */
+:root[data-platform="macos"] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --radius: 12px;
+  --radius-card: 10px;
+  --radius-sm: 7px;
+  --mac-titlebar: 38px;
+}
+:root[data-platform="macos"],
+:root[data-platform="macos"][data-theme="dark"] {
+  --mac-sidebar: rgba(14, 26, 39, 0.52);
+  --mac-content: #0f1b28;
+  --mac-hairline: rgba(255, 255, 255, 0.08);
+  --mac-selected: color-mix(in srgb, var(--accent) 30%, transparent);
+  --mac-control: rgba(255, 255, 255, 0.07);
+  --mac-control-border: rgba(255, 255, 255, 0.1);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+:root[data-platform="macos"][data-theme="light"] {
+  --mac-sidebar: rgba(236, 242, 249, 0.55);
+  --mac-content: #ffffff;
+  --mac-hairline: rgba(0, 0, 0, 0.09);
+  --mac-selected: color-mix(in srgb, var(--accent) 18%, transparent);
+  --mac-control: #ffffff;
+  --mac-control-border: rgba(0, 0, 0, 0.13);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+/* Окно прозрачное: под сайдбаром — нативная вибрация, контент — сплошной. */
+:root[data-platform="macos"] body {
+  background: transparent;
+  font-size: 13px;
+  letter-spacing: -0.003em;
+}
+:root[data-platform="macos"] .app {
+  background: transparent;
+  grid-template-columns: 248px 1fr;
+}
+:root[data-platform="macos"] .sidebar {
+  position: relative;
+  margin: 0;
+  gap: 8px;
+  padding: calc(var(--mac-titlebar) + 4px) 10px 10px;
+  border: none;
+  border-right: 1px solid var(--mac-hairline);
+  border-radius: 0;
+  background: var(--mac-sidebar);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+/* Полоса заголовка: за неё двигается окно, слева — «светофор». */
+.mac-drag {
+  display: none;
+}
+:root[data-platform="macos"] .mac-drag {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mac-titlebar);
+  -webkit-user-select: none;
+  user-select: none;
+}
+:root[data-platform="macos"] .content {
+  background: var(--mac-content);
+}
+:root[data-platform="macos"] .mv {
+  padding-top: 0;
+}
+:root[data-platform="macos"] .content > .mac-drag {
+  position: sticky;
+  flex: none;
+  z-index: 6;
+  background: var(--mac-content);
+}
+
+/* Лок-ап бренда остаётся фирменным (Manrope), но компактнее. */
+:root[data-platform="macos"] .brand {
+  padding: 0 6px 6px;
+}
+:root[data-platform="macos"] .brand-word {
+  font-family: "Manrope Variable", var(--font-display);
+  font-size: 17px;
+}
+
+/* Кнопки: высота 28, 13 pt, радиус 7 — как NSButton «rounded». */
+:root[data-platform="macos"] .btn {
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-color: var(--mac-control-border);
+  background: var(--mac-control);
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12);
+}
+:root[data-platform="macos"] .btn:hover:not(:disabled) {
+  border-color: var(--mac-control-border);
+  filter: brightness(1.04);
+}
+:root[data-platform="macos"] .btn.primary {
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.18);
+}
+:root[data-platform="macos"] .btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-platform="macos"] .btn.ghost:hover:not(:disabled) {
+  background: var(--hover);
+}
+:root[data-platform="macos"] .modal-actions .btn {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  min-width: 84px;
+}
+:root[data-platform="macos"] .record {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+:root[data-platform="macos"] .side-btn {
+  height: 30px;
+  border-radius: 7px;
+  border-color: var(--mac-control-border);
+  background: var(--mac-control);
+  font-size: 13px;
+}
+
+/* Поля: радиус 6, акцентное кольцо фокуса (как у AppKit). */
+:root[data-platform="macos"] .search input {
+  border-radius: 7px;
+  padding: 5px 10px 5px 28px;
+  font-size: 13px;
+  border-color: var(--mac-control-border);
+  background: color-mix(in srgb, var(--mac-control) 70%, transparent);
+}
+:root[data-platform="macos"] .search::before {
+  left: 10px;
+  font-size: 13px;
+}
+:root[data-platform="macos"] .field input,
+:root[data-platform="macos"] .field select,
+:root[data-platform="macos"] .field textarea,
+:root[data-platform="macos"] textarea {
+  border-radius: 6px;
+  font-size: 13px;
+}
+:root[data-platform="macos"] .field input,
+:root[data-platform="macos"] .field select {
+  padding: 6px 9px;
+}
+:root[data-platform="macos"] input:focus,
+:root[data-platform="macos"] select:focus,
+:root[data-platform="macos"] textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: var(--focus-ring);
+}
+
+/* Список встреч — как сайдбар Finder/Notes: заголовки секций без капса,
+   выделение — акцентная заливка. */
+:root[data-platform="macos"] .section-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 8px 2px;
+}
+:root[data-platform="macos"] .m-item {
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: none;
+}
+:root[data-platform="macos"] .m-item.active {
+  background: var(--mac-selected);
+  box-shadow: none;
+}
+:root[data-platform="macos"] .m-item .m-title {
+  font-size: 13px;
+}
+
+/* Футер сайдбара: сегментированный переключатель темы. */
+:root[data-platform="macos"] .footer-row .theme-switch {
+  border-radius: 7px;
+}
+:root[data-platform="macos"] .footer-row .settings-trigger {
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+/* Окна — как листы macOS: радиус 12, без размытия фона за оверлеем. */
+:root[data-platform="macos"] .overlay {
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-platform="macos"] .modal {
+  border-radius: 12px;
+  padding: 20px;
+  background: var(--mac-content);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.35), 0 0 0 0.5px var(--mac-hairline);
+}
+:root[data-platform="macos"] .modal-actions {
+  bottom: -20px;
+  margin: 18px -20px -20px;
+  padding: 12px 20px;
+  background: var(--mac-content);
+  border-radius: 0 0 12px 12px;
+}
+:root[data-platform="macos"] .modal h2 {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+/* Тонкие скроллбары в духе overlay-скроллеров macOS. */
+:root[data-platform="macos"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+:root[data-platform="macos"] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 10px;
+}
+:root[data-platform="macos"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Заголовки экранов — SF Pro Display Bold (крупные, как в Заметках). */
+:root[data-platform="macos"] .empty h2 {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+:root[data-platform="macos"] .toast {
+  border-radius: 12px;
+}
+
+/* Доступы macOS (Настройки → Запись) */
+.mac-perms {
+  gap: 8px;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+.perm-text {
+  flex: 1;
+  min-width: 0;
+}
+.perm-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.perm-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f0a868;
+}
+.perm-dot.ok {
+  background: #34c759;
+}
+.perm-dot.neutral {
+  background: var(--text-faint);
 }

@@ -21,7 +21,7 @@ tauri-build = { version = "2", features = [] }
 # protocol-asset — для assetProtocol из tauri.conf.json (проигрывание аудио
 # через convertFileSrc). tauri-cli добавляет её при `tauri build`, но голому
 # `cargo check` нужно объявить явно.
-tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
@@ -39,6 +39,8 @@ uxo-core = { path = "../core" }
 whisper = ["uxo-core/whisper"]
 # Whisper с GPU-ускорением (Vulkan). Включает и whisper-гейт в командах.
 gpu = ["whisper", "uxo-core/gpu"]
+# Whisper с GPU на Mac (Metal).
+metal = ["whisper", "uxo-core/metal"]
 # Диаризация (разделение говорящих в импортированных записях).
 diarize = ["uxo-core/diarize"]
 # Распознавание NVIDIA Parakeet (ONNX Runtime).

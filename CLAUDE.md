@@ -54,18 +54,28 @@ Updater endpoint — `github.com/bglglzd/auris/releases/latest/download/latest.j
 MockRecorder), `service` (сервис-слой: запись/импорт/расшифровка/правка/файлы), `storage`
 (rusqlite, миграции), `transcript` (модель + merge/assign_speakers), `transcriber`
 (трейт), `whisper` (whisper-rs, за фичей), `wasapi_recorder` (реальный захват на
-Windows, `#[cfg(windows)]`).
+Windows, `#[cfg(windows)]`), `mac_recorder` (macOS: микрофон через cpal/CoreAudio +
+системный звук через ScreenCaptureKit, `#[cfg(target_os = "macos")]`); общие для
+захвата `audio::StreamResampler`/`TrackSink` (любая частота → 16 кГц моно WAV).
 
 ### Cargo-фичи (`core` зеркалит в `src-tauri`)
 - `whisper` — встроенный whisper.cpp (whisper-rs).
 - `gpu` — whisper с Vulkan (включает `whisper`).
+- `metal` — whisper с Metal (Apple Silicon; включает `whisper`).
 - `diarize` — диаризация (ONNX Runtime через `ort`, статически; бинарники ORT
   качаются при сборке с cdn.pyke.io).
 - `opus` — декод Ogg/Opus (libopus через audiopus/cmake).
 - `parakeet` — распознавание NVIDIA Parakeet TDT 0.6B v3 (ONNX Runtime).
-- **Релиз собирает `--features gpu,diarize,opus,parakeet`**; **CI check-app —
-  `cargo build` с `whisper,diarize,opus,parakeet`** (без GPU); job
-  `onnx-windows` — e2e диаризации и Parakeet на реальных моделях.
+- **Релиз собирает `--features gpu,diarize,opus,parakeet`** (Windows),
+  **`metal,diarize,opus,parakeet`** (Mac arm64), **`whisper,diarize,opus,parakeet`**
+  (Mac Intel); **CI check-app — `cargo build` с `whisper,diarize,opus,parakeet`**
+  (без GPU); job `onnx-windows` — e2e диаризации и Parakeet на реальных моделях;
+  job `macos` (arm64 + x86_64) — тесты ядра + e2e диаризации + `tauri build`.
+- **ONNX Runtime на macOS** — `ort` с `load-dynamic` + `api-23` (у pyke нет сборки
+  под Intel-Mac, у Microsoft Intel есть только до 1.23.2). Dylib 1.23.2 качает
+  `scripts/fetch-onnxruntime-macos.sh` в `src-tauri/macos/` (в git не хранится),
+  бандл кладёт её в `Contents/Frameworks`, `lib.rs` при старте ставит
+  `ORT_DYLIB_PATH`. На Windows/Linux — прежняя статическая сборка (`api-27`).
 
 ---
 
@@ -93,6 +103,16 @@ Windows, `#[cfg(windows)]`).
   При выборе ≥2 собеседников системная дорожка диаризуется (`assign_speakers`).
 - Импортированная встреча: одна дорожка `audio.wav` → whisper → (с фичей diarize)
   диаризация на N голосов.
+
+### Запись (macOS, v0.9)
+`mac_recorder.rs`: `mic.wav` — cpal (CoreAudio, поток в своём треде, любая частота
+→ `TrackSink`); `system.wav` — ScreenCaptureKit (macOS 13+, аудио 16 кГц моно,
+`excludes_current_process_audio`). Нужны разрешения: микрофон (Info.plist
+`NSMicrophoneUsageDescription`) и «Запись экрана и системного звука»
+(`CGPreflight/RequestScreenCaptureAccess`). Без второго запись идёт только с
+микрофона: `Recorder::warning()` → событие `recording-warning` → тост во фронте;
+статус и кнопка — `MacPermissions` в настройках (команды `system_audio_access`,
+`open_privacy_settings`). Авто-запись на Mac скрыта (детектор — только WASAPI).
 
 ### Импорт
 `service::import_to_meeting` → `decode_to_wav_16k_mono(src, audio.wav)` (symphonia
@@ -198,6 +218,17 @@ Ollama), `ai::pick_model` (настроенная → ближайшая по п
   `CopyLogButton`, `Markdown`.
 - Состояние: `settings.ts` (localStorage `3uxo.settings`), `theme.ts`, `labels.ts`,
   `api.ts` (обёртки `invoke`). Тема применяется до рендера (`initTheme`).
+- **macOS-вид (v0.9)**: `platform.ts` ставит `data-platform="macos"` до рендера;
+  в конце `App.css` — слой `:root[data-platform="macos"]` (Apple HIG: шрифт SF,
+  прозрачное окно + нативная вибрация `windowEffects: sidebar` под сайдбаром,
+  «светофор» в сайдбаре, полосы `.mac-drag` с `data-tauri-drag-region`, контролы
+  13 pt). Знак, градиенты и цвета спикеров — те же. Подписи сочетаний —
+  `formatAccel`/`accelKeys` (⌘⇧R), хоткей по умолчанию — `defaultHotkey()`.
+  Строка меню macOS (`setup_mac_menu` в lib.rs) шлёт `app-menu` → `appmenu.ts`
+  (`useAppMenu`). Окно/бандл Mac — `src-tauri/tauri.macos.conf.json`
+  (`macOSPrivateApi`, Overlay-заголовок, frameworks, entitlements, мин. 13.0,
+  ad-hoc подпись), `Info.plist`, `Entitlements.plist`. Собирать Mac только через
+  `npm run tauri` — CLI сам включает фичу `macos-private-api`.
 - Экспорт (v0.8): одна кнопка «⬇ Экспорт» → `ExportModal`: Word (.docx — свой
   генератор `docx.ts`, без зависимостей), Markdown, TXT, субтитры SRT; в документ
   складываются стенограмма (опц. таймкоды) + выбранные ИИ-отчёты.
