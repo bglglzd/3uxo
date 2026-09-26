@@ -70,7 +70,7 @@ jobs:
         run: >-
           npm run tauri build -- --debug --bundles nsis
           --features whisper,diarize,opus,parakeet
-          --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          --config src-tauri/tauri.ci.conf.json
       - name: Check installer
         shell: pwsh
         run: |
@@ -141,7 +141,7 @@ jobs:
         run: >-
           npm run tauri build -- --debug --bundles app
           --features ${{ matrix.features }}
-          --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          --config src-tauri/tauri.ci.conf.json
       - name: Check bundle
         run: |
           APP=$(find target -maxdepth 5 -type d -path "*bundle/macos/Memiro AI.app" | head -1)
